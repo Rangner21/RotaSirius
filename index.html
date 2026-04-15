@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>RotaLog</title>
+  <title>Rota Sirius</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -42,7 +42,10 @@
 
     <div class="topbar">
       <h2>Roteirização</h2>
-      <button class="btn" id="open-rota-modal-btn">+ Nova Rota</button>
+      <div style="display: flex; gap: 12px;">
+        <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
+        <button class="btn" id="open-rota-modal-btn">+ Nova Rota</button>
+      </div>
     </div>
 
     <div class="rotas"></div>
@@ -107,13 +110,42 @@
 <!-- Modal para Nova Rota -->
 <div id="create-rota-modal" class="modal-overlay">
     <div class="modal-content">
-        <h3>Criar Nova Rota</h3>
+        <h3 id="rota-modal-title">Adicionar Nova Rota</h3>
         <span class="close-button">&times;</span>
         <form id="create-rota-form">
+            <input type="hidden" id="rota-id-hidden">
             <label for="rota-nome">Nome da rota (ex: Recife 15/04):</label>
             <input type="text" id="rota-nome" required>
             <button type="submit" class="btn">Salvar Rota</button>
         </form>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Exclusão -->
+<div id="delete-confirm-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Excluir Rota</h3>
+        <span class="close-button">&times;</span>
+        <p style="text-align: center; margin-bottom: 20px; color: var(--text-main);">
+            Tem certeza que deseja excluir esta rota? <br>
+            As Notas Fiscais vinculadas retornarão para a lista de pendentes.
+        </p>
+        <div class="form-row">
+            <button id="cancel-delete-btn" class="btn-toggle">Cancelar</button>
+            <button id="confirm-delete-btn" class="btn" style="background: #ef4444; margin-top: 0;">Excluir</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Histórico -->
+<div id="history-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 600px;">
+        <h3>Histórico de Rotas Finalizadas</h3>
+        <span class="close-button">&times;</span>
+        
+        <div id="history-container" class="history-list">
+            <!-- Itens do histórico aparecerão aqui -->
+        </div>
     </div>
 </div>
 

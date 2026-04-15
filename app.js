@@ -1,9 +1,12 @@
 // Referências aos elementos do DOM para os modais
 const createNfModal = document.getElementById('create-nf-modal');
 const createRotaModal = document.getElementById('create-rota-modal');
+const deleteConfirmModal = document.getElementById('delete-confirm-modal');
+const historyModal = document.getElementById('history-modal');
 
 const openNfModalBtn = document.getElementById('open-nf-modal-btn');
 const openRotaModalBtn = document.getElementById('open-rota-modal-btn');
+const openHistoryBtn = document.getElementById('open-history-btn');
 
 const createNfForm = document.getElementById('create-nf-form');
 const createRotaForm = document.getElementById('create-rota-form');
@@ -18,10 +21,15 @@ const nfValorInput = document.getElementById('nf-valor');
 const btnTransporte = document.getElementById('btn-transporte');
 const btnRetira = document.getElementById('btn-retira');
 const rotaNomeInput = document.getElementById('rota-nome');
+const rotaModalTitle = document.getElementById('rota-modal-title');
+const rotaIdHidden = document.getElementById('rota-id-hidden');
+const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
 
 const searchInput = document.querySelector('.search');
 let filtroAtual = "todos";
 let rotaSelecionada = null;
+let rotaIdParaDeletar = null;
 
 // Funções para abrir e fechar modais
 function openModal(modalElement) {
@@ -44,10 +52,19 @@ if (openNfModalBtn) {
   openNfModalBtn.addEventListener('click', () => openModal(createNfModal));
 }
 if (openRotaModalBtn) {
-  openRotaModalBtn.addEventListener('click', () => openModal(createRotaModal));
+  openRotaModalBtn.addEventListener('click', () => {
+    if (rotaModalTitle) rotaModalTitle.innerText = "Adicionar Nova Rota";
+    if (rotaIdHidden) rotaIdHidden.value = "";
+    if (rotaNomeInput) rotaNomeInput.value = "";
+    openModal(createRotaModal);
+  });
 } else {
   console.warn('openRotaModalBtn não encontrado.');
 }
+if (openHistoryBtn) {
+  openHistoryBtn.addEventListener('click', () => { renderizarHistorico(); openModal(historyModal); });
+}
+
 
 // Lógica de alternância do tipo de NF (Transporte/Retira)
 if (btnTransporte && btnRetira && nfTipoInput) {
@@ -151,6 +168,7 @@ async function handleCriarRota(event) {
   }
 
   const nome = rotaNomeInput ? rotaNomeInput.value.trim() : '';
+  const rotaId = rotaIdHidden ? rotaIdHidden.value : '';
   console.log('handleCriarRota: Nome da rota coletado:', nome);
 
   if (!nome) {
@@ -160,15 +178,24 @@ async function handleCriarRota(event) {
   }
 
   try {
-    const { data, error } = await supabaseClient.from("rotas").insert([{ nome }]).select();
+    let result;
+    if (rotaId) {
+      // Modo Edição
+      result = await supabaseClient.from("rotas").update({ nome }).eq("id", rotaId).select();
+    } else {
+      // Modo Criação
+      result = await supabaseClient.from("rotas").insert([{ nome }]).select();
+    }
+
+    const { data, error } = result;
 
     if (error) {
-      console.error('handleCriarRota: Erro ao inserir Rota no supabaseClient:', error);
+      console.error('handleCriarRota: Erro ao salvar Rota no supabaseClient:', error);
       alert('Erro ao salvar Rota: ' + error.message);
       return;
     }
 
-    console.log('handleCriarRota: Rota salva com sucesso:', data);
+    console.log('handleCriarRota: Rota salva/atualizada com sucesso:', data);
     carregarTudo();
     closeModal(createRotaModal);
     if (createRotaForm) { // Verifica se o formulário existe antes de resetar
@@ -333,7 +360,13 @@ async function carregarRotas() {
     card.innerHTML = `
       <div class="rota-header">
         <div>
-          <h3>${rota.nome}</h3>
+          <div class="rota-title-group">
+            <h3>${rota.nome}</h3>
+            <div class="rota-actions">
+              <button class="btn-action" title="Editar nome" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+              <button class="btn-action btn-delete" title="Excluir rota" onclick="event.stopPropagation(); deletarRota('${rota.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
+            </div>
+          </div>
           <span>${nfsDaRota.length} NFs</span>
         </div>
         <div class="valor">R$ ${formatar(total)}</div>
@@ -343,10 +376,15 @@ async function carregarRotas() {
 
         <div class="nf-header">
           <span>NF</span>
-          <span>Destino</span>
-          <span>Frete</span>
+          <span>DESTINO</span>
+          <span>FRETE</span>
         </div>
 
+      </div>
+
+      <div class="rota-footer">
+        <button class="btn btn-outline" onclick="event.stopPropagation(); copiarResumo('${rota.id}', '${rota.nome}', ${total})">Copiar Resumo</button>
+        <button class="btn" onclick="event.stopPropagation(); finalizarRota('${rota.id}')">Finalizar Rota</button>
       </div>
     `;
 
@@ -384,6 +422,149 @@ async function removerDaRota(nfId) {
     .eq("id", nfId);
 
   carregarTudo();
+}
+
+// EDITAR NOME DA ROTA
+async function editarRota(rotaId, nomeAtual) {
+  if (rotaModalTitle) rotaModalTitle.innerText = "Editar Rota";
+  if (rotaIdHidden) rotaIdHidden.value = rotaId;
+  if (rotaNomeInput) rotaNomeInput.value = nomeAtual;
+  openModal(createRotaModal);
+}
+
+// COPIAR RESUMO DA ROTA
+window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
+  try {
+    const { data: nfs, error } = await supabaseClient
+      .from("nfs")
+      .select("*")
+      .eq("rota_id", rotaId);
+
+    if (error) throw error;
+
+    let resumo = `ROTA: ${rotaNome}\n`;
+    resumo += `QTD NFs: ${nfs.length}\n`;
+    resumo += `TOTAL FRETE: R$ ${formatar(totalFrete)}\n\n`;
+
+    nfs.forEach(nf => {
+      resumo += `NF ${nf.numero} | ${nf.destino}/${nf.uf} | R$ ${formatar(nf.valor_frete)}\n`;
+    });
+
+    await navigator.clipboard.writeText(resumo);
+    alert("Resumo copiado para a área de transferência!");
+  } catch (err) {
+    console.error("Erro ao copiar resumo:", err);
+    alert("Erro ao copiar resumo.");
+  }
+};
+
+// FINALIZAR ROTA (Deleta a rota sem devolver NFs para pendentes)
+window.finalizarRota = async function(rotaId) {
+  if (!confirm("Deseja finalizar esta rota? Ela será removida permanentemente do sistema.")) return;
+
+  try {
+    // Buscar dados para o histórico antes de excluir
+    const { data: rotas } = await supabaseClient.from("rotas").select("*").eq("id", rotaId);
+    const { data: nfs } = await supabaseClient.from("nfs").select("*").eq("rota_id", rotaId);
+
+    if (rotas && rotas[0]) {
+        let total = 0;
+        nfs.forEach(n => total += Number(n.valor_frete));
+        
+        salvarRotaNoHistorico(rotas[0], nfs || [], total);
+    }
+
+    const { error } = await supabaseClient.from("rotas").delete().eq("id", rotaId);
+    if (error) throw error;
+    
+    if (rotaSelecionada === rotaId) rotaSelecionada = null;
+    carregarTudo();
+  } catch (error) {
+    console.error("Erro ao finalizar rota:", error);
+    alert("Erro ao finalizar rota.");
+  }
+};
+
+// LOGICA DE HISTÓRICO (LocalStorage)
+function salvarRotaNoHistorico(rota, nfs, totalFrete) {
+    const historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
+    
+    const novaEntrada = {
+        id: rota.id,
+        nome: rota.nome,
+        data: new Date().toLocaleString('pt-BR'),
+        qtdNfs: nfs.length,
+        totalFrete: totalFrete,
+        nfs: nfs.map(n => ({
+            numero: n.numero,
+            destino: n.destino,
+            uf: n.uf,
+            valor_frete: n.valor_frete
+        }))
+    };
+
+    historico.unshift(novaEntrada); // Adiciona no início (mais recente primeiro)
+    localStorage.setItem('rota_historico', JSON.stringify(historico));
+}
+
+function renderizarHistorico() {
+    const container = document.getElementById('history-container');
+    if (!container) return;
+    
+    const historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
+    container.innerHTML = "";
+
+    if (historico.length === 0) {
+        container.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>Nenhuma rota finalizada no histórico.</p>";
+        return;
+    }
+
+    historico.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        card.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                <div>
+                    <strong style="font-size:16px;">${item.nome}</strong><br>
+                    <small style="color:var(--text-muted)">${item.data}</small>
+                </div>
+                <div style="text-align:right">
+                    <span style="color:var(--primary); font-weight:bold;">R$ ${formatar(item.totalFrete)}</span><br>
+                    <small style="color:var(--text-muted)">${item.qtdNfs} NFs</small>
+                </div>
+            </div>
+            <button class="btn btn-outline" style="width:100%; font-size:12px; padding:5px;" onclick="copiarResumoHistorico('${item.id}')">Copiar Resumo</button>
+        `;
+        container.appendChild(card);
+    });
+}
+
+window.copiarResumoHistorico = async function(historicoId) {
+    const historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
+    const item = historico.find(h => h.id === historicoId);
+    
+    if (!item) return;
+
+    let resumo = `ROTA: ${item.nome} - ${item.data}\n`;
+    resumo += `QTD NFs: ${item.qtdNfs}\n`;
+    resumo += `TOTAL FRETE: R$ ${formatar(item.totalFrete)}\n\n`;
+
+    item.nfs.forEach(nf => {
+        resumo += `NF ${nf.numero} | ${nf.destino}/${nf.uf} | R$ ${formatar(nf.valor_frete)}\n`;
+    });
+
+    try {
+        await navigator.clipboard.writeText(resumo);
+        alert("Resumo do histórico copiado!");
+    } catch (e) {
+        alert("Erro ao copiar.");
+    }
+};
+
+// EXCLUIR ROTA
+async function deletarRota(rotaId) {
+  rotaIdParaDeletar = rotaId;
+  openModal(deleteConfirmModal);
 }
 
 // FORMATAR VALOR
@@ -429,6 +610,51 @@ if (createRotaModal) {
   if (closeRotaBtn) {
     closeRotaBtn.addEventListener('click', () => closeModal(createRotaModal));
   }
+}
+
+if (deleteConfirmModal) {
+  const closeDeleteBtn = deleteConfirmModal.querySelector('.close-button');
+  if (closeDeleteBtn) {
+    closeDeleteBtn.addEventListener('click', () => closeModal(deleteConfirmModal));
+  }
+}
+
+if (historyModal) {
+    const closeHistoryBtn = historyModal.querySelector('.close-button');
+    if (closeHistoryBtn) {
+        closeHistoryBtn.addEventListener('click', () => closeModal(historyModal));
+    }
+}
+
+// Lógica do Modal de Confirmação de Exclusão
+if (confirmDeleteBtn) {
+  confirmDeleteBtn.addEventListener('click', async () => {
+    if (!rotaIdParaDeletar) return;
+    
+    try {
+      // Primeiro removemos o vínculo das NFs com esta rota
+      await supabaseClient.from("nfs").update({ rota_id: null }).eq("rota_id", rotaIdParaDeletar);
+      // Depois deletamos a rota
+      const { error } = await supabaseClient.from("rotas").delete().eq("id", rotaIdParaDeletar);
+      if (error) throw error;
+      
+      if (rotaSelecionada === rotaIdParaDeletar) rotaSelecionada = null;
+      closeModal(deleteConfirmModal);
+      carregarTudo();
+    } catch (error) {
+      console.error("Erro ao deletar rota:", error);
+      alert("Erro ao deletar rota.");
+    } finally {
+      rotaIdParaDeletar = null;
+    }
+  });
+}
+
+if (cancelDeleteBtn) {
+  cancelDeleteBtn.addEventListener('click', () => {
+    closeModal(deleteConfirmModal);
+    rotaIdParaDeletar = null;
+  });
 }
 
 // Evento global para deselecionar rota ao clicar fora

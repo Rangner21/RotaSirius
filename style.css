@@ -164,9 +164,44 @@ body {
 .rota-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
   padding-bottom: 15px;
+}
+
+.rota-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.rota-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px;
+  transition: 0.2s;
+  opacity: 0.6;
+}
+
+.btn-action:hover {
+  opacity: 1;
+  color: var(--text-main);
+}
+
+.btn-delete:hover {
+  color: #ef4444;
 }
 
 .valor {
@@ -175,11 +210,24 @@ body {
   font-size: 20px;
 }
 
+/* HEADER DAS COLUNAS NO CARD */
+.nf-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  text-align: center;
+  padding: 9px 8px;
+  font-weight: bold;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
 /* LINHAS */
 .nf-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  padding: 10px 8px;
+  text-align: center;
+  padding: 4px 8px;
   border-bottom: 1px solid rgba(30, 41, 59, 0.5);
   cursor: pointer;
   transition: 0.2s;
@@ -189,6 +237,58 @@ body {
 .nf-row:hover {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 4px;
+}
+
+/* RODAPÉ DO CARD DE ROTA */
+.rota-footer {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+
+.rota-footer .btn {
+  padding: 7px 14px;
+  font-size: 12px;
+  min-width: 120px;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-main);
+}
+
+.btn-outline:hover {
+  background: var(--bg-card);
+  border-color: var(--text-muted);
+}
+
+/* HISTÓRICO STYLES */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.history-card {
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.history-list::-webkit-scrollbar {
+  width: 6px;
+}
+.history-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
 }
 
 /* BOTÕES */
