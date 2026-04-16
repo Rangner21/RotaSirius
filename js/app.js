@@ -200,8 +200,8 @@ function initAdmin() {
             id: 'admin-001',
             nome: "Admin",
             sobrenome: "Sistema",
-            email: "admin@sirios.com",
-            senha: "Admin.2026",
+            email: "admin@sirius.colibri",
+            senha: "./Sirius.Admin",
             cargo: "Administrador",
             permissao: "Administrador",
             status: "Ativo"
