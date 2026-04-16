@@ -228,10 +228,12 @@ let rotaIdParaDeletar = null;
 
 // Funções para abrir e fechar modais
 function openModal(modalElement) {
-  modalElement.classList.add('active');
+  // FIX 2: Verificação de nulo ANTES do uso (bug original: verificava DEPOIS, causando crash)
   if (!modalElement) {
     console.error('openModal: Elemento modal é nulo.');
+    return;
   }
+  modalElement.classList.add('active');
 }
 
 // FUNÇÕES DE MODAL REUTILIZÁVEIS (Substitutos de alert/confirm)
@@ -261,10 +263,12 @@ window.confirmarAcao = function(mensagem, callback) {
 };
 
 function closeModal(modalElement) {
-  modalElement.classList.remove('active');
+  // FIX 2b: Verificação de nulo antes do uso
   if (!modalElement) {
     console.error('closeModal: Elemento modal é nulo.');
+    return;
   }
+  modalElement.classList.remove('active');
 }
 
 // --- NAVEGAÇÃO PAINEL DE CONTROLE ---
@@ -280,7 +284,10 @@ const userIdHidden = document.getElementById('user-id-hidden');
 
 function initAdmin() {
     const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-    if (users.length === 0) {
+    // FIX 1: Verifica se o admin JÁ EXISTE especificamente.
+    // BUG ORIGINAL: se outros usuários existissem no localStorage, o admin nunca era criado.
+    // CONSEQUÊNCIA: admin ficava bloqueado sempre que algum outro usuário era cadastrado.
+    if (!users.some(u => u.email === "admin@sirius.colibri")) {
         const admin = {
             id: 'admin-001',
             nome: "Admin",
@@ -371,6 +378,13 @@ if (createUserModal) {
 
 if (openControlPanelBtn) {
     openControlPanelBtn.addEventListener('click', () => {
+        // FIX 4: Verificação de permissão de administrador
+        // BUG ORIGINAL: qualquer usuário logado (Operador, Visualizador) podia acessar o painel
+        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
+            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
+            return;
+        }
         if (dashboardView && controlPanelView) {
             dashboardView.classList.add('hidden');
             controlPanelView.classList.remove('hidden');
@@ -428,23 +442,25 @@ if (createUserForm) {
 
         localStorage.setItem('sirios_usuarios', JSON.stringify(users));
 
-        // Integração Supabase
+        // FIX 3: Corrigido para usar UPDATE ao editar e INSERT ao criar
+        // BUG ORIGINAL: sempre usava insert, mesmo ao editar (duplicava registros no Supabase)
         try {
-            const { error } = await supabaseClient.from("usuarios").insert([
-                {
-                    nome: nome,
-                    sobrenome: sobrenome,
-                    email: email,
-                    senha: senha,
-                    cargo: cargo,
-                    permissao: permissao
-                }
-            ]);
-
-            if (error) {
-                console.error("Erro ao salvar no Supabase:", error);
+            let supaError;
+            if (id) {
+                const { error } = await supabaseClient.from("usuarios").update({
+                    nome, sobrenome, email, senha, cargo, permissao
+                }).eq("id", id);
+                supaError = error;
             } else {
-                console.log("Usuário salvo no Supabase");
+                const { error } = await supabaseClient.from("usuarios").insert([
+                    { nome, sobrenome, email, senha, cargo, permissao }
+                ]);
+                supaError = error;
+            }
+            if (supaError) {
+                console.error("Erro ao salvar no Supabase:", supaError);
+            } else {
+                console.log("Usuário salvo no Supabase com sucesso");
             }
         } catch (err) {
             console.error("Erro inesperado:", err);
@@ -895,7 +911,7 @@ async function removerDaRota(nfId) {
 }
 
 // EDITAR NOME DA ROTA
-async function editarRota(rotaId, nomeAtual) {
+window.editarRota = async function(rotaId, nomeAtual) {
   if (rotaModalTitle) rotaModalTitle.innerText = "Editar Rota";
   if (rotaIdHidden) rotaIdHidden.value = rotaId;
   if (rotaNomeInput) rotaNomeInput.value = nomeAtual;
@@ -1086,7 +1102,7 @@ window.copiarResumoHistorico = async function(historicoId) {
 };
 
 // EXCLUIR ROTA
-async function deletarRota(rotaId) {
+window.deletarRota = async function(rotaId) {
   confirmarAcao("Tem certeza que deseja excluir esta rota? As Notas Fiscais vinculadas retornarão para a lista de pendentes.", async () => {
     try {
       // Primeiro removemos o vínculo das NFs com esta rota
