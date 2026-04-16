@@ -136,45 +136,46 @@ if (loginForm) {
         const email = loginEmail.value.trim();
         const pass = loginPass.value.trim();
 
+        // Função auxiliar para tentar o login local (localStorage)
+        const realizarLoginLocal = () => {
+            initAdmin(); // Garante que o admin padrão exista
+            const localUsers = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+            const localUser = localUsers.find(u => u.email === email && u.senha === pass);
+
+            if (localUser) {
+                localStorage.setItem('rota_sirius_logged', 'true');
+                localStorage.setItem('usuarioLogado', JSON.stringify(localUser));
+                loginError.classList.add('hidden');
+                checkAuth();
+                return true;
+            }
+            return false;
+        };
+
         try {
-            const { data, error } = await supabaseClient
-                .from("usuarios")
-                .select("*")
-                .eq("email", email)
-                .eq("senha", pass)
-                .single();
+            if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+                const { data, error } = await supabaseClient
+                    .from("usuarios")
+                    .select("*")
+                    .eq("email", email)
+                    .eq("senha", pass)
+                    .maybeSingle(); // maybeSingle é mais seguro que single() para login
 
-            console.log("Resposta Supabase:", data, error);
-
-            if (error || !data) {
-                // Fallback: Se não encontrar no Supabase, tenta no localStorage
-                const localUsers = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-                const localUser = localUsers.find(u => u.email === email && u.senha === pass);
-
-                if (localUser) {
+                if (!error && data) {
                     localStorage.setItem('rota_sirius_logged', 'true');
-                    localStorage.setItem('usuarioLogado', JSON.stringify(localUser));
+                    localStorage.setItem('usuarioLogado', JSON.stringify(data));
                     loginError.classList.add('hidden');
                     checkAuth();
                     return;
                 }
-
-                loginError.innerText = "E-mail ou senha inválidos";
-                loginError.classList.remove('hidden');
-                return;
             }
-
-            // login OK via Supabase
-            localStorage.setItem('rota_sirius_logged', 'true');
-            localStorage.setItem('usuarioLogado', JSON.stringify(data));
-
-            loginError.classList.add('hidden');
-
-            checkAuth(); // mantém seu fluxo atual
-
         } catch (err) {
-            console.error("Erro no login:", err);
-            loginError.innerText = "Erro ao conectar com servidor";
+            console.warn("Erro ao conectar com Supabase, tentando login local...", err);
+        }
+
+        // Se o Supabase falhou ou não encontrou o usuário, tenta o fallback local
+        if (!realizarLoginLocal()) {
+            loginError.innerText = "E-mail ou senha inválidos";
             loginError.classList.remove('hidden');
         }
     });

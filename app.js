@@ -165,7 +165,7 @@ const userIdHidden = document.getElementById('user-id-hidden');
 function initAdmin() {
     let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
     const adminEmail = "admin@sirius.colibri";
-    const adminPass = "Sirius.Admin";
+    const adminPass = "./Sirius.Admin";
 
     const adminIndex = users.findIndex(u => u.email === adminEmail);
 
