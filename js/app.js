@@ -136,15 +136,14 @@ if (loginForm) {
         const email = loginEmail.value.trim();
         const pass = loginPass.value.trim();
 
-        // Fallback: Verificar se é o admin padrão ou usuário criado localmente
-        const usersLocais = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-        const usuarioLocal = usersLocais.find(u => u.email === email && u.senha === pass);
-
         try {
             let usuarioLogado = null;
+            
+            const usersLocais = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+            usuarioLogado = usersLocais.find(u => u.email === email && u.senha === pass);
 
-            // Tenta autenticar via Supabase se o cliente estiver disponível
-            if (window.supabaseClient) {
+            // 2. Se não encontrou localmente, tenta autenticar via Supabase
+            if (!usuarioLogado && window.supabaseClient) {
                 const { data, error } = await supabaseClient
                     .from("usuarios")
                     .select("*")
@@ -157,11 +156,15 @@ if (loginForm) {
                     // Se o erro for '406' ou similar, geralmente é RLS.
                 }
 
-                if (!error && data) usuarioLogado = data;
+                if (!error && data) {
+                    usuarioLogado = data;
+                    // Salva no cache local para evitar ficar preso se o Supabase oscilar
+                    if (!usersLocais.some(u => u.id === data.id)) {
+                        usersLocais.push(data);
+                        localStorage.setItem('sirios_usuarios', JSON.stringify(usersLocais));
+                    }
+                }
             }
-
-            // Se não encontrou no Supabase, tenta o login local (onde reside o Admin padrão)
-            if (!usuarioLogado && usuarioLocal) usuarioLogado = usuarioLocal;
 
             if (!usuarioLogado) {
                 loginError.innerText = "E-mail ou senha inválidos";
