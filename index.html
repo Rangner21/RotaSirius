@@ -7,11 +7,33 @@
 </head>
 <body>
 
+<!-- TELA DE LOGIN -->
+<div id="login-screen" class="login-overlay">
+    <div class="login-box">
+        <div class="login-header">
+            <div class="logo">🚛 Rota Sirius</div>
+            <p>Acesse o sistema de roteirização</p>
+        </div>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="login-email">E-mail</label>
+                <input type="email" id="login-email" placeholder="admin@sirius.com" required autocomplete="username">
+            </div>
+            <div class="form-group" style="margin-top: 10px;">
+                <label for="login-password">Senha</label>
+                <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+            <p id="login-error" class="hidden"></p>
+            <button type="submit" class="btn btn-login">Entrar</button>
+        </form>
+    </div>
+</div>
+
 <div class="app">
 
   <!-- SIDEBAR -->
   <aside class="sidebar">
-    <div class="logo">🚚 RotaLog</div>
+    <div class="logo">🚛 Rota Sirius</div>
 
     <button class="btn" id="open-nf-modal-btn">+ Nova NF</button>
 
@@ -35,20 +57,58 @@
 
 
     <div class="nf-list"></div>
+
+    <button class="btn btn-logout" id="logout-btn">Sair do Sistema</button>
   </aside>
 
   <!-- MAIN -->
   <main class="main">
 
-    <div class="topbar">
-      <h2>Roteirização</h2>
-      <div style="display: flex; gap: 12px;">
-        <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
-        <button class="btn" id="open-rota-modal-btn">+ Nova Rota</button>
+    <!-- Visão Principal (Dashboard) -->
+    <div id="dashboard-view">
+      <div class="topbar">
+        <h2>Roteirização</h2>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <button class="btn btn-outline" id="open-control-panel-btn">⚙ Painel de Controle</button>
+          <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
+          <button class="btn" id="open-rota-modal-btn">+ Nova Rota</button>
+          <div id="user-display-dashboard" class="user-display"></div>
+        </div>
       </div>
+      <div class="rotas"></div>
     </div>
 
-    <div class="rotas"></div>
+    <!-- Visão do Painel de Controle -->
+    <div id="control-panel-view" class="hidden">
+      <div class="topbar">
+        <h2>Painel de Controle</h2>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <button class="btn btn-outline" id="back-to-dashboard-btn">← Voltar</button>
+          <div id="user-display-panel" class="user-display"></div>
+        </div>
+      </div>
+      <div class="panel-container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <h3 style="margin: 0;">Gerenciamento de Usuários</h3>
+          <button class="btn" id="add-user-btn" style="margin: 0;">+ Adicionar Usuário</button>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Cargo</th>
+              <th>E-mail</th>
+              <th>Permissão</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <!-- Usuários carregados via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
 
   </main>
 
@@ -57,9 +117,10 @@
 <!-- Modal para Nova NF -->
 <div id="create-nf-modal" class="modal-overlay">
     <div class="modal-content">
-        <h3>Adicionar Nova NF</h3>
+        <h3 id="nf-modal-title">Adicionar Nova NF</h3>
         <span class="close-button">&times;</span>
         <form id="create-nf-form">
+            <input type="hidden" id="nf-id-hidden">
             <label for="nf-numero">Número da NF:</label>
             <input type="text" id="nf-numero" required>
 
@@ -121,19 +182,58 @@
     </div>
 </div>
 
-<!-- Modal de Confirmação de Exclusão -->
-<div id="delete-confirm-modal" class="modal-overlay">
+<!-- Modal Genérico de Confirmação e Aviso -->
+<div id="generic-modal" class="modal-overlay">
     <div class="modal-content">
-        <h3>Excluir Rota</h3>
+        <h3 id="generic-modal-title">Aviso</h3>
         <span class="close-button">&times;</span>
-        <p style="text-align: center; margin-bottom: 20px; color: var(--text-main);">
-            Tem certeza que deseja excluir esta rota? <br>
-            As Notas Fiscais vinculadas retornarão para a lista de pendentes.
-        </p>
+        <p id="generic-modal-message" style="text-align: center; margin-bottom: 20px; color: var(--text-main); line-height: 1.5;"></p>
         <div class="form-row">
-            <button id="cancel-delete-btn" class="btn-toggle">Cancelar</button>
-            <button id="confirm-delete-btn" class="btn" style="background: #ef4444; margin-top: 0;">Excluir</button>
+            <button id="generic-modal-cancel" class="btn-toggle">Cancelar</button>
+            <button id="generic-modal-ok" class="btn" style="margin-top: 0;">Confirmar</button>
         </div>
+    </div>
+</div>
+
+<!-- Modal para Novo Usuário -->
+<div id="create-user-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="user-modal-title">Adicionar Novo Usuário</h3>
+        <span class="close-button">&times;</span>
+        <form id="create-user-form">
+            <input type="hidden" id="user-id-hidden">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="user-nome">Nome:</label>
+                    <input type="text" id="user-nome" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-sobrenome">Sobrenome:</label>
+                    <input type="text" id="user-sobrenome" required>
+                </div>
+            </div>
+            <label for="user-email">E-mail:</label>
+            <input type="email" id="user-email" required>
+            
+            <label for="user-password">Senha:</label>
+            <input type="password" id="user-password" required>
+
+            <div class="form-row" style="margin-top: 10px;">
+                <div class="form-group">
+                    <label for="user-cargo">Cargo:</label>
+                    <input type="text" id="user-cargo" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-permissao">Permissão:</label>
+                    <select id="user-permissao" required>
+                        <option value="Administrador">Administrador</option>
+                        <option value="Operador" selected>Operador</option>
+                        <option value="Visualizador">Visualizador</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn">Salvar Usuário</button>
+        </form>
     </div>
 </div>
 

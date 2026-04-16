@@ -1,7 +1,81 @@
+// --- SISTEMA DE LOGIN ---
+const loginScreen = document.getElementById('login-screen');
+const mainApp = document.querySelector('.app');
+const loginForm = document.getElementById('login-form');
+const loginEmail = document.getElementById('login-email');
+const loginPass = document.getElementById('login-password');
+const loginError = document.getElementById('login-error');
+const logoutBtn = document.getElementById('logout-btn');
+
+function checkAuth() {
+    initAdmin(); // Garante que o administrador padrão exista no sistema
+    const isLogged = localStorage.getItem('rota_sirius_logged') === 'true';
+    if (isLogged) {
+        loginScreen.classList.add('hidden');
+        mainApp.classList.remove('hidden');
+        carregarTudo();
+        exibirUsuarioLogado();
+    } else {
+        loginScreen.classList.remove('hidden');
+        mainApp.classList.add('hidden');
+    }
+}
+
+function exibirUsuarioLogado() {
+    const dashElem = document.getElementById('user-display-dashboard');
+    const panelElem = document.getElementById('user-display-panel');
+    const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+
+    if (!usuarioLogado) {
+        if (dashElem) dashElem.innerHTML = "";
+        if (panelElem) panelElem.innerHTML = "";
+        return;
+    }
+
+    const primeiroNome = usuarioLogado.nome.split(" ")[0];
+    const html = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        <span>${primeiroNome}</span>
+    `;
+
+    if (dashElem) dashElem.innerHTML = html;
+    if (panelElem) panelElem.innerHTML = html;
+}
+
+if (loginForm) {
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        initAdmin(); // Garante que a lista de usuários esteja inicializada
+        const email = loginEmail.value.trim();
+        const pass = loginPass.value.trim();
+        
+        const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+        const userFound = users.find(u => u.email === email && u.senha === pass);
+
+        if (userFound) {
+            localStorage.setItem('rota_sirius_logged', 'true');
+            localStorage.setItem('usuarioLogado', JSON.stringify(userFound));
+            loginError.classList.add('hidden');
+            checkAuth();
+        } else {
+            loginError.innerText = "E-mail ou senha inválidos";
+            loginError.classList.remove('hidden');
+        }
+    });
+}
+
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('rota_sirius_logged');
+        localStorage.removeItem('usuarioLogado');
+        checkAuth();
+    });
+}
+
 // Referências aos elementos do DOM para os modais
 const createNfModal = document.getElementById('create-nf-modal');
 const createRotaModal = document.getElementById('create-rota-modal');
-const deleteConfirmModal = document.getElementById('delete-confirm-modal');
+const genericModal = document.getElementById('generic-modal');
 const historyModal = document.getElementById('history-modal');
 
 const openNfModalBtn = document.getElementById('open-nf-modal-btn');
@@ -12,6 +86,8 @@ const createNfForm = document.getElementById('create-nf-form');
 const createRotaForm = document.getElementById('create-rota-form');
 
 const nfNumeroInput = document.getElementById('nf-numero');
+const nfIdHidden = document.getElementById('nf-id-hidden');
+const nfModalTitle = document.getElementById('nf-modal-title');
 const nfDestinoInput = document.getElementById('nf-destino');
 const nfUfInput = document.getElementById('nf-uf');
 const nfTipoInput = document.getElementById('nf-tipo');
@@ -23,8 +99,11 @@ const btnRetira = document.getElementById('btn-retira');
 const rotaNomeInput = document.getElementById('rota-nome');
 const rotaModalTitle = document.getElementById('rota-modal-title');
 const rotaIdHidden = document.getElementById('rota-id-hidden');
-const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
-const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+
+const genericModalOk = document.getElementById('generic-modal-ok');
+const genericModalCancel = document.getElementById('generic-modal-cancel');
+const genericModalTitle = document.getElementById('generic-modal-title');
+const genericModalMessage = document.getElementById('generic-modal-message');
 
 const searchInput = document.querySelector('.search');
 let filtroAtual = "todos";
@@ -39,6 +118,32 @@ function openModal(modalElement) {
   }
 }
 
+// FUNÇÕES DE MODAL REUTILIZÁVEIS (Substitutos de alert/confirm)
+window.mostrarAviso = function(mensagem) {
+  if (genericModalTitle) genericModalTitle.innerText = "Aviso";
+  if (genericModalMessage) genericModalMessage.innerText = mensagem;
+  if (genericModalCancel) genericModalCancel.style.display = "none";
+  if (genericModalOk) {
+    genericModalOk.innerText = "OK";
+    genericModalOk.onclick = () => closeModal(genericModal);
+  }
+  openModal(genericModal);
+};
+
+window.confirmarAcao = function(mensagem, callback) {
+  if (genericModalTitle) genericModalTitle.innerText = "Confirmação";
+  if (genericModalMessage) genericModalMessage.innerText = mensagem;
+  if (genericModalCancel) genericModalCancel.style.display = "block";
+  if (genericModalOk) {
+    genericModalOk.innerText = "Confirmar";
+    genericModalOk.onclick = async () => {
+      await callback();
+      closeModal(genericModal);
+    };
+  }
+  openModal(genericModal);
+};
+
 function closeModal(modalElement) {
   modalElement.classList.remove('active');
   if (!modalElement) {
@@ -46,10 +151,176 @@ function closeModal(modalElement) {
   }
 }
 
+// --- NAVEGAÇÃO PAINEL DE CONTROLE ---
+const dashboardView = document.getElementById('dashboard-view');
+const controlPanelView = document.getElementById('control-panel-view');
+const openControlPanelBtn = document.getElementById('open-control-panel-btn');
+const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
+const addUserBtn = document.getElementById('add-user-btn');
+const createUserModal = document.getElementById('create-user-modal');
+const createUserForm = document.getElementById('create-user-form');
+const userModalTitle = document.getElementById('user-modal-title');
+const userIdHidden = document.getElementById('user-id-hidden');
+
+function initAdmin() {
+    const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+    if (users.length === 0) {
+        const admin = {
+            id: 'admin-001',
+            nome: "Admin",
+            sobrenome: "Sistema",
+            email: "admin@sirios.com",
+            senha: "Admin.2026",
+            cargo: "Administrador",
+            permissao: "Administrador",
+            status: "Ativo"
+        };
+        users.push(admin);
+        localStorage.setItem('sirios_usuarios', JSON.stringify(users));
+    }
+}
+
+function renderizarUsuarios() {
+    const tbody = document.getElementById('users-table-body');
+    if (!tbody) return;
+    
+    const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+    tbody.innerHTML = "";
+
+    users.forEach(user => {
+        const tr = document.createElement('tr');
+        const statusColor = user.status === 'Ativo' ? 'var(--primary)' : '#ef4444';
+        
+        tr.innerHTML = `
+            <td>${user.nome} ${user.sobrenome}</td>
+            <td>${user.cargo || '---'}</td>
+            <td>${user.email || '---'}</td>
+            <td><span style="background: var(--border); padding: 4px 8px; border-radius: 4px; font-size: 11px;">${user.permissao || 'Operador'}</span></td>
+            <td><span style="color: ${statusColor}; font-weight: 600;">● ${user.status}</span></td>
+            <td>
+                <div style="display: flex; gap: 8px;">
+                    <button class="icon-btn edit" title="Editar" onclick="editarUsuario('${user.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+                    <button class="icon-btn delete" title="Excluir" onclick="excluirUsuario('${user.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+window.editarUsuario = function(id) {
+    const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+    const user = users.find(u => u.id == id);
+    if (!user) return;
+
+    if (userModalTitle) userModalTitle.innerText = "Editar Usuário";
+    if (userIdHidden) userIdHidden.value = user.id;
+    
+    document.getElementById('user-nome').value = user.nome;
+    document.getElementById('user-sobrenome').value = user.sobrenome;
+    document.getElementById('user-email').value = user.email;
+    document.getElementById('user-password').value = user.senha;
+    document.getElementById('user-cargo').value = user.cargo;
+    document.getElementById('user-permissao').value = user.permissao;
+
+    openModal(createUserModal);
+};
+
+window.excluirUsuario = function(id) {
+    confirmarAcao("Tem certeza que deseja remover este usuário?", async () => {
+        let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+        users = users.filter(u => u.id != id);
+        localStorage.setItem('sirios_usuarios', JSON.stringify(users));
+        renderizarUsuarios();
+    });
+};
+
+function carregarUsuarios() {
+    renderizarUsuarios();
+}
+
+if (addUserBtn) {
+    addUserBtn.addEventListener('click', () => {
+        if (userModalTitle) userModalTitle.innerText = "Adicionar Novo Usuário";
+        if (userIdHidden) userIdHidden.value = "";
+        if (createUserForm) createUserForm.reset();
+        openModal(createUserModal);
+    });
+}
+
+if (createUserModal) {
+    const closeBtn = createUserModal.querySelector('.close-button');
+    if (closeBtn) closeBtn.addEventListener('click', () => closeModal(createUserModal));
+}
+
+if (openControlPanelBtn) {
+    openControlPanelBtn.addEventListener('click', () => {
+        if (dashboardView && controlPanelView) {
+            dashboardView.classList.add('hidden');
+            controlPanelView.classList.remove('hidden');
+            carregarUsuarios();
+        }
+    });
+}
+
+if (backToDashboardBtn) {
+    backToDashboardBtn.addEventListener('click', () => {
+        if (dashboardView && controlPanelView) {
+            controlPanelView.classList.add('hidden');
+            dashboardView.classList.remove('hidden');
+            carregarTudo(); // Garante que os dados estejam atualizados ao voltar
+        }
+    });
+}
+
+if (createUserForm) {
+    createUserForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const id = userIdHidden ? userIdHidden.value : "";
+        const email = document.getElementById('user-email').value.trim();
+        let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+
+        if (users.some(u => u.email === email && u.id != id)) {
+            mostrarAviso("Este e-mail já está cadastrado.");
+            return;
+        }
+
+        const userData = {
+            id: id || Date.now(),
+            nome: document.getElementById('user-nome').value.trim(),
+            sobrenome: document.getElementById('user-sobrenome').value.trim(),
+            email: email,
+            senha: document.getElementById('user-password').value,
+            cargo: document.getElementById('user-cargo').value.trim(),
+            permissao: document.getElementById('user-permissao').value,
+            status: "Ativo"
+        };
+
+        if (id) {
+            const index = users.findIndex(u => u.id == id);
+            if (index !== -1) users[index] = userData;
+        } else {
+            users.push(userData);
+        }
+
+        localStorage.setItem('sirios_usuarios', JSON.stringify(users));
+        
+        closeModal(createUserModal);
+        createUserForm.reset();
+        if (userIdHidden) userIdHidden.value = "";
+        renderizarUsuarios();
+    });
+}
 
 // Event Listeners para abrir modais
 if (openNfModalBtn) {
-  openNfModalBtn.addEventListener('click', () => openModal(createNfModal));
+  openNfModalBtn.addEventListener('click', () => {
+    if (nfModalTitle) nfModalTitle.innerText = "Adicionar Nova NF";
+    if (nfIdHidden) nfIdHidden.value = "";
+    if (createNfForm) createNfForm.reset();
+    if (btnTransporte) btnTransporte.click();
+    openModal(createNfModal);
+  });
 }
 if (openRotaModalBtn) {
   openRotaModalBtn.addEventListener('click', () => {
@@ -99,11 +370,12 @@ async function handleCriarNF(event) {
 
   if (typeof supabaseClient === 'undefined') {
     console.error('handleCriarNF: Cliente supabaseClient não está definido. Verifique se supabaseClient.js foi carregado.');
-    alert('Erro: O serviço de banco de dados não está disponível. Verifique a conexão.');
+    mostrarAviso('Erro: O serviço de banco de dados não está disponível. Verifique a conexão.');
     return;
   }
 
   // Adicionado verificação para nfNumeroInput etc. para evitar erro se forem nulos
+  const nfId = nfIdHidden ? nfIdHidden.value : '';
   const numero = nfNumeroInput ? nfNumeroInput.value.trim() : '';
   const destino = nfDestinoInput ? nfDestinoInput.value.trim() : '';
   const uf = nfUfInput ? nfUfInput.value.trim().toUpperCase() : '';
@@ -115,29 +387,39 @@ async function handleCriarNF(event) {
 
   // Validação básica
   if (!numero) {
-    alert("Por favor, preencha o número da NF.");
+    mostrarAviso("Por favor, preencha o número da NF.");
     return;
   }
 
   // Validação condicional baseada no tipo
   if (tipo === 'transporte' && (!destino || !uf || isNaN(valor))) {
-    alert("Por favor, preencha todos os campos (Destino, UF e Valor) para NFs de Transporte.");
+    mostrarAviso("Por favor, preencha todos os campos (Destino, UF e Valor) para NFs de Transporte.");
     return;
   }
 
   try {
-    const { data, error } = await supabaseClient.from("nfs").insert([{
+    const nfData = {
       numero,
       destino: tipo === 'retira' ? 'RETIRA' : destino,
       uf: tipo === 'retira' ? 'RT' : uf,
       valor_frete: tipo === 'retira' ? 0 : valor, 
       observacao: observacao,
       rota_id: null
-    }]).select();
+    };
+
+    let result;
+    if (nfId) {
+      // Modo Edição
+      result = await supabaseClient.from("nfs").update(nfData).eq("id", nfId).select();
+    } else {
+      // Modo Criação
+      result = await supabaseClient.from("nfs").insert([nfData]).select();
+    }
+    const { data, error } = result;
 
     if (error) {
       console.error('handleCriarNF: Erro ao inserir NF no supabaseClient:', error);
-      alert('Erro ao salvar NF: ' + error.message);
+      mostrarAviso('Erro ao salvar NF: ' + error.message);
       return;
     }
 
@@ -151,7 +433,7 @@ async function handleCriarNF(event) {
     await carregarTudo(); // await carregarTudo();
   } catch (e) {
     console.error('handleCriarNF: Erro inesperado durante a criação da NF:', e);
-    alert('Ocorreu um erro inesperado ao criar a NF.');
+    mostrarAviso('Ocorreu um erro inesperado ao criar a NF.');
   }
 }
 
@@ -163,7 +445,7 @@ async function handleCriarRota(event) {
 
   if (typeof supabaseClient === 'undefined') {
     console.error('handleCriarRota: Cliente supabaseClient não está definido. Verifique se supabaseClient.js foi carregado.');
-    alert('Erro: O serviço de banco de dados não está disponível. Verifique a conexão.');
+    mostrarAviso('Erro: O serviço de banco de dados não está disponível. Verifique a conexão.');
     return;
   }
 
@@ -172,7 +454,7 @@ async function handleCriarRota(event) {
   console.log('handleCriarRota: Nome da rota coletado:', nome);
 
   if (!nome) {
-    alert("Por favor, insira um nome para a rota.");
+    mostrarAviso("Por favor, insira um nome para a rota.");
     console.warn('handleCriarRota: Validação falhou. Nome da rota vazio.');
     return;
   }
@@ -191,7 +473,7 @@ async function handleCriarRota(event) {
 
     if (error) {
       console.error('handleCriarRota: Erro ao salvar Rota no supabaseClient:', error);
-      alert('Erro ao salvar Rota: ' + error.message);
+      mostrarAviso('Erro ao salvar Rota: ' + error.message);
       return;
     }
 
@@ -203,7 +485,7 @@ async function handleCriarRota(event) {
     }
   } catch (e) {
     console.error('handleCriarRota: Erro inesperado durante a criação da Rota:', e);
-    alert('Ocorreu um erro inesperado ao criar a Rota.');
+    mostrarAviso('Ocorreu um erro inesperado ao criar a Rota.');
   }
 }
 
@@ -271,6 +553,10 @@ async function carregarNFs() {
       const badge = nf.uf === 'RT' ? '<small style="color: #f87171;">[RETIRA]</small>' : '';
 
       div.innerHTML = `
+        <div class="nf-actions-top">
+          <button class="icon-btn edit" title="Editar" onclick="event.stopPropagation(); editarNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+          <button class="icon-btn delete" title="Excluir" onclick="event.stopPropagation(); excluirNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
+        </div>
         <strong>NF ${nf.numero} ${badge}</strong>
         <span>${nf.destino}/${nf.uf}</span>
         <small>R$ ${formatar(nf.valor_frete)}</small>
@@ -285,6 +571,45 @@ async function carregarNFs() {
   }
 }
 
+// EDITAR NF
+window.editarNF = async function(nfId) {
+  try {
+    const { data, error } = await supabaseClient.from("nfs").select("*").eq("id", nfId).single();
+    if (error) throw error;
+
+    if (nfModalTitle) nfModalTitle.innerText = "Editar NF";
+    if (nfIdHidden) nfIdHidden.value = data.id;
+    if (nfNumeroInput) nfNumeroInput.value = data.numero;
+    if (nfObsInput) nfObsInput.value = data.observacao || "";
+    
+    if (data.uf === 'RT') {
+        if (btnRetira) btnRetira.click();
+    } else {
+        if (btnTransporte) btnTransporte.click();
+        if (nfDestinoInput) nfDestinoInput.value = data.destino;
+        if (nfUfInput) nfUfInput.value = data.uf;
+        if (nfValorInput) nfValorInput.value = data.valor_frete;
+    }
+
+    openModal(createNfModal);
+  } catch (err) {
+    console.error("Erro ao buscar NF para edição:", err);
+  }
+};
+
+// EXCLUIR NF
+window.excluirNF = async function(nfId) {
+  confirmarAcao("Tem certeza que deseja excluir esta Nota Fiscal permanentemente?", async () => {
+    try {
+      const { error } = await supabaseClient.from("nfs").delete().eq("id", nfId);
+      if (error) throw error;
+      carregarTudo();
+    } catch (err) {
+      console.error("Erro ao excluir NF:", err);
+    }
+  });
+};
+
 // Listener para a busca
 if (searchInput) {
   searchInput.addEventListener('input', carregarNFs);
@@ -294,12 +619,12 @@ if (searchInput) {
 async function enviarParaRota(nfId) {
   if (typeof supabaseClient === 'undefined') {
     console.error('enviarParaRota: Cliente supabaseClient não está definido.');
-    alert('Erro: O serviço de banco de dados não está disponível.');
+    mostrarAviso('Erro: O serviço de banco de dados não está disponível.');
     return;
   }
   
   if (!rotaSelecionada) {
-    alert("Selecione uma rota primeiro clicando nela!");
+    mostrarAviso("Selecione uma rota primeiro clicando nela!");
     return;
   }
 
@@ -363,8 +688,8 @@ async function carregarRotas() {
           <div class="rota-title-group">
             <h3>${rota.nome}</h3>
             <div class="rota-actions">
-              <button class="btn-action" title="Editar nome" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
-              <button class="btn-action btn-delete" title="Excluir rota" onclick="event.stopPropagation(); deletarRota('${rota.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
+              <button class="icon-btn edit" title="Editar nome" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+              <button class="icon-btn delete" title="Excluir rota" onclick="event.stopPropagation(); deletarRota('${rota.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
             </div>
           </div>
           <span>${nfsDaRota.length} NFs</span>
@@ -451,38 +776,37 @@ window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
     });
 
     await navigator.clipboard.writeText(resumo);
-    alert("Resumo copiado para a área de transferência!");
+    mostrarAviso("Resumo copiado para a área de transferência!");
   } catch (err) {
     console.error("Erro ao copiar resumo:", err);
-    alert("Erro ao copiar resumo.");
+    mostrarAviso("Erro ao copiar resumo.");
   }
 };
 
 // FINALIZAR ROTA (Deleta a rota sem devolver NFs para pendentes)
 window.finalizarRota = async function(rotaId) {
-  if (!confirm("Deseja finalizar esta rota? Ela será removida permanentemente do sistema.")) return;
+  confirmarAcao("Deseja finalizar esta rota? Ela será removida permanentemente do sistema.", async () => {
+    try {
+      // Buscar dados para o histórico antes de excluir
+      const { data: rotas } = await supabaseClient.from("rotas").select("*").eq("id", rotaId);
+      const { data: nfs } = await supabaseClient.from("nfs").select("*").eq("rota_id", rotaId);
 
-  try {
-    // Buscar dados para o histórico antes de excluir
-    const { data: rotas } = await supabaseClient.from("rotas").select("*").eq("id", rotaId);
-    const { data: nfs } = await supabaseClient.from("nfs").select("*").eq("rota_id", rotaId);
+      if (rotas && rotas[0]) {
+          let total = 0;
+          nfs.forEach(n => total += Number(n.valor_frete));
+          salvarRotaNoHistorico(rotas[0], nfs || [], total);
+      }
 
-    if (rotas && rotas[0]) {
-        let total = 0;
-        nfs.forEach(n => total += Number(n.valor_frete));
-        
-        salvarRotaNoHistorico(rotas[0], nfs || [], total);
+      const { error } = await supabaseClient.from("rotas").delete().eq("id", rotaId);
+      if (error) throw error;
+      
+      if (rotaSelecionada === rotaId) rotaSelecionada = null;
+      carregarTudo();
+    } catch (error) {
+      console.error("Erro ao finalizar rota:", error);
+      mostrarAviso("Erro ao finalizar rota.");
     }
-
-    const { error } = await supabaseClient.from("rotas").delete().eq("id", rotaId);
-    if (error) throw error;
-    
-    if (rotaSelecionada === rotaId) rotaSelecionada = null;
-    carregarTudo();
-  } catch (error) {
-    console.error("Erro ao finalizar rota:", error);
-    alert("Erro ao finalizar rota.");
-  }
+  });
 };
 
 // LOGICA DE HISTÓRICO (LocalStorage)
@@ -533,15 +857,70 @@ function renderizarHistorico() {
                     <small style="color:var(--text-muted)">${item.qtdNfs} NFs</small>
                 </div>
             </div>
-            <button class="btn btn-outline" style="width:100%; font-size:12px; padding:5px;" onclick="copiarResumoHistorico('${item.id}')">Copiar Resumo</button>
+            <div style="display:flex; gap:8px; margin-top:10px;">
+                <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px;" onclick="copiarResumoHistorico('${item.id}')">Resumo</button>
+                <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRota('${item.id}')">Retornar</button>
+                <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:#ef4444; color:#ef4444;" onclick="excluirHistorico('${item.id}')">Excluir</button>
+            </div>
         `;
         container.appendChild(card);
     });
 }
 
+// EXCLUIR ROTA DO HISTÓRICO
+window.excluirHistorico = function(historicoId) {
+    confirmarAcao("Tem certeza que deseja excluir esta rota permanentemente do histórico?", () => {
+        let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
+        historico = historico.filter(h => h.id !== historicoId);
+        localStorage.setItem('rota_historico', JSON.stringify(historico));
+        
+        renderizarHistorico();
+    });
+};
+
+// RETORNAR ROTA PARA ATIVA
+window.retornarRota = async function(historicoId) {
+    const historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
+    const item = historico.find(h => h.id == historicoId);
+    
+    if (!item) {
+        mostrarAviso("Erro: Rota não encontrada no histórico.");
+        return;
+    }
+
+    try {
+        // 1. Criar a nova rota no banco de dados
+        const { data: novaRota, error: errorRota } = await supabaseClient.from("rotas").insert([{ nome: item.nome }]).select();
+        if (errorRota) throw errorRota;
+        if (!novaRota || novaRota.length === 0) throw new Error("Falha ao recriar rota.");
+
+        const novaRotaId = novaRota[0].id;
+
+        // 2. Vincular as NFs de volta (atualização em lote por número da NF)
+        if (item.nfs && item.nfs.length > 0) {
+            const numeros = item.nfs.map(nf => nf.numero);
+            const { error: errorNfs } = await supabaseClient.from("nfs").update({ rota_id: novaRotaId }).in("numero", numeros);
+            if (errorNfs) throw errorNfs;
+        }
+
+        // 3. Remover do histórico do localStorage
+        const novoHistorico = historico.filter(h => h.id != historicoId);
+        localStorage.setItem('rota_historico', JSON.stringify(novoHistorico));
+
+        // 4. Atualizar UI
+        renderizarHistorico();
+        carregarTudo();
+        
+        mostrarAviso(`Rota "${item.nome}" retornada para o painel ativo!`);
+    } catch (err) {
+        console.error("Erro ao retornar rota:", err);
+        mostrarAviso("Erro ao tentar retornar a rota para o painel ativo. Verifique a conexão.");
+    }
+};
+
 window.copiarResumoHistorico = async function(historicoId) {
     const historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
-    const item = historico.find(h => h.id === historicoId);
+    const item = historico.find(h => h.id == historicoId);
     
     if (!item) return;
 
@@ -555,16 +934,29 @@ window.copiarResumoHistorico = async function(historicoId) {
 
     try {
         await navigator.clipboard.writeText(resumo);
-        alert("Resumo do histórico copiado!");
+        mostrarAviso("Resumo da rota copiado para a área de transferência!");
     } catch (e) {
-        alert("Erro ao copiar.");
+        mostrarAviso("Erro ao copiar.");
     }
 };
 
 // EXCLUIR ROTA
 async function deletarRota(rotaId) {
-  rotaIdParaDeletar = rotaId;
-  openModal(deleteConfirmModal);
+  confirmarAcao("Tem certeza que deseja excluir esta rota? As Notas Fiscais vinculadas retornarão para a lista de pendentes.", async () => {
+    try {
+      // Primeiro removemos o vínculo das NFs com esta rota
+      await supabaseClient.from("nfs").update({ rota_id: null }).eq("rota_id", rotaId);
+      // Depois deletamos a rota
+      const { error } = await supabaseClient.from("rotas").delete().eq("id", rotaId);
+      if (error) throw error;
+      
+      if (rotaSelecionada === rotaId) rotaSelecionada = null;
+      carregarTudo();
+    } catch (error) {
+      console.error("Erro ao deletar rota:", error);
+      mostrarAviso("Erro ao deletar rota.");
+    }
+  });
 }
 
 // FORMATAR VALOR
@@ -612,11 +1004,11 @@ if (createRotaModal) {
   }
 }
 
-if (deleteConfirmModal) {
-  const closeDeleteBtn = deleteConfirmModal.querySelector('.close-button');
-  if (closeDeleteBtn) {
-    closeDeleteBtn.addEventListener('click', () => closeModal(deleteConfirmModal));
-  }
+if (genericModal) {
+    const closeGenericBtn = genericModal.querySelector('.close-button');
+    const cancelGenericBtn = document.getElementById('generic-modal-cancel');
+    if (closeGenericBtn) closeGenericBtn.addEventListener('click', () => closeModal(genericModal));
+    if (cancelGenericBtn) cancelGenericBtn.addEventListener('click', () => closeModal(genericModal));
 }
 
 if (historyModal) {
@@ -624,37 +1016,6 @@ if (historyModal) {
     if (closeHistoryBtn) {
         closeHistoryBtn.addEventListener('click', () => closeModal(historyModal));
     }
-}
-
-// Lógica do Modal de Confirmação de Exclusão
-if (confirmDeleteBtn) {
-  confirmDeleteBtn.addEventListener('click', async () => {
-    if (!rotaIdParaDeletar) return;
-    
-    try {
-      // Primeiro removemos o vínculo das NFs com esta rota
-      await supabaseClient.from("nfs").update({ rota_id: null }).eq("rota_id", rotaIdParaDeletar);
-      // Depois deletamos a rota
-      const { error } = await supabaseClient.from("rotas").delete().eq("id", rotaIdParaDeletar);
-      if (error) throw error;
-      
-      if (rotaSelecionada === rotaIdParaDeletar) rotaSelecionada = null;
-      closeModal(deleteConfirmModal);
-      carregarTudo();
-    } catch (error) {
-      console.error("Erro ao deletar rota:", error);
-      alert("Erro ao deletar rota.");
-    } finally {
-      rotaIdParaDeletar = null;
-    }
-  });
-}
-
-if (cancelDeleteBtn) {
-  cancelDeleteBtn.addEventListener('click', () => {
-    closeModal(deleteConfirmModal);
-    rotaIdParaDeletar = null;
-  });
 }
 
 // Evento global para deselecionar rota ao clicar fora
@@ -667,4 +1028,4 @@ document.addEventListener('click', (e) => {
 });
 
 // Iniciar o carregamento inicial após o DOM estar completamente carregado
-document.addEventListener('DOMContentLoaded', carregarTudo);
+document.addEventListener('DOMContentLoaded', checkAuth);
