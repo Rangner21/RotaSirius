@@ -451,20 +451,6 @@ input:-webkit-autofill:active {
   transform: scale(1.02);
 }
 
-.btn-logout {
-    margin-top: auto;
-    background: transparent;
-    border: 1px solid #ef4444;
-    color: #ef4444;
-    font-size: 12px;
-}
-
-.btn-logout:hover {
-    background: #ef4444;
-    color: white;
-    border-color: #ef4444;
-}
-
 /* BOTÕES PRINCIPAIS (FIXOS) */
 #open-nf-modal-btn, 
 #open-rota-modal-btn {

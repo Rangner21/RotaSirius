@@ -5,7 +5,6 @@ const loginForm = document.getElementById('login-form');
 const loginEmail = document.getElementById('login-email');
 const loginPass = document.getElementById('login-password');
 const loginError = document.getElementById('login-error');
-const logoutBtn = document.getElementById('logout-btn');
 
 function checkAuth() {
     initAdmin(); // Garante que o administrador padrão exista no sistema
@@ -38,9 +37,14 @@ function exibirUsuarioLogado() {
         <span>${primeiroNome}</span>
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5; margin-left: 4px;"><polyline points="6 9 12 15 18 9"></polyline></svg>
         <div class="user-dropdown hidden">
-            <div class="dropdown-header">
-                ${usuarioLogado.nome} ${usuarioLogado.sobrenome}
+            <div class="dropdown-header" style="display: flex; flex-direction: column; gap: 2px;">
+                <span>${usuarioLogado.nome} ${usuarioLogado.sobrenome}</span>
+                <span style="font-size: 10px; text-transform: none; color: var(--primary); font-weight: 500; opacity: 0.9;">${usuarioLogado.cargo || 'Colaborador'}</span>
             </div>
+            <button onclick="handleOpenChangePasswordModal(event)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                Alterar Senha
+            </button>
             <button onclick="handleLogout(event)">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                 Sair
@@ -66,6 +70,58 @@ window.toggleUserMenu = function(event) {
     dropdown.classList.toggle('hidden');
 };
 
+window.handleOpenChangePasswordModal = function(event) {
+    if (event) event.stopPropagation();
+    // Fecha o menu suspenso
+    document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
+    // Abre o modal
+    openModal(document.getElementById('change-password-modal'));
+};
+
+const changePasswordForm = document.getElementById('change-password-form');
+if (changePasswordForm) {
+    changePasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const currentPass = document.getElementById('current-password').value;
+        const newPass = document.getElementById('new-password').value;
+        const confirmPass = document.getElementById('confirm-password').value;
+
+        const loggedUser = JSON.parse(localStorage.getItem("usuarioLogado"));
+
+        if (currentPass !== loggedUser.senha) {
+            mostrarAviso("A senha atual está incorreta.");
+            return;
+        }
+
+        if (newPass !== confirmPass) {
+            mostrarAviso("A nova senha e a confirmação não coincidem.");
+            return;
+        }
+
+        // Atualiza no localStorage (lista geral e sessão atual)
+        let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+        const index = users.findIndex(u => u.id == loggedUser.id);
+        if (index !== -1) {
+            users[index].senha = newPass;
+            localStorage.setItem('sirios_usuarios', JSON.stringify(users));
+        }
+        loggedUser.senha = newPass;
+        localStorage.setItem('usuarioLogado', JSON.stringify(loggedUser));
+
+        // Atualiza no Supabase
+        try {
+            await supabaseClient.from("usuarios").update({ senha: newPass }).eq("id", loggedUser.id);
+            mostrarAviso("Senha alterada com sucesso!");
+        } catch (err) {
+            console.error("Erro ao sincronizar com Supabase:", err);
+            mostrarAviso("Senha alterada localmente, mas houve um erro na sincronização.");
+        }
+
+        closeModal(document.getElementById('change-password-modal'));
+        changePasswordForm.reset();
+    });
+}
+
 window.handleLogout = function(event) {
     if (event) event.stopPropagation();
     localStorage.removeItem('rota_sirius_logged');
@@ -74,32 +130,51 @@ window.handleLogout = function(event) {
 };
 
 if (loginForm) {
-    loginForm.addEventListener('submit', (e) => {
+    loginForm.addEventListener('submit', async (e) => { // Função agora é async
         e.preventDefault();
-        initAdmin(); // Garante que a lista de usuários esteja inicializada
+        // initAdmin() é chamado em checkAuth(), que é chamado no final do login.
+        // Ele garante que o admin padrão exista no localStorage, mas o login agora consultará o Supabase.
+        // Para que o admin padrão funcione, ele deve ser adicionado manualmente ao Supabase
+        // ou a função initAdmin() deve ser estendida para também adicioná-lo ao Supabase.
         const email = loginEmail.value.trim();
         const pass = loginPass.value.trim();
         
-        const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-        const userFound = users.find(u => u.email === email && u.senha === pass);
+        try {
+            // Consulta o Supabase para validar as credenciais
+            const { data, error } = await supabaseClient
+                .from("usuarios")
+                .select("*")
+                .eq("email", email)
+                .eq("senha", pass)
+                .single(); // Espera um único registro ou erro se não encontrar
 
-        if (userFound) {
-            localStorage.setItem('rota_sirius_logged', 'true');
-            localStorage.setItem('usuarioLogado', JSON.stringify(userFound));
-            loginError.classList.add('hidden');
-            checkAuth();
-        } else {
-            loginError.innerText = "E-mail ou senha inválidos";
+            if (error && error.code === 'PGRST116') { // Código de erro do Supabase para "nenhum registro encontrado"
+                loginError.innerText = "E-mail ou senha inválidos";
+                loginError.classList.remove('hidden');
+                return;
+            } else if (error) {
+                // Outros erros do Supabase
+                console.error("Erro ao consultar Supabase para login:", error);
+                mostrarAviso("Erro no servidor. Tente novamente.");
+                loginError.classList.remove('hidden');
+                return;
+            }
+
+            if (data) { // Usuário encontrado no Supabase
+                localStorage.setItem('rota_sirius_logged', 'true');
+                localStorage.setItem('usuarioLogado', JSON.stringify(data)); // Salva os dados do usuário do Supabase
+                loginError.classList.add('hidden');
+                checkAuth(); // Redireciona para o sistema
+            } else {
+                // Caso data seja nulo sem um erro PGRST116 (fallback)
+                loginError.innerText = "E-mail ou senha inválidos";
+                loginError.classList.remove('hidden');
+            }
+        } catch (err) {
+            console.error("Erro inesperado durante o login:", err);
+            mostrarAviso("Ocorreu um erro inesperado. Tente novamente.");
             loginError.classList.remove('hidden');
         }
-    });
-}
-
-if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-        localStorage.removeItem('rota_sirius_logged');
-        localStorage.removeItem('usuarioLogado');
-        checkAuth();
     });
 }
 
@@ -305,10 +380,17 @@ if (backToDashboardBtn) {
 }
 
 if (createUserForm) {
-    createUserForm.addEventListener('submit', (e) => {
+    createUserForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = userIdHidden ? userIdHidden.value : "";
         const email = document.getElementById('user-email').value.trim();
+
+        const nome = document.getElementById('user-nome').value.trim();
+        const sobrenome = document.getElementById('user-sobrenome').value.trim();
+        const senha = document.getElementById('user-password').value;
+        const cargo = document.getElementById('user-cargo').value.trim();
+        const permissao = document.getElementById('user-permissao').value;
+
         let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
 
         if (users.some(u => u.email === email && u.id != id)) {
@@ -318,12 +400,12 @@ if (createUserForm) {
 
         const userData = {
             id: id || Date.now(),
-            nome: document.getElementById('user-nome').value.trim(),
-            sobrenome: document.getElementById('user-sobrenome').value.trim(),
+            nome: nome,
+            sobrenome: sobrenome,
             email: email,
-            senha: document.getElementById('user-password').value,
-            cargo: document.getElementById('user-cargo').value.trim(),
-            permissao: document.getElementById('user-permissao').value,
+            senha: senha,
+            cargo: cargo,
+            permissao: permissao,
             status: "Ativo"
         };
 
@@ -335,7 +417,29 @@ if (createUserForm) {
         }
 
         localStorage.setItem('sirios_usuarios', JSON.stringify(users));
-        
+
+        // Integração Supabase
+        try {
+            const { error } = await supabaseClient.from("usuarios").insert([
+                {
+                    nome: nome,
+                    sobrenome: sobrenome,
+                    email: email,
+                    senha: senha,
+                    cargo: cargo,
+                    permissao: permissao
+                }
+            ]);
+
+            if (error) {
+                console.error("Erro ao salvar no Supabase:", error);
+            } else {
+                console.log("Usuário salvo no Supabase");
+            }
+        } catch (err) {
+            console.error("Erro inesperado:", err);
+        }
+
         closeModal(createUserModal);
         createUserForm.reset();
         if (userIdHidden) userIdHidden.value = "";
@@ -1046,6 +1150,14 @@ if (historyModal) {
     const closeHistoryBtn = historyModal.querySelector('.close-button');
     if (closeHistoryBtn) {
         closeHistoryBtn.addEventListener('click', () => closeModal(historyModal));
+    }
+}
+
+const changePasswordModal = document.getElementById('change-password-modal');
+if (changePasswordModal) {
+    const closeBtn = changePasswordModal.querySelector('.close-button');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => closeModal(changePasswordModal));
     }
 }
 

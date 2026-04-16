@@ -57,8 +57,6 @@
 
 
     <div class="nf-list"></div>
-
-    <button class="btn btn-logout" id="logout-btn">Sair do Sistema</button>
   </aside>
 
   <!-- MAIN -->
@@ -192,6 +190,26 @@
             <button id="generic-modal-cancel" class="btn-toggle">Cancelar</button>
             <button id="generic-modal-ok" class="btn" style="margin-top: 0;">Confirmar</button>
         </div>
+    </div>
+</div>
+
+<!-- Modal para Alterar Senha -->
+<div id="change-password-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Alterar Senha</h3>
+        <span class="close-button">&times;</span>
+        <form id="change-password-form">
+            <label for="current-password">Senha Atual:</label>
+            <input type="password" id="current-password" required>
+            
+            <label for="new-password">Nova Senha:</label>
+            <input type="password" id="new-password" required minlength="6">
+            
+            <label for="confirm-password">Confirmar Nova Senha:</label>
+            <input type="password" id="confirm-password" required minlength="6">
+            
+            <button type="submit" class="btn">Atualizar Senha</button>
+        </form>
     </div>
 </div>
 
