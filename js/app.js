@@ -8,8 +8,8 @@ const loginError = document.getElementById('login-error');
 const logoutBtn = document.getElementById('logout-btn');
 
 function checkAuth() {
+    initAdmin(); // Garante que o administrador padrão exista no sistema
     const isLogged = localStorage.getItem('rota_sirius_logged') === 'true';
-
     if (isLogged) {
         loginScreen.classList.add('hidden');
         mainApp.classList.remove('hidden');
@@ -24,7 +24,6 @@ function checkAuth() {
 function exibirUsuarioLogado() {
     const dashElem = document.getElementById('user-display-dashboard');
     const panelElem = document.getElementById('user-display-panel');
-
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
 
     if (!usuarioLogado) {
@@ -33,60 +32,73 @@ function exibirUsuarioLogado() {
         return;
     }
 
-    const primeiroNome = usuarioLogado.email.split("@")[0];
-
+    const primeiroNome = usuarioLogado.nome.split(" ")[0];
     const html = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-            <circle cx="12" cy="7" r="4"></circle>
-        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
         <span>${primeiroNome}</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5; margin-left: 4px;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        <div class="user-dropdown hidden">
+            <div class="dropdown-header">
+                ${usuarioLogado.nome} ${usuarioLogado.sobrenome}
+            </div>
+            <button onclick="handleLogout(event)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                Sair
+            </button>
+        </div>
     `;
 
-    if (dashElem) dashElem.innerHTML = html;
-    if (panelElem) panelElem.innerHTML = html;
+    [dashElem, panelElem].forEach(el => {
+        if (el) {
+            el.innerHTML = html;
+            el.onclick = toggleUserMenu;
+        }
+    });
 }
 
-if (loginForm) {
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+window.toggleUserMenu = function(event) {
+    event.stopPropagation();
+    const dropdown = event.currentTarget.querySelector('.user-dropdown');
+    // Fecha outros dropdowns se existirem
+    document.querySelectorAll('.user-dropdown').forEach(d => {
+        if (d !== dropdown) d.classList.add('hidden');
+    });
+    dropdown.classList.toggle('hidden');
+};
 
+window.handleLogout = function(event) {
+    if (event) event.stopPropagation();
+    localStorage.removeItem('rota_sirius_logged');
+    localStorage.removeItem('usuarioLogado');
+    checkAuth();
+};
+
+if (loginForm) {
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        initAdmin(); // Garante que a lista de usuários esteja inicializada
         const email = loginEmail.value.trim();
         const pass = loginPass.value.trim();
+        
+        const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+        const userFound = users.find(u => u.email === email && u.senha === pass);
 
-        // 🔥 LOGIN COM SUPABASE
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email: email,
-            password: pass
-        });
-
-        if (error) {
-            loginError.innerText = error.message;
+        if (userFound) {
+            localStorage.setItem('rota_sirius_logged', 'true');
+            localStorage.setItem('usuarioLogado', JSON.stringify(userFound));
+            loginError.classList.add('hidden');
+            checkAuth();
+        } else {
+            loginError.innerText = "E-mail ou senha inválidos";
             loginError.classList.remove('hidden');
-            console.error(error);
-            return;
         }
-
-        // Salva login
-        localStorage.setItem('rota_sirius_logged', 'true');
-
-        // Salva dados básicos do usuário
-        localStorage.setItem('usuarioLogado', JSON.stringify({
-            email: data.user.email
-        }));
-
-        loginError.classList.add('hidden');
-        checkAuth();
     });
 }
 
 if (logoutBtn) {
-    logoutBtn.addEventListener('click', async () => {
-        await supabaseClient.auth.signOut();
-
+    logoutBtn.addEventListener('click', () => {
         localStorage.removeItem('rota_sirius_logged');
         localStorage.removeItem('usuarioLogado');
-
         checkAuth();
     });
 }
@@ -1039,6 +1051,11 @@ if (historyModal) {
 
 // Evento global para deselecionar rota ao clicar fora
 document.addEventListener('click', (e) => {
+  // Fecha dropdown do usuário ao clicar fora
+  if (!e.target.closest('.user-display')) {
+    document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
+  }
+
   // Se o clique não foi em uma rota nem em uma NF da lista lateral, limpa a seleção
   if (!e.target.closest('.rota-card') && !e.target.closest('.nf-card')) {
     rotaSelecionada = null;
