@@ -5,6 +5,7 @@ const loginForm = document.getElementById('login-form');
 const loginEmail = document.getElementById('login-email');
 const loginPass = document.getElementById('login-password');
 const loginError = document.getElementById('login-error');
+const logoutBtn = document.getElementById('logout-btn');
 
 function checkAuth() {
     initAdmin(); // Garante que o administrador padrão exista no sistema
@@ -35,148 +36,39 @@ function exibirUsuarioLogado() {
     const html = `
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
         <span>${primeiroNome}</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5; margin-left: 4px;"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        <div class="user-dropdown hidden">
-            <div class="dropdown-header" style="display: flex; flex-direction: column; gap: 2px;">
-                <span>${usuarioLogado.nome} ${usuarioLogado.sobrenome}</span>
-                <span style="font-size: 10px; text-transform: none; color: var(--primary); font-weight: 500; opacity: 0.9;">${usuarioLogado.cargo || 'Colaborador'}</span>
-            </div>
-            <button onclick="handleOpenChangePasswordModal(event)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                Alterar Senha
-            </button>
-            <button onclick="handleLogout(event)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                Sair
-            </button>
-        </div>
     `;
 
-    [dashElem, panelElem].forEach(el => {
-        if (el) {
-            el.innerHTML = html;
-            el.onclick = toggleUserMenu;
-        }
-    });
-}
-
-window.toggleUserMenu = function(event) {
-    event.stopPropagation();
-    const dropdown = event.currentTarget.querySelector('.user-dropdown');
-    // Fecha outros dropdowns se existirem
-    document.querySelectorAll('.user-dropdown').forEach(d => {
-        if (d !== dropdown) d.classList.add('hidden');
-    });
-    dropdown.classList.toggle('hidden');
-};
-
-window.handleOpenChangePasswordModal = function(event) {
-    if (event) event.stopPropagation();
-    // Fecha o menu suspenso
-    document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
-    // Abre o modal
-    openModal(document.getElementById('change-password-modal'));
-};
-
-window.handleLogout = function(event) {
-    if (event) event.stopPropagation();
-    localStorage.removeItem('rota_sirius_logged');
-    localStorage.removeItem('usuarioLogado');
-    checkAuth();
-};
-
-const changePasswordForm = document.getElementById('change-password-form');
-if (changePasswordForm) {
-    changePasswordForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const currentPass = document.getElementById('current-password').value;
-        const newPass = document.getElementById('new-password').value;
-        const confirmPass = document.getElementById('confirm-password').value;
-
-        const loggedUser = JSON.parse(localStorage.getItem("usuarioLogado"));
-
-        if (currentPass !== loggedUser.senha) {
-            mostrarAviso("A senha atual está incorreta.");
-            return;
-        }
-
-        if (newPass !== confirmPass) {
-            mostrarAviso("A nova senha e a confirmação não coincidem.");
-            return;
-        }
-
-        // Atualiza no localStorage (lista geral e sessão atual)
-        let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-        const index = users.findIndex(u => u.id == loggedUser.id);
-        if (index !== -1) {
-            users[index].senha = newPass;
-            localStorage.setItem('sirios_usuarios', JSON.stringify(users));
-        }
-        loggedUser.senha = newPass;
-        localStorage.setItem('usuarioLogado', JSON.stringify(loggedUser));
-
-        // Atualiza no Supabase
-        try {
-            await supabaseClient.from("usuarios").update({ senha: newPass }).eq("id", loggedUser.id);
-            mostrarAviso("Senha alterada com sucesso!");
-        } catch (err) {
-            console.error("Erro ao sincronizar com Supabase:", err);
-            mostrarAviso("Senha alterada localmente, mas houve um erro na sincronização.");
-        }
-
-        closeModal(document.getElementById('change-password-modal'));
-        changePasswordForm.reset();
-    });
+    if (dashElem) dashElem.innerHTML = html;
+    if (panelElem) panelElem.innerHTML = html;
 }
 
 if (loginForm) {
-    loginForm.addEventListener('submit', async (e) => {
+    loginForm.addEventListener('submit', (e) => {
         e.preventDefault();
-
+        initAdmin(); // Garante que a lista de usuários esteja inicializada
         const email = loginEmail.value.trim();
         const pass = loginPass.value.trim();
+        
+        const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+        const userFound = users.find(u => u.email === email && u.senha === pass);
 
-        try {
-            const { data, error } = await supabaseClient
-                .from("usuarios")
-                .select("*")
-                .eq("email", email)
-                .eq("senha", pass)
-                .single();
-
-            console.log("Resposta Supabase:", data, error);
-
-            if (error || !data) {
-                // Fallback: Se não encontrar no Supabase, tenta no localStorage
-                const localUsers = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-                const localUser = localUsers.find(u => u.email === email && u.senha === pass);
-
-                if (localUser) {
-                    localStorage.setItem('rota_sirius_logged', 'true');
-                    localStorage.setItem('usuarioLogado', JSON.stringify(localUser));
-                    loginError.classList.add('hidden');
-                    checkAuth();
-                    return;
-                }
-
-                loginError.innerText = "E-mail ou senha inválidos";
-                loginError.classList.remove('hidden');
-                return;
-            }
-
-            // login OK via Supabase
+        if (userFound) {
             localStorage.setItem('rota_sirius_logged', 'true');
-            localStorage.setItem('usuarioLogado', JSON.stringify(data));
-
+            localStorage.setItem('usuarioLogado', JSON.stringify(userFound));
             loginError.classList.add('hidden');
-
-            checkAuth(); // mantém seu fluxo atual
-
-        } catch (err) {
-            console.error("Erro no login:", err);
-            loginError.innerText = "Erro ao conectar com servidor";
+            checkAuth();
+        } else {
+            loginError.innerText = "E-mail ou senha inválidos";
             loginError.classList.remove('hidden');
         }
+    });
+}
+
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('rota_sirius_logged');
+        localStorage.removeItem('usuarioLogado');
+        checkAuth();
     });
 }
 
@@ -271,21 +163,29 @@ const userModalTitle = document.getElementById('user-modal-title');
 const userIdHidden = document.getElementById('user-id-hidden');
 
 function initAdmin() {
-    const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-    if (users.length === 0) {
-        const admin = {
+    let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+    const adminEmail = "admin@sirius.colibri";
+    const adminPass = "Sirius.Admin";
+
+    const adminIndex = users.findIndex(u => u.email === adminEmail);
+
+    if (adminIndex !== -1) {
+        // Se já existe, garante que a senha seja a atualizada
+        users[adminIndex].senha = adminPass;
+    } else {
+        // Se não existe, adiciona o admin padrão
+        users.push({
             id: 'admin-001',
             nome: "Admin",
             sobrenome: "Sistema",
-            email: "admin@sirius.colibri",
-            senha: "./Sirius.Admin",
+            email: adminEmail,
+            senha: adminPass,
             cargo: "Administrador",
             permissao: "Administrador",
             status: "Ativo"
-        };
-        users.push(admin);
-        localStorage.setItem('sirios_usuarios', JSON.stringify(users));
+        });
     }
+    localStorage.setItem('sirios_usuarios', JSON.stringify(users));
 }
 
 function renderizarUsuarios() {
@@ -382,17 +282,10 @@ if (backToDashboardBtn) {
 }
 
 if (createUserForm) {
-    createUserForm.addEventListener('submit', async (e) => {
+    createUserForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const id = userIdHidden ? userIdHidden.value : "";
         const email = document.getElementById('user-email').value.trim();
-
-        const nome = document.getElementById('user-nome').value.trim();
-        const sobrenome = document.getElementById('user-sobrenome').value.trim();
-        const senha = document.getElementById('user-password').value;
-        const cargo = document.getElementById('user-cargo').value.trim();
-        const permissao = document.getElementById('user-permissao').value;
-
         let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
 
         if (users.some(u => u.email === email && u.id != id)) {
@@ -402,12 +295,12 @@ if (createUserForm) {
 
         const userData = {
             id: id || Date.now(),
-            nome: nome,
-            sobrenome: sobrenome,
+            nome: document.getElementById('user-nome').value.trim(),
+            sobrenome: document.getElementById('user-sobrenome').value.trim(),
             email: email,
-            senha: senha,
-            cargo: cargo,
-            permissao: permissao,
+            senha: document.getElementById('user-password').value,
+            cargo: document.getElementById('user-cargo').value.trim(),
+            permissao: document.getElementById('user-permissao').value,
             status: "Ativo"
         };
 
@@ -419,29 +312,7 @@ if (createUserForm) {
         }
 
         localStorage.setItem('sirios_usuarios', JSON.stringify(users));
-
-        // Integração Supabase
-        try {
-            const { error } = await supabaseClient.from("usuarios").insert([
-                {
-                    nome: nome,
-                    sobrenome: sobrenome,
-                    email: email,
-                    senha: senha,
-                    cargo: cargo,
-                    permissao: permissao
-                }
-            ]);
-
-            if (error) {
-                console.error("Erro ao salvar no Supabase:", error);
-            } else {
-                console.log("Usuário salvo no Supabase");
-            }
-        } catch (err) {
-            console.error("Erro inesperado:", err);
-        }
-
+        
         closeModal(createUserModal);
         createUserForm.reset();
         if (userIdHidden) userIdHidden.value = "";
@@ -1155,21 +1026,8 @@ if (historyModal) {
     }
 }
 
-const changePasswordModal = document.getElementById('change-password-modal');
-if (changePasswordModal) {
-    const closeBtn = changePasswordModal.querySelector('.close-button');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => closeModal(changePasswordModal));
-    }
-}
-
 // Evento global para deselecionar rota ao clicar fora
 document.addEventListener('click', (e) => {
-  // Fecha dropdown do usuário ao clicar fora
-  if (!e.target.closest('.user-display')) {
-    document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
-  }
-
   // Se o clique não foi em uma rota nem em uma NF da lista lateral, limpa a seleção
   if (!e.target.closest('.rota-card') && !e.target.closest('.nf-card')) {
     rotaSelecionada = null;
