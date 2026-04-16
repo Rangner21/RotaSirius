@@ -136,17 +136,29 @@ if (loginForm) {
         const email = loginEmail.value.trim();
         const pass = loginPass.value.trim();
 
+        // Fallback: Verificar se é o admin padrão ou usuário criado localmente
+        const usersLocais = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+        const usuarioLocal = usersLocais.find(u => u.email === email && u.senha === pass);
+
         try {
-            const { data, error } = await supabaseClient
-                .from("usuarios")
-                .select("*")
-                .eq("email", email)
-                .eq("senha", pass)
-                .single();
+            let usuarioLogado = null;
 
-            console.log("Resposta Supabase:", data, error);
+            // Tenta autenticar via Supabase se o cliente estiver disponível
+            if (window.supabaseClient) {
+                const { data, error } = await supabaseClient
+                    .from("usuarios")
+                    .select("*")
+                    .eq("email", email)
+                    .eq("senha", pass)
+                    .single();
+                
+                if (!error && data) usuarioLogado = data;
+            }
 
-            if (error || !data) {
+            // Se não encontrou no Supabase, tenta o login local (onde reside o Admin padrão)
+            if (!usuarioLogado && usuarioLocal) usuarioLogado = usuarioLocal;
+
+            if (!usuarioLogado) {
                 loginError.innerText = "E-mail ou senha inválidos";
                 loginError.classList.remove('hidden');
                 return;
@@ -154,7 +166,7 @@ if (loginForm) {
 
             // login OK
             localStorage.setItem('rota_sirius_logged', 'true');
-            localStorage.setItem('usuarioLogado', JSON.stringify(data));
+            localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogado));
 
             loginError.classList.add('hidden');
 
