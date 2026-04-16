@@ -8,8 +8,8 @@ const loginError = document.getElementById('login-error');
 const logoutBtn = document.getElementById('logout-btn');
 
 function checkAuth() {
-    initAdmin(); // Garante que o administrador padrão exista no sistema
     const isLogged = localStorage.getItem('rota_sirius_logged') === 'true';
+
     if (isLogged) {
         loginScreen.classList.add('hidden');
         mainApp.classList.remove('hidden');
@@ -24,6 +24,7 @@ function checkAuth() {
 function exibirUsuarioLogado() {
     const dashElem = document.getElementById('user-display-dashboard');
     const panelElem = document.getElementById('user-display-panel');
+
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
 
     if (!usuarioLogado) {
@@ -32,9 +33,13 @@ function exibirUsuarioLogado() {
         return;
     }
 
-    const primeiroNome = usuarioLogado.nome.split(" ")[0];
+    const primeiroNome = usuarioLogado.email.split("@")[0];
+
     const html = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+        </svg>
         <span>${primeiroNome}</span>
     `;
 
@@ -43,31 +48,45 @@ function exibirUsuarioLogado() {
 }
 
 if (loginForm) {
-    loginForm.addEventListener('submit', (e) => {
+    loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        initAdmin(); // Garante que a lista de usuários esteja inicializada
+
         const email = loginEmail.value.trim();
         const pass = loginPass.value.trim();
-        
-        const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-        const userFound = users.find(u => u.email === email && u.senha === pass);
 
-        if (userFound) {
-            localStorage.setItem('rota_sirius_logged', 'true');
-            localStorage.setItem('usuarioLogado', JSON.stringify(userFound));
-            loginError.classList.add('hidden');
-            checkAuth();
-        } else {
-            loginError.innerText = "E-mail ou senha inválidos";
+        // 🔥 LOGIN COM SUPABASE
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email: email,
+            password: pass
+        });
+
+        if (error) {
+            loginError.innerText = error.message;
             loginError.classList.remove('hidden');
+            console.error(error);
+            return;
         }
+
+        // Salva login
+        localStorage.setItem('rota_sirius_logged', 'true');
+
+        // Salva dados básicos do usuário
+        localStorage.setItem('usuarioLogado', JSON.stringify({
+            email: data.user.email
+        }));
+
+        loginError.classList.add('hidden');
+        checkAuth();
     });
 }
 
 if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
+    logoutBtn.addEventListener('click', async () => {
+        await supabaseClient.auth.signOut();
+
         localStorage.removeItem('rota_sirius_logged');
         localStorage.removeItem('usuarioLogado');
+
         checkAuth();
     });
 }
