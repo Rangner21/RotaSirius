@@ -122,57 +122,40 @@ if (changePasswordForm) {
     });
 }
 
-window.handleLogout = function(event) {
-    if (event) event.stopPropagation();
-    localStorage.removeItem('rota_sirius_logged');
-    localStorage.removeItem('usuarioLogado');
-    checkAuth();
-};
-
 if (loginForm) {
-    loginForm.addEventListener('submit', async (e) => { // Função agora é async
+    loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        // initAdmin() é chamado em checkAuth(), que é chamado no final do login.
-        // Ele garante que o admin padrão exista no localStorage, mas o login agora consultará o Supabase.
-        // Para que o admin padrão funcione, ele deve ser adicionado manualmente ao Supabase
-        // ou a função initAdmin() deve ser estendida para também adicioná-lo ao Supabase.
+
         const email = loginEmail.value.trim();
         const pass = loginPass.value.trim();
-        
+
         try {
-            // Consulta o Supabase para validar as credenciais
             const { data, error } = await supabaseClient
                 .from("usuarios")
                 .select("*")
                 .eq("email", email)
                 .eq("senha", pass)
-                .single(); // Espera um único registro ou erro se não encontrar
+                .single();
 
-            if (error && error.code === 'PGRST116') { // Código de erro do Supabase para "nenhum registro encontrado"
+            console.log("Resposta Supabase:", data, error);
+
+            if (error || !data) {
                 loginError.innerText = "E-mail ou senha inválidos";
-                loginError.classList.remove('hidden');
-                return;
-            } else if (error) {
-                // Outros erros do Supabase
-                console.error("Erro ao consultar Supabase para login:", error);
-                mostrarAviso("Erro no servidor. Tente novamente.");
                 loginError.classList.remove('hidden');
                 return;
             }
 
-            if (data) { // Usuário encontrado no Supabase
-                localStorage.setItem('rota_sirius_logged', 'true');
-                localStorage.setItem('usuarioLogado', JSON.stringify(data)); // Salva os dados do usuário do Supabase
-                loginError.classList.add('hidden');
-                checkAuth(); // Redireciona para o sistema
-            } else {
-                // Caso data seja nulo sem um erro PGRST116 (fallback)
-                loginError.innerText = "E-mail ou senha inválidos";
-                loginError.classList.remove('hidden');
-            }
+            // login OK
+            localStorage.setItem('rota_sirius_logged', 'true');
+            localStorage.setItem('usuarioLogado', JSON.stringify(data));
+
+            loginError.classList.add('hidden');
+
+            checkAuth(); // mantém seu fluxo atual
+
         } catch (err) {
-            console.error("Erro inesperado durante o login:", err);
-            mostrarAviso("Ocorreu um erro inesperado. Tente novamente.");
+            console.error("Erro no login:", err);
+            loginError.innerText = "Erro ao conectar com servidor";
             loginError.classList.remove('hidden');
         }
     });
