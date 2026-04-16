@@ -136,20 +136,15 @@ if (loginForm) {
         const email = loginEmail.value.trim();
         const pass = loginPass.value.trim();
 
-        console.log("Tentando login com:", email);
-
         // Fallback: Verificar se é o admin padrão ou usuário criado localmente
         const usersLocais = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
         const usuarioLocal = usersLocais.find(u => u.email === email && u.senha === pass);
-        
-        if (usuarioLocal) console.log("Usuário encontrado localmente.");
 
         try {
             let usuarioLogado = null;
 
             // Tenta autenticar via Supabase se o cliente estiver disponível
             if (window.supabaseClient) {
-                console.log("Consultando Supabase...");
                 const { data, error } = await supabaseClient
                     .from("usuarios")
                     .select("*")
@@ -157,6 +152,11 @@ if (loginForm) {
                     .eq("senha", pass)
                     .single();
                 
+                if (error) {
+                    console.error("Erro detalhado do Supabase:", error.message, error.details, error.hint);
+                    // Se o erro for '406' ou similar, geralmente é RLS.
+                }
+
                 if (!error && data) usuarioLogado = data;
             }
 
@@ -164,7 +164,6 @@ if (loginForm) {
             if (!usuarioLogado && usuarioLocal) usuarioLogado = usuarioLocal;
 
             if (!usuarioLogado) {
-                console.warn("Nenhum usuário encontrado no Banco ou Local.");
                 loginError.innerText = "E-mail ou senha inválidos";
                 loginError.classList.remove('hidden');
                 return;
