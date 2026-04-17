@@ -12,8 +12,28 @@ function checkAuth() {
     if (isLogged) {
         loginScreen.classList.add('hidden');
         mainApp.classList.remove('hidden');
-        carregarTudo();
-        exibirUsuarioLogado();
+        // --- START Task 4: Synchronize on System Load ---
+        (async () => {
+            const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+            if (usuarioLogado?.id) {
+                console.log("checkAuth: Sincronizando usuário logado com Supabase...");
+                const { data, error } = await supabaseClient
+                    .from("usuarios")
+                    .select("*")
+                    .eq("id", usuarioLogado.id)
+                    .single();
+
+                if (data && !error) {
+                    console.log("checkAuth: Usuário logado atualizado do Supabase:", data);
+                    localStorage.setItem("usuarioLogado", JSON.stringify(data));
+                } else if (error) {
+                    console.error("checkAuth: Erro ao buscar usuário logado do Supabase:", error);
+                }
+            }
+            carregarTudo();
+            exibirUsuarioLogado();
+        })();
+        // --- END Task 4 ---
     } else {
         loginScreen.classList.remove('hidden');
         mainApp.classList.add('hidden');
