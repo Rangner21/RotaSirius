@@ -674,6 +674,7 @@ if (createUserForm) {
             let result;
             if (id) {
                 // Modo Edição
+                console.log("Atualizando usuário:", userData);
                 result = await supabaseClient.from("usuarios").update(userData).eq("id", id).select();
             } else {
                 // Modo Criação
@@ -682,7 +683,12 @@ if (createUserForm) {
             }
 
             const { data, error } = result;
-            console.log("Resposta salvamento usuário:", data, error);
+            
+            if (id) {
+                console.log("Resposta update usuário:", data, error);
+            } else {
+                console.log("Resposta salvamento usuário:", data, error);
+            }
 
             if (error) {
                 console.error("Erro ao salvar no Supabase:", error);
@@ -696,6 +702,17 @@ if (createUserForm) {
                 return; // Não fecha o modal nem limpa campos
             } else {
                 console.log("Usuário persistido com sucesso");
+
+                // Sincronização se for o usuário logado (Tarefa 3 e 5)
+                const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+                if (usuarioLogado && id && usuarioLogado.id == id) {
+                    console.log("Usuário logado antes:", usuarioLogado);
+                    const usuarioAtualizado = { ...usuarioLogado, ...userData };
+                    localStorage.setItem("usuarioLogado", JSON.stringify(usuarioAtualizado));
+                    console.log("Usuário logado depois:", usuarioAtualizado);
+                    exibirUsuarioLogado();
+                }
+
                 await carregarUsuarios();
             }
         } catch (err) {
