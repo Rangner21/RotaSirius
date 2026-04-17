@@ -31,6 +31,18 @@ function exibirUsuarioLogado() {
         return;
     }
 
+    // Controle de visibilidade do Painel de Controle por permissão
+    const isAdmin = usuarioLogado.permissao === "Administrador";
+    const btnControlDash = document.getElementById('open-control-panel-btn');
+    const btnControlProg = document.getElementById('open-control-panel-from-prog-btn');
+
+    if (btnControlDash) {
+        isAdmin ? btnControlDash.classList.remove('hidden') : btnControlDash.classList.add('hidden');
+    }
+    if (btnControlProg) {
+        isAdmin ? btnControlProg.classList.remove('hidden') : btnControlProg.classList.add('hidden');
+    }
+
     const primeiroNome = usuarioLogado.nome.split(" ")[0];
     const html = `
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
