@@ -68,6 +68,7 @@
         <h2>Roteirização</h2>
         <div style="display: flex; gap: 12px; align-items: center;">
           <button class="btn btn-outline" id="open-control-panel-btn">⚙ Painel de Controle</button>
+ <button class="btn btn-outline" id="open-programacao-btn">📅 Programação</button>
           <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
           <button class="btn" id="open-rota-modal-btn">+ Nova Rota</button>
           <div id="user-display-dashboard" class="user-display"></div>
@@ -85,26 +86,66 @@
           <div id="user-display-panel" class="user-display"></div>
         </div>
       </div>
-      <div class="panel-container">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-          <h3 style="margin: 0;">Gerenciamento de Usuários</h3>
-          <button class="btn" id="add-user-btn" style="margin: 0;">+ Adicionar Usuário</button>
+      
+      <div class="panel-grid">
+        <!-- Coluna da Esquerda: Usuários -->
+        <div class="panel-container">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0;">Gerenciamento de Usuários</h3>
+            <button class="btn" id="add-user-btn" style="margin: 0;">+ Adicionar Usuário</button>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Cargo</th>
+                <th>E-mail</th>
+                <th>Permissão</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body">
+            <!-- Usuários carregados via JS -->
+            </tbody>
+          </table>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>Cargo</th>
-              <th>E-mail</th>
-              <th>Permissão</th>
-              <th>Status</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody id="users-table-body">
-          <!-- Usuários carregados via JS -->
-          </tbody>
-        </table>
+
+        <!-- Coluna da Direita: KAM -->
+        <div class="panel-container">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0;">KAM</h3>
+            <button class="btn" id="add-kam-btn" style="margin: 0;">+ Adicionar KAM</button>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nome do KAM</th>
+                <th style="width: 100px; text-align: center;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="kams-table-body">
+              <!-- KAMs carregados via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visão de Programação -->
+    <div id="programacao-view" class="hidden">
+      <div class="topbar">
+        <h2>Programação</h2>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <button class="btn btn-outline" id="open-control-panel-from-prog-btn">⚙ Painel de Controle</button>
+          <button class="btn btn-outline" id="back-to-dashboard-from-programacao-btn">🚛 Roteirização</button>
+          <button class="btn btn-outline" id="open-programacao-history-btn">⏱ Histórico</button>
+          <button class="btn" id="open-rota-modal-from-prog-btn">+ Nova Rota</button>
+          <div id="user-display-programacao" class="user-display"></div>
+        </div>
+      </div>
+      <div id="programacao-dinamica-container" style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Conteúdo gerado automaticamente aparecerá aqui -->
       </div>
     </div>
 
@@ -114,14 +155,16 @@
 
 <!-- Modal para Nova NF -->
 <div id="create-nf-modal" class="modal-overlay">
-    <div class="modal-content">
+    <div class="modal-content" style="max-width: 500px;">
         <h3 id="nf-modal-title">Adicionar Nova NF</h3>
         <span class="close-button">&times;</span>
         <form id="create-nf-form">
             <input type="hidden" id="nf-id-hidden">
+            
             <label for="nf-numero">Número da NF:</label>
             <input type="text" id="nf-numero" required>
 
+            <label>Tipo de operação:</label>
             <div class="nf-tipo-toggle">
                 <button type="button" id="btn-transporte" class="btn-toggle active">Transporte</button>
                 <button type="button" id="btn-retira" class="btn-toggle">Retira</button>
@@ -158,10 +201,33 @@
             <label for="nf-valor">Valor de Frete:</label>
             <input type="number" id="nf-valor" step="0.01" required>
 
-            <label for="nf-obs">Observação:</label>
-            <input type="text" id="nf-obs" placeholder="Opcional">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nf-quantidade">Quantidade:</label>
+                    <input type="number" id="nf-quantidade" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label for="nf-marca">Marca:</label>
+                    <input type="text" id="nf-marca" placeholder="Marca">
+                </div>
+                <div class="form-group">
+                    <label for="nf-potencia">Potência:</label>
+                    <input type="text" id="nf-potencia" placeholder="Ex: 650W">
+                </div>
+            </div>
 
-            <button type="submit" class="btn">Salvar NF</button>
+            <label for="nf-kam">KAM (Responsável):</label>
+            <select id="nf-kam">
+                <option value="" disabled selected>Carregando KAMs...</option>
+            </select>
+
+            <label for="nf-obs">Observação:</label>
+            <textarea id="nf-obs" placeholder="Observações adicionais..." style="width: 100%; padding: 10px; border: 1px solid #1e293b; background: #0f172a; color: #e2e8f0; border-radius: 5px; outline: none; resize: vertical; min-height: 60px;"></textarea>
+
+            <div class="form-row" style="margin-top: 20px;">
+                <button type="button" id="btn-save-nf" class="btn btn-outline" style="flex: 1; margin-top: 0;">Salvar</button>
+                <button type="button" id="btn-save-close-nf" class="btn" style="flex: 1; margin-top: 0;">Salvar e Fechar</button>
+            </div>
         </form>
     </div>
 </div>
@@ -173,8 +239,12 @@
         <span class="close-button">&times;</span>
         <form id="create-rota-form">
             <input type="hidden" id="rota-id-hidden">
-            <label for="rota-nome">Nome da rota (ex: Recife 15/04):</label>
-            <input type="text" id="rota-nome" required>
+            <label for="rota-nome">Nome da rota (ex: Recife):</label>
+            <input type="text" id="rota-nome" placeholder="Ex: Recife" required>
+            
+            <label for="rota-data">Data da rota:</label>
+            <input type="date" id="rota-data" required>
+            
             <button type="submit" class="btn">Salvar Rota</button>
         </form>
     </div>
@@ -190,6 +260,20 @@
             <button id="generic-modal-cancel" class="btn-toggle">Cancelar</button>
             <button id="generic-modal-ok" class="btn" style="margin-top: 0;">Confirmar</button>
         </div>
+    </div>
+</div>
+
+<!-- Modal para Gerenciamento de KAM -->
+<div id="create-kam-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="kam-modal-title">Adicionar Novo KAM</h3>
+        <span class="close-button">&times;</span>
+        <form id="create-kam-form">
+            <input type="hidden" id="kam-id-hidden">
+            <label for="kam-nome">Nome do KAM:</label>
+            <input type="text" id="kam-nome" placeholder="Ex: João Silva" required>
+            <button type="submit" class="btn">Salvar KAM</button>
+        </form>
     </div>
 </div>
 
@@ -255,14 +339,51 @@
     </div>
 </div>
 
+<!-- Modal para Agendamento de Rota -->
+<div id="schedule-rota-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Agendar Rota</h3>
+        <span class="close-button">&times;</span>
+        <form id="schedule-rota-form">
+            <label for="schedule-rota-select">Selecionar Rota Ativa:</label>
+            <select id="schedule-rota-select" required>
+                <option value="" disabled selected>Selecione uma rota...</option>
+            </select>
+            <label for="schedule-date">Data da Saída:</label>
+            <input type="date" id="schedule-date" required>
+            <label for="schedule-vehicle">Veículo / Motorista:</label>
+            <input type="text" id="schedule-vehicle" placeholder="Ex: Caminhão 01 - João" required>
+            <button type="submit" class="btn">Confirmar Agendamento</button>
+        </form>
+    </div>
+</div>
+
 <!-- Modal de Histórico -->
 <div id="history-modal" class="modal-overlay">
     <div class="modal-content" style="max-width: 600px;">
         <h3>Histórico de Rotas Finalizadas</h3>
         <span class="close-button">&times;</span>
         
+        <!-- Campo de Pesquisa -->
+        <input type="text" id="history-search" class="search" style="margin-top: 0; margin-bottom: 20px;" placeholder="Pesquisar por nome ou data...">
+
         <div id="history-container" class="history-list">
             <!-- Itens do histórico aparecerão aqui -->
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Histórico da Programação -->
+<div id="programacao-history-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 800px; width: 95%;">
+        <h3>Histórico da Programação</h3>
+        <span class="close-button">&times;</span>
+
+        <!-- Campo de Pesquisa -->
+        <input type="text" id="programacao-history-search" class="search" style="margin-top: 0; margin-bottom: 20px;" placeholder="Pesquisar por nome ou data...">
+
+        <div id="programacao-history-container" style="max-height: 70vh; overflow-y: auto; padding-right: 10px;">
+            <!-- Conteúdo agrupado por data aparecerá aqui -->
         </div>
     </div>
 </div>

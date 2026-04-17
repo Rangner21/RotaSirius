@@ -529,6 +529,7 @@ input:-webkit-autofill:active {
 .modal-content input[type="number"],
 .modal-content input[type="email"],
 .modal-content input[type="password"],
+.modal-content input[type="date"],
 .modal-content select {
   width: 100%;
   padding: 10px;
@@ -537,6 +538,18 @@ input:-webkit-autofill:active {
   color: #e2e8f0;
   border-radius: 5px;
   outline: none;
+}
+
+/* Melhoria para ícone do calendário em campos de data no tema dark */
+.modal-content input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(1);
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.modal-content input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .modal-content input:disabled,
@@ -619,6 +632,21 @@ input:-webkit-autofill:active {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 24px;
+}
+
+/* Layout em colunas para o Painel de Controle */
+.panel-grid {
+  display: grid;
+  grid-template-columns: 7fr 3fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Responsividade: empilhar em telas menores que 1100px */
+@media (max-width: 1100px) {
+  .panel-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .data-table {

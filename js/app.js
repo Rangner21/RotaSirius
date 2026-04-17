@@ -23,11 +23,11 @@ function checkAuth() {
 function exibirUsuarioLogado() {
     const dashElem = document.getElementById('user-display-dashboard');
     const panelElem = document.getElementById('user-display-panel');
+    const programacaoElem = document.getElementById('user-display-programacao');
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
 
     if (!usuarioLogado) {
-        if (dashElem) dashElem.innerHTML = "";
-        if (panelElem) panelElem.innerHTML = "";
+        [dashElem, panelElem, programacaoElem].forEach(el => { if (el) el.innerHTML = ""; });
         return;
     }
 
@@ -52,7 +52,7 @@ function exibirUsuarioLogado() {
         </div>
     `;
 
-    [dashElem, panelElem].forEach(el => {
+    [dashElem, panelElem, programacaoElem].forEach(el => {
         if (el) {
             el.innerHTML = html;
             el.onclick = toggleUserMenu;
@@ -209,12 +209,24 @@ const nfUfInput = document.getElementById('nf-uf');
 const nfTipoInput = document.getElementById('nf-tipo');
 const nfObsInput = document.getElementById('nf-obs');
 const nfValorInput = document.getElementById('nf-valor');
+const nfQuantidadeInput = document.getElementById('nf-quantidade');
+const nfMarcaInput = document.getElementById('nf-marca');
+const nfPotenciaInput = document.getElementById('nf-potencia');
+const nfKamInput = document.getElementById('nf-kam');
 
 const btnTransporte = document.getElementById('btn-transporte');
 const btnRetira = document.getElementById('btn-retira');
 const rotaNomeInput = document.getElementById('rota-nome');
+const rotaDataInput = document.getElementById('rota-data');
 const rotaModalTitle = document.getElementById('rota-modal-title');
 const rotaIdHidden = document.getElementById('rota-id-hidden');
+
+const createKamModal = document.getElementById('create-kam-modal');
+const createKamForm = document.getElementById('create-kam-form');
+const kamNomeInput = document.getElementById('kam-nome');
+const kamIdHidden = document.getElementById('kam-id-hidden');
+const kamModalTitle = document.getElementById('kam-modal-title');
+const addKamBtn = document.getElementById('add-kam-btn');
 
 const genericModalOk = document.getElementById('generic-modal-ok');
 const genericModalCancel = document.getElementById('generic-modal-cancel');
@@ -274,8 +286,15 @@ function closeModal(modalElement) {
 // --- NAVEGAÇÃO PAINEL DE CONTROLE ---
 const dashboardView = document.getElementById('dashboard-view');
 const controlPanelView = document.getElementById('control-panel-view');
+const programacaoView = document.getElementById('programacao-view'); // Nova referência
+
 const openControlPanelBtn = document.getElementById('open-control-panel-btn');
+const openProgramacaoBtn = document.getElementById('open-programacao-btn'); // Novo botão
 const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
+const openProgHistoryBtn = document.getElementById('open-programacao-history-btn');
+const progHistoryModal = document.getElementById('programacao-history-modal');
+const openControlPanelFromProgBtn = document.getElementById('open-control-panel-from-prog-btn');
+const openRotaModalFromProgBtn = document.getElementById('open-rota-modal-from-prog-btn');
 const addUserBtn = document.getElementById('add-user-btn');
 const createUserModal = document.getElementById('create-user-modal');
 const createUserForm = document.getElementById('create-user-form');
@@ -362,6 +381,145 @@ function carregarUsuarios() {
     renderizarUsuarios();
 }
 
+// --- LÓGICA DE KAM ---
+async function carregarKams() {
+    try {
+        const { data: kams, error } = await supabaseClient.from("kams").select("*").order("nome");
+        if (error) throw error;
+
+        renderizarKams(kams);
+        popularSelectKam(kams);
+    } catch (err) {
+        console.error("Erro ao carregar KAMs:", err);
+    }
+}
+
+function renderizarKams(kams) {
+    const tbody = document.getElementById('kams-table-body');
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (!kams || kams.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="2" style="text-align:center; color:var(--text-muted); padding:10px;">Nenhum KAM cadastrado.</td></tr>`;
+        return;
+    }
+
+    kams.forEach(kam => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${kam.nome}</td>
+            <td style="text-align: center;">
+                <div style="display: flex; gap: 8px; justify-content: center;">
+                    <button class="icon-btn edit" title="Editar" onclick="editarKam('${kam.id}', '${kam.nome}')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+                    <button class="icon-btn delete" title="Excluir" onclick="excluirKam('${kam.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function popularSelectKam(kams, valorSelecionado = "") {
+    if (!nfKamInput) return;
+    nfKamInput.innerHTML = '<option value="" disabled selected>Selecione um KAM...</option>';
+    
+    if (kams && kams.length > 0) {
+        kams.forEach(kam => {
+            const option = document.createElement('option');
+            option.value = kam.nome;
+            option.textContent = kam.nome;
+            nfKamInput.appendChild(option);
+        });
+    } else {
+        nfKamInput.innerHTML = '<option value="" disabled selected>Nenhum KAM cadastrado</option>';
+    }
+
+    // Tarefa 7: Compatibilidade com NFs antigas (valor texto)
+    if (valorSelecionado) {
+        const existe = Array.from(nfKamInput.options).some(opt => opt.value === valorSelecionado);
+        if (!existe) {
+            const opt = document.createElement('option');
+            opt.value = valorSelecionado;
+            opt.textContent = valorSelecionado;
+            nfKamInput.appendChild(opt);
+        }
+        nfKamInput.value = valorSelecionado;
+    }
+}
+
+window.editarKam = function(id, nome) {
+    if (kamModalTitle) kamModalTitle.innerText = "Editar KAM";
+    if (kamIdHidden) kamIdHidden.value = id;
+    if (kamNomeInput) kamNomeInput.value = nome;
+    openModal(createKamModal);
+};
+
+window.excluirKam = function(id) {
+    confirmarAcao("Tem certeza que deseja excluir este KAM?", async () => {
+        try {
+            await supabaseClient.from("kams").delete().eq("id", id);
+            carregarKams();
+        } catch (err) {
+            console.error("Erro ao excluir KAM:", err);
+        }
+    });
+};
+
+if (addKamBtn) {
+    addKamBtn.addEventListener('click', () => {
+        if (kamModalTitle) kamModalTitle.innerText = "Adicionar Novo KAM";
+        if (kamIdHidden) kamIdHidden.value = "";
+        if (createKamForm) createKamForm.reset();
+        openModal(createKamModal);
+    });
+}
+
+if (createKamForm) {
+    createKamForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = kamIdHidden ? kamIdHidden.value : "";
+        const nome = kamNomeInput ? kamNomeInput.value.trim() : "";
+
+        console.log("Clique salvar KAM");
+        console.log("Nome KAM:", nome);
+
+        if (!nome) {
+            mostrarAviso("Informe o nome do KAM");
+            return;
+        }
+
+        try {
+            let result;
+            if (id) {
+                // Modo Edição
+                result = await supabaseClient.from("kams").update({ nome }).eq("id", id).select();
+            } else {
+                // Modo Criação
+                result = await supabaseClient.from("kams").insert([{ nome }]).select();
+            }
+
+            const { data, error } = result;
+            console.log("Resposta Supabase:", data, error);
+
+            if (error) {
+                console.error("Erro ao salvar KAM:", error);
+                mostrarAviso("Erro ao salvar KAM");
+                return; // Interrompe o fluxo para não fechar o modal
+            }
+
+            // Sucesso: Atualiza as listas (tabela e dropdown), limpa o form e fecha o modal
+            await carregarKams();
+            closeModal(createKamModal);
+            createKamForm.reset();
+            if (kamIdHidden) kamIdHidden.value = "";
+            
+        } catch (err) {
+            console.error("Erro inesperado ao salvar KAM:", err);
+            mostrarAviso("Erro inesperado ao salvar KAM");
+        }
+    });
+}
+
 if (addUserBtn) {
     addUserBtn.addEventListener('click', () => {
         if (userModalTitle) userModalTitle.innerText = "Adicionar Novo Usuário";
@@ -385,21 +543,82 @@ if (openControlPanelBtn) {
             mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
             return;
         }
-        if (dashboardView && controlPanelView) {
+        if (dashboardView && controlPanelView && programacaoView) {
             dashboardView.classList.add('hidden');
+            programacaoView.classList.add('hidden'); // Esconde programação também
             controlPanelView.classList.remove('hidden');
             carregarUsuarios();
+            carregarKams();
         }
     });
 }
 
+if (openControlPanelFromProgBtn) {
+    openControlPanelFromProgBtn.addEventListener('click', () => {
+        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
+            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
+            return;
+        }
+        programacaoView.classList.add('hidden');
+        controlPanelView.classList.remove('hidden');
+        carregarUsuarios();
+        carregarKams();
+    });
+}
+
+if (openProgramacaoBtn) {
+    openProgramacaoBtn.addEventListener('click', () => {
+        // Não há verificação de permissão específica para "Programação" por enquanto,
+        // mas pode ser adicionada aqui se necessário.
+        if (dashboardView && controlPanelView && programacaoView) {
+            dashboardView.classList.add('hidden');
+            controlPanelView.classList.add('hidden'); // Esconde painel de controle
+            programacaoView.classList.remove('hidden');
+            carregarProgramacao();
+        }
+    });
+}
+
+if (openProgHistoryBtn) {
+    openProgHistoryBtn.addEventListener('click', () => {
+        const progHistorySearch = document.getElementById('programacao-history-search');
+        if (progHistorySearch) progHistorySearch.value = "";
+        renderizarHistoricoProgramacao();
+        openModal(progHistoryModal);
+    });
+}
+
+const backToDashboardFromProgramacaoBtn = document.getElementById('back-to-dashboard-from-programacao-btn');
+
 if (backToDashboardBtn) {
     backToDashboardBtn.addEventListener('click', () => {
+        // Este botão é do Painel de Controle
+        // Garante que o dashboard seja exibido e o painel de controle oculto
         if (dashboardView && controlPanelView) {
             controlPanelView.classList.add('hidden');
             dashboardView.classList.remove('hidden');
             carregarTudo(); // Garante que os dados estejam atualizados ao voltar
         }
+    });
+}
+
+if (backToDashboardFromProgramacaoBtn) {
+    backToDashboardFromProgramacaoBtn.addEventListener('click', () => {
+        // Este botão é da Programação
+        if (dashboardView && programacaoView) {
+            programacaoView.classList.add('hidden');
+            dashboardView.classList.remove('hidden');
+            carregarTudo(); // Garante que os dados estejam atualizados ao voltar
+        }
+    });
+}
+
+if (openRotaModalFromProgBtn) {
+    openRotaModalFromProgBtn.addEventListener('click', () => {
+        if (rotaModalTitle) rotaModalTitle.innerText = "Adicionar Nova Rota";
+        if (rotaIdHidden) rotaIdHidden.value = "";
+        openModal(createRotaModal);
     });
 }
 
@@ -448,12 +667,12 @@ if (createUserForm) {
             let supaError;
             if (id) {
                 const { error } = await supabaseClient.from("usuarios").update({
-                    nome, sobrenome, email, senha, cargo, permissao
+                    nome, sobrenome, email, senha, cargo, permissao, status: "Ativo"
                 }).eq("id", id);
                 supaError = error;
             } else {
                 const { error } = await supabaseClient.from("usuarios").insert([
-                    { nome, sobrenome, email, senha, cargo, permissao }
+                    { nome, sobrenome, email, senha, cargo, permissao, status: "Ativo" }
                 ]);
                 supaError = error;
             }
@@ -479,6 +698,11 @@ if (openNfModalBtn) {
     if (nfModalTitle) nfModalTitle.innerText = "Adicionar Nova NF";
     if (nfIdHidden) nfIdHidden.value = "";
     if (createNfForm) createNfForm.reset();
+    if (nfQuantidadeInput) nfQuantidadeInput.value = "";
+    if (nfMarcaInput) nfMarcaInput.value = "";
+    if (nfPotenciaInput) nfPotenciaInput.value = "";
+    if (nfKamInput) nfKamInput.value = "";
+    carregarKams(); // Atualiza dropdown ao abrir
     if (btnTransporte) btnTransporte.click();
     openModal(createNfModal);
   });
@@ -488,6 +712,7 @@ if (openRotaModalBtn) {
     if (rotaModalTitle) rotaModalTitle.innerText = "Adicionar Nova Rota";
     if (rotaIdHidden) rotaIdHidden.value = "";
     if (rotaNomeInput) rotaNomeInput.value = "";
+    if (rotaDataInput) rotaDataInput.value = "";
     openModal(createRotaModal);
   });
 } else {
@@ -523,14 +748,12 @@ if (btnTransporte && btnRetira && nfTipoInput) {
   });
 }
 
-// CRIAR NF
-async function handleCriarNF(event) {
-  event.preventDefault(); // Previne o recarregamento da página
-
-  console.log('handleCriarNF: Função chamada.');
+// SALVAR NF (UNIFICADO)
+async function handleSalvarNF(fecharAoSalvar = true) {
+  console.log('handleSalvarNF: Função chamada. Fechar:', fecharAoSalvar);
 
   if (typeof supabaseClient === 'undefined') {
-    console.error('handleCriarNF: Cliente supabaseClient não está definido. Verifique se supabaseClient.js foi carregado.');
+    console.error('handleSalvarNF: Cliente supabaseClient não está definido.');
     mostrarAviso('Erro: O serviço de banco de dados não está disponível. Verifique a conexão.');
     return;
   }
@@ -541,10 +764,12 @@ async function handleCriarNF(event) {
   const destino = nfDestinoInput ? nfDestinoInput.value.trim() : '';
   const uf = nfUfInput ? nfUfInput.value.trim().toUpperCase() : '';
   const tipo = nfTipoInput ? nfTipoInput.value : 'transporte';
-  const valor = nfValorInput ? parseFloat(nfValorInput.value) : 0;
+  const valor = (nfValorInput && nfValorInput.value) ? parseFloat(nfValorInput.value) : 0;
   const observacao = nfObsInput ? nfObsInput.value.trim() : '';
-
-  console.log('handleCriarNF: Dados coletados:', { numero, destino, uf, tipo, valor, observacao });
+  const qtd = nfQuantidadeInput ? nfQuantidadeInput.value : '';
+  const marca = nfMarcaInput ? nfMarcaInput.value.trim() : '';
+  const potencia = nfPotenciaInput ? nfPotenciaInput.value.trim() : '';
+  const kam = nfKamInput ? nfKamInput.value.trim() : '';
 
   // Validação básica
   if (!numero) {
@@ -563,10 +788,16 @@ async function handleCriarNF(event) {
       numero,
       destino: tipo === 'retira' ? 'RETIRA' : destino,
       uf: tipo === 'retira' ? 'RT' : uf,
-      valor_frete: tipo === 'retira' ? 0 : valor, 
-      observacao: observacao,
-      rota_id: null
+      tipo,
+      valor_frete: tipo === 'retira' ? 0 : valor,
+      observacao,
+      kam,
+      marca,
+      potencia,
+      qtd
     };
+
+    console.log("Objeto NF enviado:", nfData);
 
     let result;
     if (nfId) {
@@ -574,27 +805,43 @@ async function handleCriarNF(event) {
       result = await supabaseClient.from("nfs").update(nfData).eq("id", nfId).select();
     } else {
       // Modo Criação
+      nfData.rota_id = null;
       result = await supabaseClient.from("nfs").insert([nfData]).select();
     }
     const { data, error } = result;
+    console.log("Resultado Supabase NF:", data, error);
 
     if (error) {
-      console.error('handleCriarNF: Erro ao inserir NF no supabaseClient:', error);
+      console.error('handleSalvarNF: Erro ao inserir NF no supabaseClient:', error);
       mostrarAviso('Erro ao salvar NF: ' + error.message);
       return;
     }
 
     console.log('handleCriarNF: NF salva com sucesso:', data);
     
-    if (createNfForm) { 
-      createNfForm.reset();
+    await carregarTudo();
+
+    if (fecharAoSalvar) {
+      closeModal(createNfModal);
+    } else {
+      // Feedback visual e limpeza para novo cadastro (Tarefa 2, 5 e 6)
+      if (createNfForm) createNfForm.reset();
+      if (nfIdHidden) nfIdHidden.value = "";
+      if (nfQuantidadeInput) nfQuantidadeInput.value = "";
+      if (nfMarcaInput) nfMarcaInput.value = "";
+      if (nfPotenciaInput) nfPotenciaInput.value = "";
+      if (nfKamInput) nfKamInput.value = "";
+      
+      carregarKams();
       if (btnTransporte) btnTransporte.click();
+      
+      if (nfNumeroInput) nfNumeroInput.focus();
+      mostrarAviso("NF salva com sucesso!");
     }
-    closeModal(createNfModal);// closeModal(createNfModal);
-    await carregarTudo(); // await carregarTudo();
+
   } catch (e) {
-    console.error('handleCriarNF: Erro inesperado durante a criação da NF:', e);
-    mostrarAviso('Ocorreu um erro inesperado ao criar a NF.');
+    console.error('handleSalvarNF: Erro inesperado:', e);
+    mostrarAviso('Ocorreu um erro inesperado ao salvar a NF.');
   }
 }
 
@@ -611,12 +858,13 @@ async function handleCriarRota(event) {
   }
 
   const nome = rotaNomeInput ? rotaNomeInput.value.trim() : '';
+  const dataRota = rotaDataInput ? rotaDataInput.value : '';
   const rotaId = rotaIdHidden ? rotaIdHidden.value : '';
   console.log('handleCriarRota: Nome da rota coletado:', nome);
 
-  if (!nome) {
-    mostrarAviso("Por favor, insira um nome para a rota.");
-    console.warn('handleCriarRota: Validação falhou. Nome da rota vazio.');
+  if (!nome || !dataRota) {
+    mostrarAviso("Por favor, preencha o nome e a data da rota.");
+    console.warn('handleCriarRota: Validação falhou.');
     return;
   }
 
@@ -624,10 +872,10 @@ async function handleCriarRota(event) {
     let result;
     if (rotaId) {
       // Modo Edição
-      result = await supabaseClient.from("rotas").update({ nome }).eq("id", rotaId).select();
+      result = await supabaseClient.from("rotas").update({ nome, data: dataRota }).eq("id", rotaId).select();
     } else {
       // Modo Criação
-      result = await supabaseClient.from("rotas").insert([{ nome }]).select();
+      result = await supabaseClient.from("rotas").insert([{ nome, data: dataRota }]).select();
     }
 
     const { data, error } = result;
@@ -742,8 +990,17 @@ window.editarNF = async function(nfId) {
     if (nfIdHidden) nfIdHidden.value = data.id;
     if (nfNumeroInput) nfNumeroInput.value = data.numero;
     if (nfObsInput) nfObsInput.value = data.observacao || "";
+    if (nfQuantidadeInput) nfQuantidadeInput.value = data.qtd ?? "";
+    if (nfMarcaInput) nfMarcaInput.value = data.marca || "";
+    if (nfPotenciaInput) nfPotenciaInput.value = data.potencia || "";
     
-    if (data.uf === 'RT') {
+    const { data: kams } = await supabaseClient.from("kams").select("*").order("nome");
+    popularSelectKam(kams, data.kam);
+    
+    // Usa o campo 'tipo' da tabela se existir, caso contrário verifica pela UF (compatibilidade)
+    const tipoOperacao = data.tipo || (data.uf === 'RT' ? 'retira' : 'transporte');
+
+    if (tipoOperacao === 'retira') {
         if (btnRetira) btnRetira.click();
     } else {
         if (btnTransporte) btnTransporte.click();
@@ -774,6 +1031,17 @@ window.excluirNF = async function(nfId) {
 // Listener para a busca
 if (searchInput) {
   searchInput.addEventListener('input', carregarNFs);
+}
+
+// Listeners para os campos de pesquisa dos históricos (Tarefa 4)
+const historySearchInput = document.getElementById('history-search');
+if (historySearchInput) {
+    historySearchInput.addEventListener('input', (e) => renderizarHistorico(e.target.value));
+}
+
+const progHistorySearchInput = document.getElementById('programacao-history-search');
+if (progHistorySearchInput) {
+    progHistorySearchInput.addEventListener('input', (e) => renderizarHistoricoProgramacao(e.target.value));
 }
 
 // ENVIAR PARA ROTA
@@ -843,13 +1111,18 @@ async function carregarRotas() {
     let total = 0;
     nfsDaRota.forEach(n => total += Number(n.valor_frete));
 
+    // Formatação do Nome e Data (Tarefa 5 e 6)
+    const displayNome = rota.data 
+        ? `${rota.nome} - ${rota.data.split('-')[2]}/${rota.data.split('-')[1]}` 
+        : rota.nome;
+
     card.innerHTML = `
       <div class="rota-header">
         <div>
           <div class="rota-title-group">
-            <h3>${rota.nome}</h3>
+            <h3>${displayNome}</h3>
             <div class="rota-actions">
-              <button class="icon-btn edit" title="Editar nome" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+              <button class="icon-btn edit" title="Editar nome" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}', '${rota.data || ''}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
               <button class="icon-btn delete" title="Excluir rota" onclick="event.stopPropagation(); deletarRota('${rota.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
             </div>
           </div>
@@ -911,10 +1184,11 @@ async function removerDaRota(nfId) {
 }
 
 // EDITAR NOME DA ROTA
-window.editarRota = async function(rotaId, nomeAtual) {
+window.editarRota = async function(rotaId, nomeAtual, dataAtual) {
   if (rotaModalTitle) rotaModalTitle.innerText = "Editar Rota";
   if (rotaIdHidden) rotaIdHidden.value = rotaId;
   if (rotaNomeInput) rotaNomeInput.value = nomeAtual;
+  if (rotaDataInput) rotaDataInput.value = dataAtual || "";
   openModal(createRotaModal);
 }
 
@@ -977,6 +1251,7 @@ function salvarRotaNoHistorico(rota, nfs, totalFrete) {
     const novaEntrada = {
         id: rota.id,
         nome: rota.nome,
+        dataRota: rota.data, // Salva a data original da rota (ex: 2024-04-16)
         data: new Date().toLocaleString('pt-BR'),
         qtdNfs: nfs.length,
         totalFrete: totalFrete,
@@ -992,15 +1267,38 @@ function salvarRotaNoHistorico(rota, nfs, totalFrete) {
     localStorage.setItem('rota_historico', JSON.stringify(historico));
 }
 
-function renderizarHistorico() {
+function renderizarHistorico(termoBusca = "") {
     const container = document.getElementById('history-container');
     if (!container) return;
     
-    const historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
+    let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
     container.innerHTML = "";
 
+    const termo = termoBusca.toLowerCase();
+
+    if (termo) {
+        historico = historico.filter(item => {
+            const nomeMatch = (item.nome || "").toLowerCase().includes(termo);
+            const dataFinalizacaoMatch = (item.data || "").toLowerCase().includes(termo);
+            
+            let dataRotaMatch = false;
+            if (item.dataRota) {
+                // Verifica formato ISO (YYYY-MM-DD)
+                if (item.dataRota.toLowerCase().includes(termo)) dataRotaMatch = true;
+                
+                // Verifica formato BR (DD/MM/YYYY) para facilitar busca
+                const [y, m, d] = item.dataRota.split('-');
+                const dataBR = `${d}/${m}/${y}`;
+                if (dataBR.includes(termo)) dataRotaMatch = true;
+            }
+            
+            return nomeMatch || dataFinalizacaoMatch || dataRotaMatch;
+        });
+    }
+
     if (historico.length === 0) {
-        container.innerHTML = "<p style='text-align:center; color:var(--text-muted); padding:20px;'>Nenhuma rota finalizada no histórico.</p>";
+        const msg = termo ? "Nenhum resultado encontrado." : "Nenhuma rota finalizada no histórico.";
+        container.innerHTML = `<p style='text-align:center; color:var(--text-muted); padding:20px;'>${msg}</p>`;
         return;
     }
 
@@ -1051,7 +1349,10 @@ window.retornarRota = async function(historicoId) {
 
     try {
         // 1. Criar a nova rota no banco de dados
-        const { data: novaRota, error: errorRota } = await supabaseClient.from("rotas").insert([{ nome: item.nome }]).select();
+        const { data: novaRota, error: errorRota } = await supabaseClient.from("rotas").insert([{ 
+            nome: item.nome, 
+            data: item.dataRota || null 
+        }]).select();
         if (errorRota) throw errorRota;
         if (!novaRota || novaRota.length === 0) throw new Error("Falha ao recriar rota.");
 
@@ -1120,6 +1421,222 @@ window.deletarRota = async function(rotaId) {
   });
 }
 
+// --- LÓGICA DE PROGRAMAÇÃO / AGENDAMENTO ---
+
+async function buscarDadosParaProgramacao() {
+    const { data: rotas, error: errR } = await supabaseClient.from("rotas").select("*");
+    const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*").not("rota_id", "is", null);
+    
+    if (errR || errN) throw new Error("Erro ao carregar dados do Supabase");
+    return { rotas, nfs };
+}
+
+function agruparDadosProgramacao(rotas, nfs) {
+    const agrupado = {};
+
+    nfs.forEach(nf => {
+        const rota = rotas.find(r => r.id === nf.rota_id);
+        if (!rota) return;
+
+        const dataKey = rota.data || "sem-data";
+        if (!agrupado[dataKey]) agrupado[dataKey] = {};
+        
+        if (!agrupado[dataKey][rota.id]) {
+            agrupado[dataKey][rota.id] = {
+                nome: rota.nome,
+                nfs: []
+            };
+        }
+        agrupado[dataKey][rota.id].nfs.push(nf);
+    });
+
+    return agrupado;
+}
+
+function formatarDataComDiaSemana(dataISO) {
+    if (dataISO === "sem-data") return "Data não definida";
+    const [ano, mes, dia] = dataISO.split('-').map(Number);
+    const dataObj = new Date(ano, mes - 1, dia);
+    const diaSemana = dataObj.toLocaleDateString('pt-BR', { weekday: 'long' });
+    const dataFormatada = `${dia.toString().padStart(2, '0')}/${mes.toString().padStart(2, '0')}/${ano}`;
+    return `${dataFormatada} (${diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)})`;
+}
+
+function renderizarProgramacaoAutomatica(agrupado) {
+    const container = document.getElementById('programacao-dinamica-container');
+    if (!container) return;
+    container.innerHTML = "";
+
+    const datas = Object.keys(agrupado).sort((a, b) => {
+        if (a === "sem-data") return 1;
+        if (b === "sem-data") return -1;
+        return a.localeCompare(b);
+    });
+
+    if (datas.length === 0) {
+        container.innerHTML = `<div class="panel-container"><p style="text-align:center; color:var(--text-muted); padding:20px;">Nenhuma rota com NFs vinculadas para exibir na programação.</p></div>`;
+        return;
+    }
+
+    datas.forEach(dataKey => {
+        const cardData = document.createElement('div');
+        cardData.className = "panel-container";
+        
+        let html = `
+            <h3 style="margin-bottom: 20px; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+                ${formatarDataComDiaSemana(dataKey)}
+            </h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>NF</th>
+                        <th>Destino</th>
+                        <th>Tipo</th>
+                        <th>Qtd</th>
+                        <th>Marca</th>
+                        <th>Potência</th>
+                        <th>KAM</th>
+                        <th>Rota</th>
+                        <th>Frete</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) => 
+            agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome)
+        );
+
+        rotasIds.forEach(rotaId => {
+            const infoRota = agrupado[dataKey][rotaId];
+            infoRota.nfs.forEach(nf => {
+                html += `
+                    <tr>
+                        <td><strong>${nf.numero}</strong></td>
+                        <td>${nf.destino}/${nf.uf}</td>
+                        <td style="text-transform: capitalize;">${nf.tipo}</td>
+                        <td>${nf.qtd || '---'}</td>
+                        <td>${nf.marca || '---'}</td>
+                        <td>${nf.potencia || '---'}</td>
+                        <td>${nf.kam || '---'}</td>
+                        <td><span style="background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap;">${infoRota.nome}</span></td>
+                        <td style="color: var(--primary); font-weight: 600;">R$ ${formatar(nf.valor_frete)}</td>
+                        <td><span style="color: var(--text-muted); font-size: 11px;">Preparado</span></td>
+                    </tr>
+                `;
+            });
+        });
+
+        html += `</tbody></table>`;
+        cardData.innerHTML = html;
+        container.appendChild(cardData);
+    });
+}
+
+async function carregarProgramacao() {
+    try {
+        const { rotas, nfs } = await buscarDadosParaProgramacao();
+        const agrupado = agruparDadosProgramacao(rotas, nfs);
+        renderizarProgramacaoAutomatica(agrupado);
+    } catch (err) {
+        console.error("Erro ao carregar programação automática:", err);
+    }
+}
+
+// --- HISTÓRICO ESPECÍFICO DA PROGRAMAÇÃO ---
+
+function renderizarHistoricoProgramacao(termoBusca = "") {
+    const container = document.getElementById('programacao-history-container');
+    if (!container) return;
+
+    let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
+    container.innerHTML = "";
+
+    const termo = termoBusca.toLowerCase();
+
+    if (termo) {
+        historico = historico.filter(item => {
+            const nomeMatch = (item.nome || "").toLowerCase().includes(termo);
+            const dataFinalizacaoMatch = (item.data || "").toLowerCase().includes(termo);
+            
+            let dataRotaMatch = false;
+            if (item.dataRota) {
+                // Verifica formato ISO (YYYY-MM-DD)
+                if (item.dataRota.toLowerCase().includes(termo)) dataRotaMatch = true;
+                
+                // Verifica formato BR (DD/MM/YYYY)
+                const [y, m, d] = item.dataRota.split('-');
+                const dataBR = `${d}/${m}/${y}`;
+                if (dataBR.includes(termo)) dataRotaMatch = true;
+            }
+            
+            return nomeMatch || dataFinalizacaoMatch || dataRotaMatch;
+        });
+    }
+
+    if (historico.length === 0) {
+        const msg = termo ? "Nenhum resultado encontrado." : "Nenhuma rota finalizada no histórico da programação.";
+        container.innerHTML = `<p style='text-align:center; color:var(--text-muted); padding:20px;'>${msg}</p>`;
+        return;
+    }
+
+    // Agrupar histórico por data da rota
+    const agrupado = {};
+    historico.forEach(item => {
+        const dataKey = item.dataRota || "sem-data";
+        if (!agrupado[dataKey]) agrupado[dataKey] = [];
+        agrupado[dataKey].push(item);
+    });
+
+    const datas = Object.keys(agrupado).sort((a, b) => {
+        if (a === "sem-data") return 1;
+        if (b === "sem-data") return -1;
+        return b.localeCompare(a); // Mais recentes primeiro no histórico
+    });
+
+    datas.forEach(dataKey => {
+        const section = document.createElement('div');
+        section.style.marginBottom = "30px";
+        
+        let html = `
+            <h4 style="color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 15px;">
+                ${formatarDataComDiaSemana(dataKey)}
+            </h4>
+        `;
+
+        agrupado[dataKey].forEach(rota => {
+            html += `
+                <div class="panel-container" style="margin-bottom: 15px; padding: 15px; background: rgba(30, 41, 59, 0.4);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div>
+                            <strong>Rota: ${rota.nome}</strong><br>
+                            <small style="color:var(--text-muted)">Finalizada em: ${rota.data}</small>
+                        </div>
+                        <div style="text-align:right">
+                            <span style="color:var(--primary); font-weight:bold;">R$ ${formatar(rota.totalFrete)}</span><br>
+                            <small style="color:var(--text-muted)">${rota.qtdNfs} NFs</small>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px;" onclick="copiarResumoHistorico('${rota.id}')">Copiar Resumo</button>
+                        <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRotaProgramacao('${rota.id}')">Retornar para Ativa</button>
+                    </div>
+                </div>
+            `;
+        });
+
+        section.innerHTML = html;
+        container.appendChild(section);
+    });
+}
+
+window.retornarRotaProgramacao = async function(id) {
+    // Reutiliza a lógica de retornar rota, mas fecha o modal específico de histórico de programação
+    await retornarRota(id);
+    closeModal(progHistoryModal);
+};
+
 // FORMATAR VALOR
 function formatar(valor) {
   return Number(valor).toLocaleString("pt-BR", {
@@ -1136,11 +1653,22 @@ function carregarTudo() {
 
 // Adicionar event listeners para os formulários
 // Verificações adicionadas para garantir que os elementos existem antes de anexar listeners
+const btnSaveNf = document.getElementById('btn-save-nf');
+const btnSaveCloseNf = document.getElementById('btn-save-close-nf');
+
+if (btnSaveNf) {
+  btnSaveNf.addEventListener('click', () => handleSalvarNF(false));
+}
+if (btnSaveCloseNf) {
+  btnSaveCloseNf.addEventListener('click', () => handleSalvarNF(true));
+}
+
+// Evita que o Enter no formulário dê um refresh indesejado, ou podemos mapear para o Salvar e Fechar
 if (createNfForm) {
-  createNfForm.addEventListener('submit', handleCriarNF);
-  console.log('Listener de submit para createNfForm anexado.');
-} else {
-  console.error('Elemento createNfForm não encontrado. O listener de submit não foi anexado.');
+    createNfForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        handleSalvarNF(true);
+    });
 }
 
 if (createRotaForm) {
@@ -1184,6 +1712,20 @@ if (changePasswordModal) {
     const closeBtn = changePasswordModal.querySelector('.close-button');
     if (closeBtn) {
         closeBtn.addEventListener('click', () => closeModal(changePasswordModal));
+    }
+}
+
+if (createKamModal) {
+    const closeBtn = createKamModal.querySelector('.close-button');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => closeModal(createKamModal));
+    }
+}
+
+if (progHistoryModal) {
+    const closeBtn = progHistoryModal.querySelector('.close-button');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => closeModal(progHistoryModal));
     }
 }
 
