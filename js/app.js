@@ -301,6 +301,8 @@ const createUserForm = document.getElementById('create-user-form');
 const userModalTitle = document.getElementById('user-modal-title');
 const userIdHidden = document.getElementById('user-id-hidden');
 
+let listaUsuariosLocal = []; // Cache local para busca rápida na edição
+
 function initAdmin() {
     const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
     // FIX 1: Verifica se o admin JÁ EXISTE especificamente.
@@ -322,11 +324,9 @@ function initAdmin() {
     }
 }
 
-function renderizarUsuarios() {
+function renderizarUsuarios(users) {
     const tbody = document.getElementById('users-table-body');
     if (!tbody) return;
-    
-    const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
     tbody.innerHTML = "";
 
     users.forEach(user => {
@@ -351,8 +351,7 @@ function renderizarUsuarios() {
 }
 
 window.editarUsuario = function(id) {
-    const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-    const user = users.find(u => u.id == id);
+    const user = listaUsuariosLocal.find(u => u.id == id);
     if (!user) return;
 
     if (userModalTitle) userModalTitle.innerText = "Editar Usuário";
@@ -369,16 +368,30 @@ window.editarUsuario = function(id) {
 };
 
 window.excluirUsuario = function(id) {
-    confirmarAcao("Tem certeza que deseja remover este usuário?", async () => {
-        let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-        users = users.filter(u => u.id != id);
-        localStorage.setItem('sirios_usuarios', JSON.stringify(users));
-        renderizarUsuarios();
+    confirmarAcao("Tem certeza que deseja remover este usuário do banco de dados?", async () => {
+        try {
+            const { error } = await supabaseClient.from("usuarios").delete().eq("id", id);
+            if (error) throw error;
+            
+            await carregarUsuarios();
+        } catch (err) {
+            console.error("Erro ao excluir usuário:", err);
+            mostrarAviso("Erro ao excluir usuário no servidor.");
+        }
     });
 };
 
-function carregarUsuarios() {
-    renderizarUsuarios();
+async function carregarUsuarios() {
+    console.log("Carregando usuários do banco...");
+    try {
+        const { data, error } = await supabaseClient.from("usuarios").select("*").order("nome");
+        console.log("Usuários carregados:", data, error);
+        if (error) throw error;
+        listaUsuariosLocal = data || [];
+        renderizarUsuarios(listaUsuariosLocal);
+    } catch (err) {
+        console.error("Erro ao carregar usuários:", err);
+    }
 }
 
 // --- LÓGICA DE KAM ---
@@ -634,52 +647,44 @@ if (createUserForm) {
         const cargo = document.getElementById('user-cargo').value.trim();
         const permissao = document.getElementById('user-permissao').value;
 
-        let users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-
-        if (users.some(u => u.email === email && u.id != id)) {
-            mostrarAviso("Este e-mail já está cadastrado.");
-            return;
-        }
-
         const userData = {
-            id: id || Date.now(),
             nome: nome,
             sobrenome: sobrenome,
             email: email,
             senha: senha,
             cargo: cargo,
             permissao: permissao,
-            status: "Ativo"
         };
 
-        if (id) {
-            const index = users.findIndex(u => u.id == id);
-            if (index !== -1) users[index] = userData;
-        } else {
-            users.push(userData);
-        }
+        console.log("Tentando salvar usuário:", userData);
 
-        localStorage.setItem('sirios_usuarios', JSON.stringify(users));
-
-        // FIX 3: Corrigido para usar UPDATE ao editar e INSERT ao criar
-        // BUG ORIGINAL: sempre usava insert, mesmo ao editar (duplicava registros no Supabase)
         try {
-            let supaError;
+            let result;
             if (id) {
-                const { error } = await supabaseClient.from("usuarios").update({
-                    nome, sobrenome, email, senha, cargo, permissao, status: "Ativo"
-                }).eq("id", id);
-                supaError = error;
+                // Modo Edição
+                result = await supabaseClient.from("usuarios").update(userData).eq("id", id).select();
             } else {
-                const { error } = await supabaseClient.from("usuarios").insert([
-                    { nome, sobrenome, email, senha, cargo, permissao, status: "Ativo" }
-                ]);
-                supaError = error;
+                // Modo Criação
+                userData.status = "Ativo";
+                result = await supabaseClient.from("usuarios").insert([userData]).select();
             }
-            if (supaError) {
-                console.error("Erro ao salvar no Supabase:", supaError);
+
+            const { data, error } = result;
+            console.log("Resposta salvamento usuário:", data, error);
+
+            if (error) {
+                console.error("Erro ao salvar no Supabase:", error);
+                
+                // Tratamento de e-mail duplicado comum no Supabase (código 23505)
+                if (error.code === '23505') {
+                    mostrarAviso("Este e-mail já está cadastrado no sistema.");
+                } else {
+                    mostrarAviso("Erro ao salvar usuário no servidor: " + error.message);
+                }
+                return; // Não fecha o modal nem limpa campos
             } else {
-                console.log("Usuário salvo no Supabase com sucesso");
+                console.log("Usuário persistido com sucesso");
+                await carregarUsuarios();
             }
         } catch (err) {
             console.error("Erro inesperado:", err);
@@ -688,7 +693,6 @@ if (createUserForm) {
         closeModal(createUserModal);
         createUserForm.reset();
         if (userIdHidden) userIdHidden.value = "";
-        renderizarUsuarios();
     });
 }
 
