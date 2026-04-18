@@ -250,6 +250,7 @@ const btnTransporte = document.getElementById('btn-transporte');
 const btnRetira = document.getElementById('btn-retira');
 const rotaNomeInput = document.getElementById('rota-nome');
 const rotaDataInput = document.getElementById('rota-data');
+const rotaTransportadoraInput = document.getElementById('rota-transportadora');
 const rotaModalTitle = document.getElementById('rota-modal-title');
 const rotaIdHidden = document.getElementById('rota-id-hidden');
 
@@ -913,6 +914,7 @@ async function handleCriarRota(event) {
 
   const nome = rotaNomeInput ? rotaNomeInput.value.trim() : '';
   const dataRota = rotaDataInput ? rotaDataInput.value : '';
+  const transportadora = rotaTransportadoraInput ? rotaTransportadoraInput.value.trim() : '';
   const rotaId = rotaIdHidden ? rotaIdHidden.value : '';
   console.log('handleCriarRota: Nome da rota coletado:', nome);
 
@@ -926,10 +928,10 @@ async function handleCriarRota(event) {
     let result;
     if (rotaId) {
       // Modo Edição
-      result = await supabaseClient.from("rotas").update({ nome, data: dataRota }).eq("id", rotaId).select();
+      result = await supabaseClient.from("rotas").update({ nome, data: dataRota, transportadora }).eq("id", rotaId).select();
     } else {
       // Modo Criação
-      result = await supabaseClient.from("rotas").insert([{ nome, data: dataRota }]).select();
+      result = await supabaseClient.from("rotas").insert([{ nome, data: dataRota, transportadora }]).select();
     }
 
     const { data, error } = result;
@@ -1208,7 +1210,7 @@ async function carregarRotas() {
           <div class="rota-title-group">
             <h3>${displayNome}</h3>
             <div class="rota-actions">
-              <button class="icon-btn edit" title="Editar nome" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}', '${rota.data || ''}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+              <button class="icon-btn edit" title="Editar rota" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}', '${rota.data || ''}', '${rota.transportadora || ''}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
               <button class="icon-btn delete" title="Excluir rota" onclick="event.stopPropagation(); deletarRota('${rota.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
             </div>
           </div>
@@ -1270,11 +1272,12 @@ async function removerDaRota(nfId) {
 }
 
 // EDITAR NOME DA ROTA
-window.editarRota = async function(rotaId, nomeAtual, dataAtual) {
+window.editarRota = async function(rotaId, nomeAtual, dataAtual, transportadoraAtual) {
   if (rotaModalTitle) rotaModalTitle.innerText = "Editar Rota";
   if (rotaIdHidden) rotaIdHidden.value = rotaId;
   if (rotaNomeInput) rotaNomeInput.value = nomeAtual;
   if (rotaDataInput) rotaDataInput.value = dataAtual || "";
+  if (rotaTransportadoraInput) rotaTransportadoraInput.value = transportadoraAtual || "";
   openModal(createRotaModal);
 }
 
@@ -1543,6 +1546,7 @@ function agruparDadosProgramacao(rotas, nfs, termoBusca = "") {
         if (!agrupado[dataKey][rota.id]) {
             agrupado[dataKey][rota.id] = {
                 nome: rota.nome,
+                transportadora: rota.transportadora,
                 nfs: []
             };
         }
@@ -1565,6 +1569,9 @@ function renderizarProgramacaoAutomatica(agrupado) {
     const container = document.getElementById('programacao-dinamica-container');
     if (!container) return;
     container.innerHTML = "";
+
+    const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+    const canEdit = usuarioLogado && usuarioLogado.permissao !== "Visualizador";
 
     const datas = Object.keys(agrupado).sort((a, b) => {
         if (a === "sem-data") return 1;
@@ -1614,7 +1621,7 @@ function renderizarProgramacaoAutomatica(agrupado) {
                         <th>Potência</th>
                         <th>KAM</th>
                         <th>Rota</th>
-                        <th>Frete</th>
+                        <th>Transportadora</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -1628,6 +1635,11 @@ function renderizarProgramacaoAutomatica(agrupado) {
         rotasIds.forEach(rotaId => {
             const infoRota = agrupado[dataKey][rotaId];
             infoRota.nfs.forEach(nf => {
+                const statusAtual = nf.status || "";
+                const statusDisplay = statusAtual || "---";
+                // Atributo de clique apenas se tiver permissão
+                const editAttr = canEdit ? `onclick="window.abrirEdicaoStatus(event, '${nf.id}', '${statusAtual}')" title="Clique para editar status" style="cursor: pointer;"` : "";
+
                 html += `
                     <tr>
                         <td><strong>${nf.numero}</strong></td>
@@ -1638,8 +1650,8 @@ function renderizarProgramacaoAutomatica(agrupado) {
                         <td>${nf.potencia || '---'}</td>
                         <td>${nf.kam || '---'}</td>
                         <td><span style="background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap;">${infoRota.nome}</span></td>
-                        <td style="color: var(--primary); font-weight: 600;">R$ ${formatar(nf.valor_frete)}</td>
-                        <td><span style="color: var(--text-muted); font-size: 11px;">Preparado</span></td>
+                        <td>${infoRota.transportadora || '---'}</td>
+                        <td id="cell-status-${nf.id}" ${editAttr}><span style="color: var(--text-muted); font-size: 11px;">${statusDisplay}</span></td>
                     </tr>
                 `;
             });
@@ -1650,6 +1662,53 @@ function renderizarProgramacaoAutomatica(agrupado) {
         container.appendChild(cardData);
     });
 }
+
+// FUNÇÕES DE EDIÇÃO INLINE DE STATUS
+window.abrirEdicaoStatus = function(event, nfId, statusAtual) {
+    event.stopPropagation();
+    const cell = document.getElementById(`cell-status-${nfId}`);
+    
+    // Evita abrir múltiplos se já estiver editando
+    if (!cell || cell.querySelector('select')) return;
+
+    const select = document.createElement('select');
+    select.className = 'status-select-inline';
+    
+    const opcoes = ["", "Em produção", "Produzida", "Expedida"];
+    opcoes.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt;
+        o.text = opt || "Vazio";
+        if (opt === statusAtual) o.selected = true;
+        select.appendChild(o);
+    });
+
+    cell.innerHTML = "";
+    cell.appendChild(select);
+    select.focus();
+
+    // Salvar ao mudar o valor
+    select.onchange = () => window.salvarStatusNF(nfId, select.value);
+    
+    // Voltar ao normal se perder o foco sem mudar
+    select.onblur = () => {
+        if (cell.contains(select)) {
+            cell.innerHTML = `<span style="color: var(--text-muted); font-size: 11px;">${statusAtual || "---"}</span>`;
+        }
+    };
+};
+
+window.salvarStatusNF = async function(nfId, novoStatus) {
+    try {
+        const { error } = await supabaseClient.from("nfs").update({ status: novoStatus }).eq("id", nfId);
+        if (error) throw error;
+        carregarProgramacao(); // Atualiza a tabela para refletir a mudança
+    } catch (err) {
+        console.error("Erro ao salvar status:", err);
+        mostrarAviso("Erro ao salvar status no servidor.");
+        carregarProgramacao();
+    }
+};
 
 async function carregarProgramacao() {
     try {
@@ -1693,7 +1752,7 @@ window.handleExportExcel = async function (e, specificDate = null) {
 
     try {
         // 2. Mostrar aviso de processamento
-        const msg = specificDate ? "Gerando planilha do dia..." : "Gerando relatório organizado por blocos... O download iniciará em instantes.";
+        const msg = specificDate ? "Gerando planilha do dia..." : "Gerando relatório da programação... O download iniciará em instantes.";
         mostrarAviso(msg);
 
         // 3. Buscar dados atuais (respeitando filtros da tela)
@@ -1725,7 +1784,7 @@ window.handleExportExcel = async function (e, specificDate = null) {
 
         // Título Principal e Metadados do Relatório
         sheetData.push(["RELATÓRIO DE PROGRAMAÇÃO ATIVA - ROTA SIRIUS"]);
-        merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }); // Mescla de A1 até I1 (Largura da tabela)
+        merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }); // Mescla de A1 até I1
         sheetData.push(["Gerado em:", agora.toLocaleString('pt-BR')]);
         sheetData.push([]); // Linha de respiro
         sheetData.push([]); // ETAPA 6: Respiro extra entre topo e primeiro bloco
@@ -1751,7 +1810,7 @@ window.handleExportExcel = async function (e, specificDate = null) {
             // Cabeçalho de colunas do bloco - Adicionado apenas uma vez por data
             headerRows.push(sheetData.length);
             sheetData.push([
-                "NF", "DESTINO", "Status", "Qtd.", "Marca", "Potência", "KAM", "ROTA", "FRETE"
+                "NF", "DESTINO", "Status", "Qtd.", "Marca", "Potência", "KAM", "ROTA", "TRANSPORTADORA"
             ]);
 
             const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) => 
@@ -1765,13 +1824,13 @@ window.handleExportExcel = async function (e, specificDate = null) {
                     sheetData.push([
                         nf.numero,
                         `${nf.destino}/${nf.uf}`,
-                        "Preparado",
+                        nf.status || "",
                         nf.qtd || 0,
                         nf.marca || "---",
                         nf.potencia || "---",
                         nf.kam || "---",
                         infoRota.nome,
-                        nf.valor_frete // Valor numérico para formatação
+                        infoRota.transportadora || ""
                     ]);
                 });
             });
@@ -1839,7 +1898,7 @@ window.handleExportExcel = async function (e, specificDate = null) {
         });
 
         // ETAPA 4: Melhoria visual das linhas de dados
-        const dataAlignments = ["center", "left", "center", "center", "left", "center", "left", "left", "center"];
+        const dataAlignments = ["center", "left", "center", "center", "left", "center", "left", "left", "left"];
         dataRowIndices.forEach(rowIdx => {
             for (let c = 0; c <= 8; c++) {
                 const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: c });
@@ -1858,19 +1917,6 @@ window.handleExportExcel = async function (e, specificDate = null) {
             }
         });
 
-        // 6. Formatação e Configurações de Exibição
-        const range = XLSX.utils.decode_range(worksheet['!ref']);
-        for (let R = range.s.r; R <= range.e.r; ++R) {
-            // Coluna I (índice 8) é o Frete em nossa estrutura AoA
-            const cellRef = XLSX.utils.encode_cell({ c: 8, r: R });
-            const cell = worksheet[cellRef];
-
-            if (cell && typeof cell.v === 'number') {
-                cell.t = 'n';
-                cell.z = '"R$ "#,##0.00'; // Formato de moeda brasileiro (Contábil)
-            }
-        }
-
         // Configurar larguras de colunas para leitura fácil
         worksheet['!cols'] = [
             { wch: 10 }, // NF (Compacta)
@@ -1881,7 +1927,7 @@ window.handleExportExcel = async function (e, specificDate = null) {
             { wch: 18 }, // Potencia
             { wch: 25 }, // KAM (Boa leitura para nomes)
             { wch: 25 }, // ROTA (Boa leitura)
-            { wch: 18 }  // FRETE (Confortável para valores)
+            { wch: 25 }  // TRANSPORTADORA (Boa leitura)
         ];
 
         // Congelar as 3 primeiras linhas (Título do Relatório)
@@ -1927,7 +1973,7 @@ window.handleExportPDF = async function(e, specificDate = null) {
             return;
         }
 
-        const msg = specificDate ? "Gerando PDF do dia..." : "Gerando PDF... O download iniciará em instantes.";
+        const msg = specificDate ? "Gerando PDF do dia..." : "Gerando PDF da programação... O download iniciará em instantes.";
         mostrarAviso(msg);
 
         const { jsPDF } = window.jspdf;
@@ -1991,13 +2037,13 @@ window.handleExportPDF = async function(e, specificDate = null) {
                     tableBody.push([
                         nf.numero,
                         `${nf.destino}/${nf.uf}`,
-                        "PREPARADO",
+                        (nf.status || "").toUpperCase(),
                         nf.qtd || 0,
                         (nf.marca || "---").toUpperCase(), // TAREFA 6: Padronização
                         nf.potencia || "---",
                         (nf.kam || "---").toUpperCase(),   // TAREFA 6: Padronização
                         infoRota.nome,
-                        `R$ ${formatar(nf.valor_frete)}`
+                        (infoRota.transportadora || "---").toUpperCase()
                     ]);
                 });
             });
@@ -2005,7 +2051,7 @@ window.handleExportPDF = async function(e, specificDate = null) {
             // TAREFA 3 e 4 — REFINAMENTO DA TABELA
             doc.autoTable({
                 startY: currentY,
-                head: [["NF", "DESTINO", "STATUS", "QTD", "MARCA", "POTÊNCIA", "KAM", "ROTA", "FRETE"]],
+                head: [["NF", "DESTINO", "STATUS", "QTD", "MARCA", "POTÊNCIA", "KAM", "ROTA", "TRANSPORTADORA"]],
                 body: tableBody,
                 theme: 'grid',
                 headStyles: { 
@@ -2031,7 +2077,7 @@ window.handleExportPDF = async function(e, specificDate = null) {
                     5: { halign: 'center', cellWidth: 27 }, // POTÊNCIA (Leve aumento para equilíbrio)
                     6: { halign: 'left', cellWidth: 42 },   // KAM (Aumentado para nomes longos)
                     7: { halign: 'left', cellWidth: 45 },   // ROTA
-                    8: { halign: 'right', cellWidth: 25 }   // FRETE
+                    8: { halign: 'left', cellWidth: 35 }    // TRANSPORTADORA
                 },
                 alternateRowStyles: {
                     fillColor: [248, 250, 252] // Slate 50 sutil

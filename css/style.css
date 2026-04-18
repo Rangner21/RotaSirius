@@ -831,3 +831,16 @@ input:-webkit-autofill:active {
 .user-dropdown button svg {
   color: inherit;
 }
+
+/* Estilo para edição inline de Status */
+.status-select-inline {
+  background: #0f172a;
+  border: 1px solid var(--primary);
+  color: var(--text-main);
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 2px 4px;
+  width: 100%;
+  outline: none;
+  cursor: pointer;
+}
