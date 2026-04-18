@@ -1,3 +1,29 @@
+// --- SISTEMA DE PERMISSÕES (TAREFA 6) ---
+const checkPerm = {
+    getUsuario: () => JSON.parse(localStorage.getItem("usuarioLogado")),
+    isAdmin: () => checkPerm.getUsuario()?.permissao === "Administrador",
+    isOperador: () => checkPerm.getUsuario()?.permissao === "Operador",
+    isVisualizador: () => checkPerm.getUsuario()?.permissao === "Visualizador",
+    
+    // Bloqueio centralizado para ações de escrita (TAREFA 3)
+    podeAlterar: function(mostrarMensagem = true) {
+        if (this.isVisualizador()) {
+            if (mostrarMensagem) window.mostrarAviso("⛔ Acesso Negado: Usuários com perfil 'Visualizador' não podem realizar alterações.");
+            return false;
+        }
+        return true;
+    },
+    
+    // Bloqueio centralizado para o Painel de Controle
+    podeAcessarPainel: function() {
+        if (!this.isAdmin()) {
+            window.mostrarAviso("⛔ Acesso Restrito: Apenas Administradores podem acessar o Painel de Controle.");
+            return false;
+        }
+        return true;
+    }
+};
+
 // --- SISTEMA DE LOGIN ---
 const loginScreen = document.getElementById('login-screen');
 const mainApp = document.querySelector('.app');
@@ -51,17 +77,22 @@ function exibirUsuarioLogado() {
         return;
     }
 
-    // Controle de visibilidade do Painel de Controle por permissão
-    const isAdmin = usuarioLogado.permissao === "Administrador";
+    // --- TAREFA 2: ESCONDER BOTÕES CONFORME A PERMISSÃO ---
+    const isAdmin = checkPerm.isAdmin();
+    const isVisualizador = checkPerm.isVisualizador();
+    
     const btnControlDash = document.getElementById('open-control-panel-btn');
     const btnControlProg = document.getElementById('open-control-panel-from-prog-btn');
+    const btnNovaNf = document.getElementById('open-nf-modal-btn');
+    const btnNovaRota = document.getElementById('open-rota-modal-btn');
 
-    if (btnControlDash) {
-        isAdmin ? btnControlDash.classList.remove('hidden') : btnControlDash.classList.add('hidden');
-    }
-    if (btnControlProg) {
-        isAdmin ? btnControlProg.classList.remove('hidden') : btnControlProg.classList.add('hidden');
-    }
+    // Esconder Painel para quem não é Admin
+    if (btnControlDash) isAdmin ? btnControlDash.classList.remove('hidden') : btnControlDash.classList.add('hidden');
+    if (btnControlProg) isAdmin ? btnControlProg.classList.remove('hidden') : btnControlProg.classList.add('hidden');
+
+    // Esconder botões de criação para Visualizador
+    if (btnNovaNf) isVisualizador ? btnNovaNf.classList.add('hidden') : btnNovaNf.classList.remove('hidden');
+    if (btnNovaRota) isVisualizador ? btnNovaRota.classList.add('hidden') : btnNovaRota.classList.remove('hidden');
 
     const primeiroNome = usuarioLogado.nome.split(" ")[0];
     const html = `
@@ -582,13 +613,8 @@ if (createUserModal) {
 
 if (openControlPanelBtn) {
     openControlPanelBtn.addEventListener('click', () => {
-        // FIX 4: Verificação de permissão de administrador
-        // BUG ORIGINAL: qualquer usuário logado (Operador, Visualizador) podia acessar o painel
-        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
-            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
-            return;
-        }
+        if (!checkPerm.podeAcessarPainel()) return;
+        
         if (dashboardView && controlPanelView && programacaoView) {
             dashboardView.classList.add('hidden');
             programacaoView.classList.add('hidden'); // Esconde programação também
@@ -601,11 +627,7 @@ if (openControlPanelBtn) {
 
 if (openControlPanelFromProgBtn) {
     openControlPanelFromProgBtn.addEventListener('click', () => {
-        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
-            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
-            return;
-        }
+        if (!checkPerm.podeAcessarPainel()) return;
         programacaoView.classList.add('hidden');
         controlPanelView.classList.remove('hidden');
         carregarUsuarios();
@@ -615,6 +637,7 @@ if (openControlPanelFromProgBtn) {
 
 if (openProgramacaoBtn) {
     openProgramacaoBtn.addEventListener('click', () => {
+        // Visualizador pode acessar a programação normalmente (Tarefa 5)
         // Não há verificação de permissão específica para "Programação" por enquanto,
         // mas pode ser adicionada aqui se necessário.
         if (dashboardView && controlPanelView && programacaoView) {
@@ -806,6 +829,9 @@ if (btnTransporte && btnRetira && nfTipoInput) {
 async function handleSalvarNF(fecharAoSalvar = true) {
   console.log('handleSalvarNF: Função chamada. Fechar:', fecharAoSalvar);
 
+  // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
+  if (!checkPerm.podeAlterar()) return;
+
   if (typeof supabaseClient === 'undefined') {
     console.error('handleSalvarNF: Cliente supabaseClient não está definido.');
     mostrarAviso('Erro: O serviço de banco de dados não está disponível. Verifique a conexão.');
@@ -903,6 +929,9 @@ async function handleSalvarNF(fecharAoSalvar = true) {
 async function handleCriarRota(event) {
   event.preventDefault(); // Previne o recarregamento da página
 
+  // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
+  if (!checkPerm.podeAlterar()) return;
+
   console.log('handleCriarRota: Função chamada.');
 
   if (typeof supabaseClient === 'undefined') {
@@ -988,6 +1017,8 @@ async function carregarNFs() {
     if (!container) return;
     container.innerHTML = "";
 
+    const canEdit = checkPerm.podeAlterar(false); // Verifica permissão sem alertar no loop
+
     // Atualizar contadores com segurança
     const total = data.length;
     const transporte = data.filter(n => n.uf !== 'RT').length;
@@ -1016,10 +1047,12 @@ async function carregarNFs() {
       const badge = nf.uf === 'RT' ? '<small style="color: #f87171;">[RETIRA]</small>' : '';
 
       div.innerHTML = `
-        <div class="nf-actions-top">
+        ${canEdit ? `
+          <div class="nf-actions-top">
           <button class="icon-btn edit" title="Editar" onclick="event.stopPropagation(); editarNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
           <button class="icon-btn delete" title="Excluir" onclick="event.stopPropagation(); excluirNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
         </div>
+        ` : ''}
         <strong>NF ${nf.numero} ${badge}</strong>
         <span>${nf.destino}/${nf.uf}</span>
         <small>R$ ${formatar(nf.valor_frete)}</small>
@@ -1037,6 +1070,10 @@ async function carregarNFs() {
 // EDITAR NF
 window.editarNF = async function(nfId) {
   try {
+    // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
+    // Operadores podem editar, Visualizadores não.
+    if (!checkPerm.podeAlterar()) return;
+
     const { data, error } = await supabaseClient.from("nfs").select("*").eq("id", nfId).single();
     if (error) throw error;
 
@@ -1072,6 +1109,9 @@ window.editarNF = async function(nfId) {
 // EXCLUIR NF
 window.excluirNF = async function(nfId) {
   confirmarAcao("Tem certeza que deseja excluir esta Nota Fiscal permanentemente?", async () => {
+    // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
+    if (!checkPerm.podeAlterar()) return;
+
     try {
       const { error } = await supabaseClient.from("nfs").delete().eq("id", nfId);
       if (error) throw error;
@@ -1105,6 +1145,10 @@ async function enviarParaRota(nfId) {
     mostrarAviso('Erro: O serviço de banco de dados não está disponível.');
     return;
   }
+
+  // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
+  // Visualizador não pode operar roteirização
+  if (!checkPerm.podeAlterar()) return;
   
   if (!rotaSelecionada) {
     mostrarAviso("Selecione uma rota primeiro clicando nela!");
@@ -1150,6 +1194,8 @@ async function carregarRotas() {
   const container = document.querySelector(".rotas");
   if (!container) return;
   container.innerHTML = "";
+
+  const canEdit = checkPerm.podeAlterar(false);
 
   // Lógica de Filtragem Local para resposta instantânea
   const termoNome = filtroNomeRota ? filtroNomeRota.value.toLowerCase() : "";
@@ -1207,10 +1253,12 @@ async function carregarRotas() {
         <div>
           <div class="rota-title-group">
             <h3>${displayNome}</h3>
-            <div class="rota-actions">
+            ${canEdit ? `
+              <div class="rota-actions">
               <button class="icon-btn edit" title="Editar nome" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}', '${rota.data || ''}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
               <button class="icon-btn delete" title="Excluir rota" onclick="event.stopPropagation(); deletarRota('${rota.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
             </div>
+            ` : ''}
           </div>
           <span>${nfsDaRota.length} NFs</span>
         </div>
@@ -1229,7 +1277,9 @@ async function carregarRotas() {
 
       <div class="rota-footer">
         <button class="btn btn-outline" onclick="event.stopPropagation(); copiarResumo('${rota.id}', '${rota.nome}', ${total})">Copiar Resumo</button>
-        <button class="btn" onclick="event.stopPropagation(); finalizarRota('${rota.id}')">Finalizar Rota</button>
+        ${canEdit ? `
+          <button class="btn" onclick="event.stopPropagation(); finalizarRota('${rota.id}')">Finalizar Rota</button>
+        ` : ''}
       </div>
     `;
 
@@ -1261,6 +1311,10 @@ async function removerDaRota(nfId) {
     alert('Erro: O serviço de banco de dados não está disponível.');
     return;
   }
+
+  // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
+  if (!checkPerm.podeAlterar()) return;
+
   await supabaseClient
     .from("nfs")
     .update({ rota_id: null })
@@ -1271,6 +1325,8 @@ async function removerDaRota(nfId) {
 
 // EDITAR NOME DA ROTA
 window.editarRota = async function(rotaId, nomeAtual, dataAtual) {
+  if (!checkPerm.podeAlterar()) return;
+
   if (rotaModalTitle) rotaModalTitle.innerText = "Editar Rota";
   if (rotaIdHidden) rotaIdHidden.value = rotaId;
   if (rotaNomeInput) rotaNomeInput.value = nomeAtual;
@@ -1307,6 +1363,9 @@ window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
 // FINALIZAR ROTA (Deleta a rota sem devolver NFs para pendentes)
 window.finalizarRota = async function(rotaId) {
   confirmarAcao("Deseja finalizar esta rota? Ela será removida permanentemente do sistema.", async () => {
+    // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
+    if (!checkPerm.podeAlterar()) return;
+
     try {
       // Buscar dados para o histórico antes de excluir
       const { data: rotas } = await supabaseClient.from("rotas").select("*").eq("id", rotaId);
@@ -1360,6 +1419,8 @@ function renderizarHistorico(termoBusca = "") {
     let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
     container.innerHTML = "";
 
+    const canEdit = checkPerm.podeAlterar(false);
+
     const termo = termoBusca.toLowerCase();
 
     if (termo) {
@@ -1404,9 +1465,11 @@ function renderizarHistorico(termoBusca = "") {
             </div>
             <div style="display:flex; gap:8px; margin-top:10px;">
                 <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px;" onclick="copiarResumoHistorico('${item.id}')">Resumo</button>
-                <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRota('${item.id}')">Retornar</button>
-                <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:#ef4444; color:#ef4444;" onclick="excluirHistorico('${item.id}')">Excluir</button>
-            </div>
+                ${canEdit ? `
+                  <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRota('${item.id}')">Retornar</button>
+                  <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:#ef4444; color:#ef4444;" onclick="excluirHistorico('${item.id}')">Excluir</button>
+                ` : ''}
+                </div>
         `;
         container.appendChild(card);
     });
@@ -1415,6 +1478,9 @@ function renderizarHistorico(termoBusca = "") {
 // EXCLUIR ROTA DO HISTÓRICO
 window.excluirHistorico = function(historicoId) {
     confirmarAcao("Tem certeza que deseja excluir esta rota permanentemente do histórico?", () => {
+        // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
+        if (!checkPerm.podeAlterar()) return;
+
         let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
         historico = historico.filter(h => h.id !== historicoId);
         localStorage.setItem('rota_historico', JSON.stringify(historico));
@@ -1426,6 +1492,9 @@ window.excluirHistorico = function(historicoId) {
 // RETORNAR ROTA PARA ATIVA
 window.retornarRota = async function(historicoId) {
     const historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
+    
+    if (!checkPerm.podeAlterar()) return;
+
     const item = historico.find(h => h.id == historicoId);
     
     if (!item) {
@@ -1491,6 +1560,9 @@ window.copiarResumoHistorico = async function(historicoId) {
 // EXCLUIR ROTA
 window.deletarRota = async function(rotaId) {
   confirmarAcao("Tem certeza que deseja excluir esta rota? As Notas Fiscais vinculadas retornarão para a lista de pendentes.", async () => {
+    // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
+    if (!checkPerm.podeAlterar()) return;
+
     try {
       // Primeiro removemos o vínculo das NFs com esta rota
       await supabaseClient.from("nfs").update({ rota_id: null }).eq("rota_id", rotaId);
@@ -1565,6 +1637,8 @@ function renderizarProgramacaoAutomatica(agrupado) {
     const container = document.getElementById('programacao-dinamica-container');
     if (!container) return;
     container.innerHTML = "";
+
+    const isVisualizador = checkPerm.isVisualizador();
 
     const datas = Object.keys(agrupado).sort((a, b) => {
         if (a === "sem-data") return 1;
@@ -1668,6 +1742,8 @@ function renderizarHistoricoProgramacao(termoBusca = "") {
     let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
     container.innerHTML = "";
 
+    const canEdit = checkPerm.podeAlterar(false);
+
     const termo = termoBusca.toLowerCase();
 
     if (termo) {
@@ -1735,8 +1811,10 @@ function renderizarHistoricoProgramacao(termoBusca = "") {
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px;" onclick="copiarResumoHistorico('${rota.id}')">Copiar Resumo</button>
-                        <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRotaProgramacao('${rota.id}')">Retornar para Ativa</button>
-                    </div>
+                        ${canEdit ? `
+                            <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRotaProgramacao('${rota.id}')">Retornar para Ativa</button>
+                        ` : ''}
+                        </div>
                 </div>
             `;
         });
