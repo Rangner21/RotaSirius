@@ -326,6 +326,7 @@ const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
 const openProgHistoryBtn = document.getElementById('open-programacao-history-btn');
 const progHistoryModal = document.getElementById('programacao-history-modal');
 const openControlPanelFromProgBtn = document.getElementById('open-control-panel-from-prog-btn');
+const exportProgramacaoBtn = document.getElementById('export-programacao-btn');
 const openRotaModalFromProgBtn = document.getElementById('open-rota-modal-from-prog-btn');
 const addUserBtn = document.getElementById('add-user-btn');
 const createUserModal = document.getElementById('create-user-modal');
@@ -1118,13 +1119,30 @@ async function enviarParaRota(nfId) {
   carregarTudo();
 }
 
+// Referências dos filtros de rota
+const filtroNomeRota = document.getElementById('filtro-nome-rota');
+const filtroDataRota = document.getElementById('filtro-data-rota');
+
+if (filtroNomeRota) filtroNomeRota.addEventListener('input', carregarRotas);
+if (filtroDataRota) filtroDataRota.addEventListener('change', carregarRotas);
+
+// Referências dos filtros de programação
+const filtroNomeProg = document.getElementById('filtro-nome-programacao');
+const filtroDataProg = document.getElementById('filtro-data-programacao');
+
+if (filtroNomeProg) filtroNomeProg.addEventListener('input', carregarProgramacao);
+if (filtroDataProg) filtroDataProg.addEventListener('change', carregarProgramacao);
+
 // CARREGAR ROTAS (COM 3 COLUNAS)
 async function carregarRotas() {
   if (typeof supabaseClient === 'undefined') {
     console.error('carregarRotas: Cliente supabaseClient não está definido.');
     return;
   }
-  const { data: rotas, error: errR } = await supabaseClient.from("rotas").select("*");
+  
+  let query = supabaseClient.from("rotas").select("*");
+  
+  const { data: rotas, error: errR } = await query;
   const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*");
 
   if (errR || errN || !rotas || !nfs) return;
@@ -1133,7 +1151,22 @@ async function carregarRotas() {
   if (!container) return;
   container.innerHTML = "";
 
-  rotas.forEach(rota => {
+  // Lógica de Filtragem Local para resposta instantânea
+  const termoNome = filtroNomeRota ? filtroNomeRota.value.toLowerCase() : "";
+  const termoData = filtroDataRota ? filtroDataRota.value : "";
+
+  const rotasFiltradas = rotas.filter(rota => {
+    const nomeMatch = rota.nome.toLowerCase().includes(termoNome);
+    const dataMatch = termoData ? rota.data === termoData : true;
+    return nomeMatch && dataMatch;
+  });
+
+  if (rotasFiltradas.length === 0) {
+    container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Nenhuma rota encontrada para os filtros aplicados.</p>`;
+    return;
+  }
+
+  rotasFiltradas.forEach(rota => {
     const card = document.createElement("div");
     card.className = "rota-card";
     
@@ -1484,12 +1517,25 @@ async function buscarDadosParaProgramacao() {
     return { rotas, nfs };
 }
 
-function agruparDadosProgramacao(rotas, nfs) {
+function agruparDadosProgramacao(rotas, nfs, termoBusca = "") {
     const agrupado = {};
+    const termo = termoBusca.toLowerCase();
 
     nfs.forEach(nf => {
         const rota = rotas.find(r => r.id === nf.rota_id);
         if (!rota) return;
+
+        // Lógica de busca multi-campo
+        if (termo) {
+            const matchRota = rota.nome.toLowerCase().includes(termo);
+            const matchNF = String(nf.numero).toLowerCase().includes(termo);
+            const matchKam = String(nf.kam || "").toLowerCase().includes(termo);
+            const matchDestino = String(nf.destino || "").toLowerCase().includes(termo) || 
+                               String(nf.uf || "").toLowerCase().includes(termo);
+
+            // Se nenhum dos campos bater, ignora esta NF
+            if (!matchRota && !matchNF && !matchKam && !matchDestino) return;
+        }
 
         const dataKey = rota.data || "sem-data";
         if (!agrupado[dataKey]) agrupado[dataKey] = {};
@@ -1536,7 +1582,7 @@ function renderizarProgramacaoAutomatica(agrupado) {
         cardData.className = "panel-container";
         
         let html = `
-            <h3 style="margin-bottom: 20px; color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+            <h3 style="margin-bottom: 20px; color: var(--primary); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; font-size: 16px;">
                 ${formatarDataComDiaSemana(dataKey)}
             </h3>
             <table class="data-table">
@@ -1590,11 +1636,27 @@ function renderizarProgramacaoAutomatica(agrupado) {
 async function carregarProgramacao() {
     try {
         const { rotas, nfs } = await buscarDadosParaProgramacao();
-        const agrupado = agruparDadosProgramacao(rotas, nfs);
+
+        // Lógica de Filtragem
+        const termoTexto = filtroNomeProg ? filtroNomeProg.value : "";
+        const termoData = filtroDataProg ? filtroDataProg.value : "";
+
+        // Filtramos as rotas apenas por data inicialmente
+        const rotasPorData = rotas.filter(rota => {
+            return termoData ? rota.data === termoData : true;
+        });
+
+        const agrupado = agruparDadosProgramacao(rotasPorData, nfs, termoTexto);
         renderizarProgramacaoAutomatica(agrupado);
     } catch (err) {
         console.error("Erro ao carregar programação automática:", err);
     }
+}
+
+if (exportProgramacaoBtn) {
+    exportProgramacaoBtn.addEventListener('click', () => {
+        mostrarAviso("A funcionalidade de exportação da programação será implementada aqui.");
+    });
 }
 
 // --- HISTÓRICO ESPECÍFICO DA PROGRAMAÇÃO ---
@@ -1653,18 +1715,18 @@ function renderizarHistoricoProgramacao(termoBusca = "") {
         section.style.marginBottom = "30px";
         
         let html = `
-            <h4 style="color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 15px;">
+            <h4 style="color: var(--primary); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; margin-bottom: 18px; font-size: 14px;">
                 ${formatarDataComDiaSemana(dataKey)}
             </h4>
         `;
 
         agrupado[dataKey].forEach(rota => {
             html += `
-                <div class="panel-container" style="margin-bottom: 15px; padding: 15px; background: rgba(30, 41, 59, 0.4);">
+                <div class="panel-container" style="margin-bottom: 15px; padding: 20px; background: rgba(30, 41, 59, 0.2); border-color: rgba(255,255,255,0.03);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                         <div>
-                            <strong>Rota: ${rota.nome}</strong><br>
-                            <small style="color:var(--text-muted)">Finalizada em: ${rota.data}</small>
+                            <strong style="font-size: 14px;">Rota: ${rota.nome}</strong><br>
+                            <small style="color:var(--text-muted); font-size: 11px;">Finalizada em: ${rota.data}</small>
                         </div>
                         <div style="text-align:right">
                             <span style="color:var(--primary); font-weight:bold;">R$ ${formatar(rota.totalFrete)}</span><br>

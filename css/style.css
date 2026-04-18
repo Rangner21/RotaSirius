@@ -286,7 +286,49 @@ input:-webkit-autofill:active {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
+  
+  /* Implementação de Header Fixo (Sticky) */
+  position: sticky;
+  top: -32px; /* Compensa o padding do container .main */
+  z-index: 100;
+  
+  /* Separação Visual e Estética Premium */
+  background: var(--bg-app);
+  margin: -32px -32px 32px -32px; /* Encosta nas bordas removendo o padding do pai */
+  padding: 16px 32px; /* Recria o espaçamento interno interno */
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px); /* Efeito de vidro sutil */
+}
+
+.topbar-actions {
+  display: flex;
+  gap: 32px; /* Espaço maior entre os grupos */
+  align-items: center;
+}
+
+.topbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Espaço menor dentro dos grupos */
+}
+
+.date-filter {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-main);
+  padding: 0 12px;
+  height: 36px; /* Botão mais fino */
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.date-filter:hover, .date-filter:focus {
+  border-color: var(--primary);
 }
 
 /* ROTAS GRID */
@@ -298,14 +340,15 @@ input:-webkit-autofill:active {
 
 /* ROTA */
 .rota-card {
-  background: var(--bg-sidebar);
+  background: rgba(30, 41, 59, 0.3);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 20px;
   display: flex;
   flex-direction: column;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
 }
 
 .rota-card.selected {
@@ -437,11 +480,16 @@ input:-webkit-autofill:active {
   background: transparent;
   color: var(--text-main);
   border: 1px solid var(--border);
-  padding: 10px 18px;
+  padding: 0 16px;
+  height: 36px; /* Altura reduzida para leveza */
   cursor: pointer;
   border-radius: 6px;
-  font-weight: 600;
+  font-weight: 500;
+  font-size: 13px;
   transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn:hover {
@@ -628,10 +676,12 @@ input:-webkit-autofill:active {
 
 /* ESTILOS DA TABELA DO PAINEL */
 .panel-container {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px;
+  background: rgba(30, 41, 59, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(4px);
 }
 
 /* Layout em colunas para o Painel de Controle */
@@ -657,17 +707,19 @@ input:-webkit-autofill:active {
 
 .data-table th {
   text-align: left;
-  padding: 12px 16px;
+  padding: 16px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
-  border-bottom: 2px solid var(--border);
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
 }
 
 .data-table td {
-  padding: 14px 16px;
+  padding: 16px;
   border-bottom: 1px solid var(--border);
-  font-size: 14px;
+  font-size: 13px;
+  color: var(--text-main);
 }
 
 .data-table tr:hover {
@@ -680,12 +732,12 @@ input:-webkit-autofill:active {
   align-items: center;
   gap: 8px;
   color: var(--text-main);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  padding: 8px 14px;
+  padding: 0 12px;
+  height: 36px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  margin-left: 32px;
   background: var(--bg-card);
   position: relative;
   cursor: pointer;

@@ -66,12 +66,25 @@
     <div id="dashboard-view">
       <div class="topbar">
         <h2>Roteirização</h2>
-        <div style="display: flex; gap: 12px; align-items: center;">
-          <button class="btn btn-outline" id="open-control-panel-btn">⚙ Painel de Controle</button>
- <button class="btn btn-outline" id="open-programacao-btn">📅 Programação</button>
-          <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
-          <button class="btn" id="open-rota-modal-btn">+ Nova Rota</button>
-          <div id="user-display-dashboard" class="user-display"></div>
+        <div class="topbar-actions">
+          <!-- GRUPO 1: FILTROS -->
+          <div class="topbar-group">
+            <input type="text" id="filtro-nome-rota" class="date-filter" placeholder="Filtrar por nome..." title="Filtrar por nome" style="cursor: text;">
+            <input type="date" id="filtro-data-rota" class="date-filter" title="Filtrar data">
+            <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
+          </div>
+
+          <!-- GRUPO 2: NAVEGAÇÃO / AÇÕES -->
+          <div class="topbar-group">
+            <button class="btn btn-outline" id="open-control-panel-btn">⚙ Painel</button>
+            <button class="btn btn-outline" id="open-programacao-btn">📅 Programação</button>
+            <button class="btn btn-primary" id="open-rota-modal-btn">+ Nova Rota</button>
+          </div>
+
+          <!-- GRUPO 3: PERFIL -->
+          <div class="topbar-group">
+            <div id="user-display-dashboard" class="user-display"></div>
+          </div>
         </div>
       </div>
       <div class="rotas"></div>
@@ -81,7 +94,7 @@
     <div id="control-panel-view" class="hidden">
       <div class="topbar">
         <h2>Painel de Controle</h2>
-        <div style="display: flex; gap: 12px; align-items: center;">
+        <div class="topbar-actions">
           <button class="btn btn-outline" id="back-to-dashboard-btn">← Voltar</button>
           <div id="user-display-panel" class="user-display"></div>
         </div>
@@ -136,11 +149,23 @@
     <div id="programacao-view" class="hidden">
       <div class="topbar">
         <h2>Programação</h2>
-        <div style="display: flex; gap: 12px; align-items: center;">
-          <button class="btn btn-outline" id="open-control-panel-from-prog-btn">⚙ Painel de Controle</button>
-          <button class="btn btn-outline" id="back-to-dashboard-from-programacao-btn">🚛 Roteirização</button>
-          <button class="btn btn-outline" id="open-programacao-history-btn">⏱ Histórico</button>
-          <div id="user-display-programacao" class="user-display"></div>
+        <div class="topbar-actions">
+          <!-- GRUPO 1: FILTROS / HISTÓRICO -->
+          <div class="topbar-group">
+              <input type="text" id="filtro-nome-programacao" class="date-filter" placeholder="NF, KAM, Rota ou Destino..." title="Pesquisa global na programação" style="cursor: text;">
+              <input type="date" id="filtro-data-programacao" class="date-filter" title="Filtrar data">
+            <button class="btn btn-outline" id="open-programacao-history-btn">⏱ Histórico</button>
+          </div>
+          <!-- GRUPO 2: NAVEGAÇÃO -->
+          <div class="topbar-group">
+            <button class="btn btn-outline" id="open-control-panel-from-prog-btn">⚙ Painel</button>
+            <button class="btn btn-outline" id="back-to-dashboard-from-programacao-btn">🚛 Roteirização</button>
+            <button class="btn btn-primary" id="export-programacao-btn">📥 Exportar</button>
+          </div>
+          <!-- GRUPO 3: PERFIL -->
+          <div class="topbar-group">
+            <div id="user-display-programacao" class="user-display"></div>
+          </div>
         </div>
       </div>
       <div id="programacao-dinamica-container" style="display: flex; flex-direction: column; gap: 24px;">
