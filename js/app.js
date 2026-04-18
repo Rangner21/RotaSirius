@@ -1,29 +1,3 @@
-// --- SISTEMA DE PERMISSÕES (TAREFA 6) ---
-const checkPerm = {
-    getUsuario: () => JSON.parse(localStorage.getItem("usuarioLogado")),
-    isAdmin: () => checkPerm.getUsuario()?.permissao === "Administrador",
-    isOperador: () => checkPerm.getUsuario()?.permissao === "Operador",
-    isVisualizador: () => checkPerm.getUsuario()?.permissao === "Visualizador",
-    
-    // Bloqueio centralizado para ações de escrita (TAREFA 3)
-    podeAlterar: function(mostrarMensagem = true) {
-        if (this.isVisualizador()) {
-            if (mostrarMensagem) window.mostrarAviso("⛔ Acesso Negado: Usuários com perfil 'Visualizador' não podem realizar alterações.");
-            return false;
-        }
-        return true;
-    },
-    
-    // Bloqueio centralizado para o Painel de Controle
-    podeAcessarPainel: function() {
-        if (!this.isAdmin()) {
-            window.mostrarAviso("⛔ Acesso Restrito: Apenas Administradores podem acessar o Painel de Controle.");
-            return false;
-        }
-        return true;
-    }
-};
-
 // --- SISTEMA DE LOGIN ---
 const loginScreen = document.getElementById('login-screen');
 const mainApp = document.querySelector('.app');
@@ -77,22 +51,17 @@ function exibirUsuarioLogado() {
         return;
     }
 
-    // --- TAREFA 2: ESCONDER BOTÕES CONFORME A PERMISSÃO ---
-    const isAdmin = checkPerm.isAdmin();
-    const isVisualizador = checkPerm.isVisualizador();
-    
+    // Controle de visibilidade do Painel de Controle por permissão
+    const isAdmin = usuarioLogado.permissao === "Administrador";
     const btnControlDash = document.getElementById('open-control-panel-btn');
     const btnControlProg = document.getElementById('open-control-panel-from-prog-btn');
-    const btnNovaNf = document.getElementById('open-nf-modal-btn');
-    const btnNovaRota = document.getElementById('open-rota-modal-btn');
 
-    // Esconder Painel para quem não é Admin
-    if (btnControlDash) isAdmin ? btnControlDash.classList.remove('hidden') : btnControlDash.classList.add('hidden');
-    if (btnControlProg) isAdmin ? btnControlProg.classList.remove('hidden') : btnControlProg.classList.add('hidden');
-
-    // Esconder botões de criação para Visualizador
-    if (btnNovaNf) isVisualizador ? btnNovaNf.classList.add('hidden') : btnNovaNf.classList.remove('hidden');
-    if (btnNovaRota) isVisualizador ? btnNovaRota.classList.add('hidden') : btnNovaRota.classList.remove('hidden');
+    if (btnControlDash) {
+        isAdmin ? btnControlDash.classList.remove('hidden') : btnControlDash.classList.add('hidden');
+    }
+    if (btnControlProg) {
+        isAdmin ? btnControlProg.classList.remove('hidden') : btnControlProg.classList.add('hidden');
+    }
 
     const primeiroNome = usuarioLogado.nome.split(" ")[0];
     const html = `
@@ -108,7 +77,7 @@ function exibirUsuarioLogado() {
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
                 Alterar Senha
             </button>
-            <button onclick="handleLogout(event)">
+            <button onclick="handleLogout(event)" class="logout-item">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                 Sair
             </button>
@@ -613,8 +582,13 @@ if (createUserModal) {
 
 if (openControlPanelBtn) {
     openControlPanelBtn.addEventListener('click', () => {
-        if (!checkPerm.podeAcessarPainel()) return;
-        
+        // FIX 4: Verificação de permissão de administrador
+        // BUG ORIGINAL: qualquer usuário logado (Operador, Visualizador) podia acessar o painel
+        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
+            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
+            return;
+        }
         if (dashboardView && controlPanelView && programacaoView) {
             dashboardView.classList.add('hidden');
             programacaoView.classList.add('hidden'); // Esconde programação também
@@ -627,7 +601,11 @@ if (openControlPanelBtn) {
 
 if (openControlPanelFromProgBtn) {
     openControlPanelFromProgBtn.addEventListener('click', () => {
-        if (!checkPerm.podeAcessarPainel()) return;
+        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
+            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
+            return;
+        }
         programacaoView.classList.add('hidden');
         controlPanelView.classList.remove('hidden');
         carregarUsuarios();
@@ -637,7 +615,6 @@ if (openControlPanelFromProgBtn) {
 
 if (openProgramacaoBtn) {
     openProgramacaoBtn.addEventListener('click', () => {
-        // Visualizador pode acessar a programação normalmente (Tarefa 5)
         // Não há verificação de permissão específica para "Programação" por enquanto,
         // mas pode ser adicionada aqui se necessário.
         if (dashboardView && controlPanelView && programacaoView) {
@@ -829,9 +806,6 @@ if (btnTransporte && btnRetira && nfTipoInput) {
 async function handleSalvarNF(fecharAoSalvar = true) {
   console.log('handleSalvarNF: Função chamada. Fechar:', fecharAoSalvar);
 
-  // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
-  if (!checkPerm.podeAlterar()) return;
-
   if (typeof supabaseClient === 'undefined') {
     console.error('handleSalvarNF: Cliente supabaseClient não está definido.');
     mostrarAviso('Erro: O serviço de banco de dados não está disponível. Verifique a conexão.');
@@ -929,9 +903,6 @@ async function handleSalvarNF(fecharAoSalvar = true) {
 async function handleCriarRota(event) {
   event.preventDefault(); // Previne o recarregamento da página
 
-  // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
-  if (!checkPerm.podeAlterar()) return;
-
   console.log('handleCriarRota: Função chamada.');
 
   if (typeof supabaseClient === 'undefined') {
@@ -1017,8 +988,6 @@ async function carregarNFs() {
     if (!container) return;
     container.innerHTML = "";
 
-    const canEdit = checkPerm.podeAlterar(false); // Verifica permissão sem alertar no loop
-
     // Atualizar contadores com segurança
     const total = data.length;
     const transporte = data.filter(n => n.uf !== 'RT').length;
@@ -1047,12 +1016,10 @@ async function carregarNFs() {
       const badge = nf.uf === 'RT' ? '<small style="color: #f87171;">[RETIRA]</small>' : '';
 
       div.innerHTML = `
-        ${canEdit ? `
-          <div class="nf-actions-top">
+        <div class="nf-actions-top">
           <button class="icon-btn edit" title="Editar" onclick="event.stopPropagation(); editarNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
           <button class="icon-btn delete" title="Excluir" onclick="event.stopPropagation(); excluirNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
         </div>
-        ` : ''}
         <strong>NF ${nf.numero} ${badge}</strong>
         <span>${nf.destino}/${nf.uf}</span>
         <small>R$ ${formatar(nf.valor_frete)}</small>
@@ -1070,10 +1037,6 @@ async function carregarNFs() {
 // EDITAR NF
 window.editarNF = async function(nfId) {
   try {
-    // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
-    // Operadores podem editar, Visualizadores não.
-    if (!checkPerm.podeAlterar()) return;
-
     const { data, error } = await supabaseClient.from("nfs").select("*").eq("id", nfId).single();
     if (error) throw error;
 
@@ -1109,9 +1072,6 @@ window.editarNF = async function(nfId) {
 // EXCLUIR NF
 window.excluirNF = async function(nfId) {
   confirmarAcao("Tem certeza que deseja excluir esta Nota Fiscal permanentemente?", async () => {
-    // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
-    if (!checkPerm.podeAlterar()) return;
-
     try {
       const { error } = await supabaseClient.from("nfs").delete().eq("id", nfId);
       if (error) throw error;
@@ -1145,10 +1105,6 @@ async function enviarParaRota(nfId) {
     mostrarAviso('Erro: O serviço de banco de dados não está disponível.');
     return;
   }
-
-  // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
-  // Visualizador não pode operar roteirização
-  if (!checkPerm.podeAlterar()) return;
   
   if (!rotaSelecionada) {
     mostrarAviso("Selecione uma rota primeiro clicando nela!");
@@ -1194,8 +1150,6 @@ async function carregarRotas() {
   const container = document.querySelector(".rotas");
   if (!container) return;
   container.innerHTML = "";
-
-  const canEdit = checkPerm.podeAlterar(false);
 
   // Lógica de Filtragem Local para resposta instantânea
   const termoNome = filtroNomeRota ? filtroNomeRota.value.toLowerCase() : "";
@@ -1253,12 +1207,10 @@ async function carregarRotas() {
         <div>
           <div class="rota-title-group">
             <h3>${displayNome}</h3>
-            ${canEdit ? `
-              <div class="rota-actions">
+            <div class="rota-actions">
               <button class="icon-btn edit" title="Editar nome" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}', '${rota.data || ''}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
               <button class="icon-btn delete" title="Excluir rota" onclick="event.stopPropagation(); deletarRota('${rota.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
             </div>
-            ` : ''}
           </div>
           <span>${nfsDaRota.length} NFs</span>
         </div>
@@ -1277,9 +1229,7 @@ async function carregarRotas() {
 
       <div class="rota-footer">
         <button class="btn btn-outline" onclick="event.stopPropagation(); copiarResumo('${rota.id}', '${rota.nome}', ${total})">Copiar Resumo</button>
-        ${canEdit ? `
-          <button class="btn" onclick="event.stopPropagation(); finalizarRota('${rota.id}')">Finalizar Rota</button>
-        ` : ''}
+        <button class="btn" onclick="event.stopPropagation(); finalizarRota('${rota.id}')">Finalizar Rota</button>
       </div>
     `;
 
@@ -1311,10 +1261,6 @@ async function removerDaRota(nfId) {
     alert('Erro: O serviço de banco de dados não está disponível.');
     return;
   }
-
-  // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
-  if (!checkPerm.podeAlterar()) return;
-
   await supabaseClient
     .from("nfs")
     .update({ rota_id: null })
@@ -1325,8 +1271,6 @@ async function removerDaRota(nfId) {
 
 // EDITAR NOME DA ROTA
 window.editarRota = async function(rotaId, nomeAtual, dataAtual) {
-  if (!checkPerm.podeAlterar()) return;
-
   if (rotaModalTitle) rotaModalTitle.innerText = "Editar Rota";
   if (rotaIdHidden) rotaIdHidden.value = rotaId;
   if (rotaNomeInput) rotaNomeInput.value = nomeAtual;
@@ -1363,9 +1307,6 @@ window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
 // FINALIZAR ROTA (Deleta a rota sem devolver NFs para pendentes)
 window.finalizarRota = async function(rotaId) {
   confirmarAcao("Deseja finalizar esta rota? Ela será removida permanentemente do sistema.", async () => {
-    // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
-    if (!checkPerm.podeAlterar()) return;
-
     try {
       // Buscar dados para o histórico antes de excluir
       const { data: rotas } = await supabaseClient.from("rotas").select("*").eq("id", rotaId);
@@ -1419,8 +1360,6 @@ function renderizarHistorico(termoBusca = "") {
     let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
     container.innerHTML = "";
 
-    const canEdit = checkPerm.podeAlterar(false);
-
     const termo = termoBusca.toLowerCase();
 
     if (termo) {
@@ -1465,11 +1404,9 @@ function renderizarHistorico(termoBusca = "") {
             </div>
             <div style="display:flex; gap:8px; margin-top:10px;">
                 <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px;" onclick="copiarResumoHistorico('${item.id}')">Resumo</button>
-                ${canEdit ? `
-                  <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRota('${item.id}')">Retornar</button>
-                  <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:#ef4444; color:#ef4444;" onclick="excluirHistorico('${item.id}')">Excluir</button>
-                ` : ''}
-                </div>
+                <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRota('${item.id}')">Retornar</button>
+                <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:#ef4444; color:#ef4444;" onclick="excluirHistorico('${item.id}')">Excluir</button>
+            </div>
         `;
         container.appendChild(card);
     });
@@ -1478,9 +1415,6 @@ function renderizarHistorico(termoBusca = "") {
 // EXCLUIR ROTA DO HISTÓRICO
 window.excluirHistorico = function(historicoId) {
     confirmarAcao("Tem certeza que deseja excluir esta rota permanentemente do histórico?", () => {
-        // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
-        if (!checkPerm.podeAlterar()) return;
-
         let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
         historico = historico.filter(h => h.id !== historicoId);
         localStorage.setItem('rota_historico', JSON.stringify(historico));
@@ -1492,9 +1426,6 @@ window.excluirHistorico = function(historicoId) {
 // RETORNAR ROTA PARA ATIVA
 window.retornarRota = async function(historicoId) {
     const historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
-    
-    if (!checkPerm.podeAlterar()) return;
-
     const item = historico.find(h => h.id == historicoId);
     
     if (!item) {
@@ -1560,9 +1491,6 @@ window.copiarResumoHistorico = async function(historicoId) {
 // EXCLUIR ROTA
 window.deletarRota = async function(rotaId) {
   confirmarAcao("Tem certeza que deseja excluir esta rota? As Notas Fiscais vinculadas retornarão para a lista de pendentes.", async () => {
-    // TAREFA 3: BLOQUEAR AÇÕES NA LÓGICA
-    if (!checkPerm.podeAlterar()) return;
-
     try {
       // Primeiro removemos o vínculo das NFs com esta rota
       await supabaseClient.from("nfs").update({ rota_id: null }).eq("rota_id", rotaId);
@@ -1638,8 +1566,6 @@ function renderizarProgramacaoAutomatica(agrupado) {
     if (!container) return;
     container.innerHTML = "";
 
-    const isVisualizador = checkPerm.isVisualizador();
-
     const datas = Object.keys(agrupado).sort((a, b) => {
         if (a === "sem-data") return 1;
         if (b === "sem-data") return -1;
@@ -1656,9 +1582,27 @@ function renderizarProgramacaoAutomatica(agrupado) {
         cardData.className = "panel-container";
         
         let html = `
-            <h3 style="margin-bottom: 20px; color: var(--primary); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; font-size: 16px;">
-                ${formatarDataComDiaSemana(dataKey)}
-            </h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
+                <h3 style="margin: 0; color: var(--primary); font-size: 16px;">
+                    ${formatarDataComDiaSemana(dataKey)}
+                </h3>
+                <div class="export-day-wrapper" style="position: relative;" onclick="toggleUserMenu(event)">
+                    <button class="btn btn-outline" style="height: 30px; font-size: 11px; padding: 0 12px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; color: var(--primary);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Exportar Dia
+                    </button>
+                    <div class="user-dropdown hidden" style="top: calc(100% + 5px); right: 0; width: 140px;">
+                        <button type="button" onclick="handleExportExcel(event, '${dataKey}')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #22c55e;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+                            Excel
+                        </button>
+                        <button type="button" onclick="handleExportPDF(event, '${dataKey}')">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            PDF
+                        </button>
+                    </div>
+                </div>
+            </div>
             <table class="data-table">
                 <thead>
                     <tr>
@@ -1727,11 +1671,396 @@ async function carregarProgramacao() {
     }
 }
 
+const exportDropdown = document.getElementById('export-dropdown');
 if (exportProgramacaoBtn) {
-    exportProgramacaoBtn.addEventListener('click', () => {
-        mostrarAviso("A funcionalidade de exportação da programação será implementada aqui.");
+    exportProgramacaoBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (exportDropdown) {
+            // Fecha outros dropdowns abertos (como o de perfil)
+            document.querySelectorAll('.user-dropdown').forEach(d => {
+                if (d !== exportDropdown) d.classList.add('hidden');
+            });
+            exportDropdown.classList.toggle('hidden');
+        }
     });
 }
+
+window.handleExportExcel = async function (e, specificDate = null) {
+    if (e) e.stopPropagation();
+
+    // 1. Fechar todos os menus de exportação (principal e individuais)
+    document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
+
+    try {
+        // 2. Mostrar aviso de processamento
+        const msg = specificDate ? "Gerando planilha do dia..." : "Gerando relatório organizado por blocos... O download iniciará em instantes.";
+        mostrarAviso(msg);
+
+        // 3. Buscar dados atuais (respeitando filtros da tela)
+        const { rotas, nfs } = await buscarDadosParaProgramacao();
+        const termoTexto = filtroNomeProg ? filtroNomeProg.value : "";
+        
+        // Se houver uma data específica (clique no card), ela ignora o filtro global de data
+        const termoData = specificDate || (filtroDataProg ? filtroDataProg.value : "");
+
+        // Filtrar rotas conforme filtros de data da tela de programação
+        const rotasFiltradas = rotas.filter(rota => {
+            if (!termoData) return true;
+            if (termoData === "sem-data") return !rota.data;
+            return rota.data === termoData;
+        });
+
+        // Agrupar usando a lógica já existente no sistema
+        const agrupado = agruparDadosProgramacao(rotasFiltradas, nfs, termoTexto);
+
+        if (Object.keys(agrupado).length === 0) {
+            mostrarAviso("Nenhum dado disponível para exportação com os filtros atuais.");
+            return;
+        }
+
+        // 4. Construir o array de dados (AoA - Array of Arrays) para a planilha organizada
+        const sheetData = [];
+        const merges = [];
+        const agora = new Date();
+
+        // Título Principal e Metadados do Relatório
+        sheetData.push(["RELATÓRIO DE PROGRAMAÇÃO ATIVA - ROTA SIRIUS"]);
+        merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }); // Mescla de A1 até I1 (Largura da tabela)
+        sheetData.push(["Gerado em:", agora.toLocaleString('pt-BR')]);
+        sheetData.push([]); // Linha de respiro
+        sheetData.push([]); // ETAPA 6: Respiro extra entre topo e primeiro bloco
+
+        const datas = Object.keys(agrupado).sort((a, b) => {
+            if (a === "sem-data") return 1;
+            if (b === "sem-data") return -1;
+            return a.localeCompare(b);
+        });
+
+        const dateRows = [];
+        const headerRows = [];
+        const dataRowIndices = [];
+        datas.forEach(dataKey => {
+            // ETAPA 2: Rastrear e configurar a linha da Data como Cabeçalho de Bloco
+            const rowIdx = sheetData.length;
+            dateRows.push(rowIdx);
+
+            const dataTitulo = formatarDataComDiaSemana(dataKey).toUpperCase();
+            sheetData.push([dataTitulo]);
+            merges.push({ s: { r: rowIdx, c: 0 }, e: { r: rowIdx, c: 8 } }); // Mescla A:I para a data
+
+            // Cabeçalho de colunas do bloco - Adicionado apenas uma vez por data
+            headerRows.push(sheetData.length);
+            sheetData.push([
+                "NF", "DESTINO", "Status", "Qtd.", "Marca", "Potência", "KAM", "ROTA", "FRETE"
+            ]);
+
+            const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) => 
+                agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome)
+            );
+
+            rotasIds.forEach(rotaId => {
+                const infoRota = agrupado[dataKey][rotaId];
+                infoRota.nfs.forEach(nf => {
+                    dataRowIndices.push(sheetData.length);
+                    sheetData.push([
+                        nf.numero,
+                        `${nf.destino}/${nf.uf}`,
+                        "Preparado",
+                        nf.qtd || 0,
+                        nf.marca || "---",
+                        nf.potencia || "---",
+                        nf.kam || "---",
+                        infoRota.nome,
+                        nf.valor_frete // Valor numérico para formatação
+                    ]);
+                });
+            });
+
+            // Espaçadores após fechar o bloco completo da data (todas as rotas do dia)
+            sheetData.push([]);
+            sheetData.push([]);
+        });
+
+        // 5. Gerar a planilha a partir do AoA
+        const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+        worksheet['!merges'] = merges;
+
+        // Estilização do Título (A1) - ETAPA 1
+        if (worksheet['A1']) {
+            worksheet['A1'].s = {
+                fill: { fgColor: { rgb: "22C55E" } }, // Fundo Verde
+                font: { bold: true, color: { rgb: "FFFFFF" }, sz: 14 },
+                alignment: { horizontal: "center", vertical: "center" },
+                border: {
+                    top: { style: "thin" }, bottom: { style: "thin" },
+                    left: { style: "thin" }, right: { style: "thin" }
+                }
+            };
+
+            // ETAPA 6: Polimento da linha de metadados (Gerado em)
+            if (worksheet['A2']) worksheet['A2'].s = { font: { italic: true, sz: 9, color: { rgb: "64748B" } } };
+            if (worksheet['B2']) worksheet['B2'].s = { font: { italic: true, sz: 9, color: { rgb: "64748B" } } };
+        }
+
+        // ETAPA 2: Estilização profissional das linhas de data (Cabeçalho de Bloco)
+        dateRows.forEach(rowIdx => {
+            const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: 0 });
+            if (worksheet[cellRef]) {
+                worksheet[cellRef].s = {
+                    fill: { fgColor: { rgb: "CFE2F3" } }, // Azul claro suave
+                    font: { bold: true, sz: 12 },
+                    alignment: { horizontal: "center", vertical: "center" },
+                    border: {
+                        top: { style: "thin" }, bottom: { style: "thin" },
+                        left: { style: "thin" }, right: { style: "thin" }
+                    }
+                };
+            }
+        });
+
+        // ETAPA 3: Estilização profissional dos cabeçalhos das colunas
+        headerRows.forEach(rowIdx => {
+            for (let c = 0; c <= 8; c++) {
+                const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: c });
+                if (worksheet[cellRef]) {
+                    worksheet[cellRef].s = {
+                        fill: { fgColor: { rgb: "F1F5F9" } }, // Fundo suave (Slate 100)
+                        font: { bold: true, sz: 10 },
+                        alignment: { horizontal: "center", vertical: "center" },
+                        border: {
+                            top: { style: "thin" },
+                            bottom: { style: "thin" },
+                            left: { style: "thin" },
+                            right: { style: "thin" }
+                        }
+                    };
+                }
+            }
+        });
+
+        // ETAPA 4: Melhoria visual das linhas de dados
+        const dataAlignments = ["center", "left", "center", "center", "left", "center", "left", "left", "center"];
+        dataRowIndices.forEach(rowIdx => {
+            for (let c = 0; c <= 8; c++) {
+                const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: c });
+                if (worksheet[cellRef]) {
+                    worksheet[cellRef].s = {
+                        font: { sz: 10 },
+                        alignment: { horizontal: dataAlignments[c], vertical: "center" },
+                        border: {
+                            top: { style: "thin" },
+                            bottom: { style: "thin" },
+                            left: { style: "thin" },
+                            right: { style: "thin" }
+                        }
+                    };
+                }
+            }
+        });
+
+        // 6. Formatação e Configurações de Exibição
+        const range = XLSX.utils.decode_range(worksheet['!ref']);
+        for (let R = range.s.r; R <= range.e.r; ++R) {
+            // Coluna I (índice 8) é o Frete em nossa estrutura AoA
+            const cellRef = XLSX.utils.encode_cell({ c: 8, r: R });
+            const cell = worksheet[cellRef];
+
+            if (cell && typeof cell.v === 'number') {
+                cell.t = 'n';
+                cell.z = '"R$ "#,##0.00'; // Formato de moeda brasileiro (Contábil)
+            }
+        }
+
+        // Configurar larguras de colunas para leitura fácil
+        worksheet['!cols'] = [
+            { wch: 10 }, // NF (Compacta)
+            { wch: 45 }, // DESTINO (Espaço importante para endereços)
+            { wch: 15 }, // Status (Largura para não quebrar texto)
+            { wch: 8 },  // Qtd.
+            { wch: 18 }, // Marca
+            { wch: 18 }, // Potencia
+            { wch: 25 }, // KAM (Boa leitura para nomes)
+            { wch: 25 }, // ROTA (Boa leitura)
+            { wch: 18 }  // FRETE (Confortável para valores)
+        ];
+
+        // Congelar as 3 primeiras linhas (Título do Relatório)
+        worksheet["!view"] = [{ state: 'frozen', ySplit: 3 }];
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Programação Ativa");
+
+        // 7. Iniciar download automático
+        const filename = specificDate ? `programacao-${specificDate}.xlsx` : `programacao-sirius-${agora.toISOString().slice(0, 10)}.xlsx`;
+        XLSX.writeFile(workbook, filename);
+
+    } catch (err) {
+        console.error("Erro na exportação Excel:", err);
+        mostrarAviso("Ocorreu um erro ao gerar a planilha. Tente novamente.");
+    }
+};
+
+window.handleExportPDF = async function(e, specificDate = null) {
+    if (e) e.stopPropagation();
+
+    // 1. Fechar todos os menus de exportação
+    document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
+
+    try {
+        // 2. Buscar e filtrar dados
+        const { rotas, nfs } = await buscarDadosParaProgramacao();
+        const termoTexto = filtroNomeProg ? filtroNomeProg.value : "";
+        
+        // Se houver uma data específica, ela ignora o filtro global
+        const termoData = specificDate || (filtroDataProg ? filtroDataProg.value : "");
+
+        const rotasFiltradas = rotas.filter(rota => {
+            if (!termoData) return true;
+            if (termoData === "sem-data") return !rota.data;
+            return rota.data === termoData;
+        });
+
+        const agrupado = agruparDadosProgramacao(rotasFiltradas, nfs, termoTexto);
+
+        if (Object.keys(agrupado).length === 0) {
+            mostrarAviso("Nenhum dado disponível para exportação.");
+            return;
+        }
+
+        const msg = specificDate ? "Gerando PDF do dia..." : "Gerando PDF... O download iniciará em instantes.";
+        mostrarAviso(msg);
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('l', 'mm', 'a4'); // Paisagem para melhor aproveitamento das colunas
+        const agora = new Date();
+        const pageWidth = doc.internal.pageSize.getWidth();
+        
+        // Configurações de Identidade Visual
+        const verdeSirius = [34, 197, 94];
+        const slate800 = [30, 41, 59];
+        const slate500 = [100, 116, 139];
+        const borderSlate = [226, 232, 240];
+        let currentY = 25;
+
+        // TAREFA 1 — CABEÇALHO PREMIUM
+        doc.setFontSize(22);
+        doc.setTextColor(slate800[0], slate800[1], slate800[2]);
+        doc.setFont("helvetica", "bold");
+        doc.text("RELATÓRIO DE PROGRAMAÇÃO ATIVA", 14, currentY);
+        
+        doc.setFontSize(14);
+        doc.setTextColor(verdeSirius[0], verdeSirius[1], verdeSirius[2]);
+        doc.text("SISTEMA ROTA SIRIUS", 14, currentY + 8);
+
+        doc.setFontSize(9);
+        doc.setTextColor(slate500[0], slate500[1], slate500[2]);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Gerado em: ${agora.toLocaleString('pt-BR')}`, 14, currentY + 15);
+        
+        // Linha divisória sutil
+        doc.setDrawColor(borderSlate[0], borderSlate[1], borderSlate[2]);
+        doc.line(14, currentY + 18, pageWidth - 14, currentY + 18);
+        
+        currentY += 30;
+
+        const datas = Object.keys(agrupado).sort((a, b) => {
+            if (a === "sem-data") return 1;
+            if (b === "sem-data") return -1;
+            return a.localeCompare(b);
+        });
+
+        datas.forEach((dataKey, index) => {
+            // TAREFA 2 — BLOCOS POR DATA ELEGANTES
+            const dataTitulo = formatarDataComDiaSemana(dataKey).toUpperCase();
+            
+            doc.setFontSize(11);
+            doc.setTextColor(verdeSirius[0], verdeSirius[1], verdeSirius[2]);
+            doc.setFont("helvetica", "bold");
+            doc.text(dataTitulo, 14, currentY);
+            currentY += 6;
+
+            // Preparar dados da tabela
+            const tableBody = [];
+            const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) => 
+                agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome)
+            );
+
+            rotasIds.forEach(rotaId => {
+                const infoRota = agrupado[dataKey][rotaId];
+                infoRota.nfs.forEach(nf => {
+                    tableBody.push([
+                        nf.numero,
+                        `${nf.destino}/${nf.uf}`,
+                        "PREPARADO",
+                        nf.qtd || 0,
+                        (nf.marca || "---").toUpperCase(), // TAREFA 6: Padronização
+                        nf.potencia || "---",
+                        (nf.kam || "---").toUpperCase(),   // TAREFA 6: Padronização
+                        infoRota.nome,
+                        `R$ ${formatar(nf.valor_frete)}`
+                    ]);
+                });
+            });
+
+            // TAREFA 3 e 4 — REFINAMENTO DA TABELA
+            doc.autoTable({
+                startY: currentY,
+                head: [["NF", "DESTINO", "STATUS", "QTD", "MARCA", "POTÊNCIA", "KAM", "ROTA", "FRETE"]],
+                body: tableBody,
+                theme: 'grid',
+                headStyles: { 
+                    fillColor: verdeSirius, 
+                    textColor: [255, 255, 255],
+                    fontSize: 8, 
+                    fontStyle: 'bold',
+                    halign: 'center'
+                },
+                styles: { 
+                    fontSize: 8, 
+                    cellPadding: 3,
+                    lineColor: borderSlate,
+                    lineWidth: 0.1,
+                    valign: 'middle'
+                },
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 12 }, // NF (Mais compacta)
+                    1: { halign: 'left' },                 // DESTINO (Restante - reduzido pela expansão das outras)
+                    2: { halign: 'center', cellWidth: 28 }, // STATUS (Aumentado para evitar quebra de "PREPARADO")
+                    3: { halign: 'center', cellWidth: 15 }, // QTD (Aumentado para evitar quebra de "QTD" e "220")
+                    4: { halign: 'center', cellWidth: 27 }, // MARCA (Leve aumento para equilíbrio)
+                    5: { halign: 'center', cellWidth: 27 }, // POTÊNCIA (Leve aumento para equilíbrio)
+                    6: { halign: 'left', cellWidth: 42 },   // KAM (Aumentado para nomes longos)
+                    7: { halign: 'left', cellWidth: 45 },   // ROTA
+                    8: { halign: 'right', cellWidth: 25 }   // FRETE
+                },
+                alternateRowStyles: {
+                    fillColor: [248, 250, 252] // Slate 50 sutil
+                },
+                margin: { left: 14, right: 14 },
+                // TAREFA 7: Evitar quebras de página desajeitadas
+                pageBreak: 'auto',
+                rowPageBreak: 'avoid'
+            });
+
+            // TAREFA 8: ESPAÇAMENTO E RESPIRO (Gap entre tabelas)
+            currentY = doc.lastAutoTable.finalY + 18;
+            
+            // Verifica se precisa de nova página antes do próximo título de data
+            if (currentY > 180 && index < datas.length - 1) {
+                doc.addPage();
+                currentY = 25;
+            }
+        });
+
+        // 4. Download automático
+        const filename = specificDate ? `programacao-${specificDate}.pdf` : `programacao-completa-${agora.toISOString().slice(0, 10)}.pdf`;
+        doc.save(filename);
+
+    } catch (err) {
+        console.error("Erro na exportação PDF:", err);
+        mostrarAviso("Ocorreu um erro ao gerar o PDF. Verifique o console.");
+    }
+};
 
 // --- HISTÓRICO ESPECÍFICO DA PROGRAMAÇÃO ---
 
@@ -1741,8 +2070,6 @@ function renderizarHistoricoProgramacao(termoBusca = "") {
 
     let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
     container.innerHTML = "";
-
-    const canEdit = checkPerm.podeAlterar(false);
 
     const termo = termoBusca.toLowerCase();
 
@@ -1811,10 +2138,8 @@ function renderizarHistoricoProgramacao(termoBusca = "") {
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px;" onclick="copiarResumoHistorico('${rota.id}')">Copiar Resumo</button>
-                        ${canEdit ? `
-                            <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRotaProgramacao('${rota.id}')">Retornar para Ativa</button>
-                        ` : ''}
-                        </div>
+                        <button class="btn btn-outline" style="flex:1; font-size:11px; padding:5px; border-color:var(--accent); color:var(--accent);" onclick="retornarRotaProgramacao('${rota.id}')">Retornar para Ativa</button>
+                    </div>
                 </div>
             `;
         });
@@ -1925,7 +2250,7 @@ if (progHistoryModal) {
 // Evento global para deselecionar rota ao clicar fora
 document.addEventListener('click', (e) => {
   // Fecha dropdown do usuário ao clicar fora
-  if (!e.target.closest('.user-display')) {
+  if (!e.target.closest('.user-display') && !e.target.closest('.export-wrapper') && !e.target.closest('.export-day-wrapper')) {
     document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
   }
 

@@ -160,7 +160,19 @@
           <div class="topbar-group">
             <button class="btn btn-outline" id="open-control-panel-from-prog-btn">⚙ Painel</button>
             <button class="btn btn-outline" id="back-to-dashboard-from-programacao-btn">🚛 Roteirização</button>
-            <button class="btn btn-primary" id="export-programacao-btn">📥 Exportar</button>
+            <div class="export-wrapper" style="position: relative; display: inline-block;">
+              <button class="btn btn-primary" id="export-programacao-btn">📥 Exportar</button>
+              <div id="export-dropdown" class="user-dropdown hidden">
+                <button type="button" onclick="handleExportExcel(event)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #22c55e;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+                  Excel
+                </button>
+                <button type="button" onclick="handleExportPDF(event)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                  PDF
+                </button>
+              </div>
+            </div>
           </div>
           <!-- GRUPO 3: PERFIL -->
           <div class="topbar-group">
@@ -413,6 +425,9 @@
 </div>
 
 <!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 <script src="js/supabase.js"></script>
 <script src="js/app.js"></script>

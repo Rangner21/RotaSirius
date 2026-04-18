@@ -129,7 +129,7 @@ input:-webkit-autofill:active {
 
 /* SIDEBAR */
 .sidebar {
-  width: 300px;
+  width: 350px;
   background: var(--bg-sidebar);
   padding: 24px;
   border-right: 1px solid var(--border);
@@ -196,6 +196,23 @@ input:-webkit-autofill:active {
 .filters .active {
   background: var(--primary);
   color: white;
+}
+
+/* AREA DE NFs PENDENTES COM SCROLL */
+.nf-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px; /* Espaço para a barra de rolagem não sobrepor o card */
+  margin-right: -8px; /* Ajuste para manter o alinhamento visual */
+}
+
+/* Estilização da barra de rolagem para manter consistência com o restante do sistema */
+.nf-list::-webkit-scrollbar {
+  width: 6px;
+}
+.nf-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
 }
 
 /* NF */
@@ -804,6 +821,10 @@ input:-webkit-autofill:active {
 
 .user-dropdown button:hover {
   background: rgba(255, 255, 255, 0.05);
+  color: var(--text-main);
+}
+
+.user-dropdown button.logout-item:hover {
   color: #ef4444;
 }
 
