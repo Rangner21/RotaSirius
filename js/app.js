@@ -241,7 +241,10 @@ const createRotaForm = document.getElementById('create-rota-form');
 const nfNumeroInput = document.getElementById('nf-numero');
 const nfIdHidden = document.getElementById('nf-id-hidden');
 const nfModalTitle = document.getElementById('nf-modal-title');
-const nfDestinoInput = document.getElementById('nf-destino');
+const nfCepInput = document.getElementById('nf-cep');
+const nfCidadeInput = document.getElementById('nf-cidade');
+const nfEnderecoInput = document.getElementById('nf-endereco');
+const nfEnderecoNumeroInput = document.getElementById('nf-endereco-numero');
 const nfUfInput = document.getElementById('nf-uf');
 const nfTipoInput = document.getElementById('nf-tipo');
 const nfObsInput = document.getElementById('nf-obs');
@@ -806,10 +809,12 @@ if (btnTransporte && btnRetira && nfTipoInput) {
     btnTransporte.classList.add('active');
     btnRetira.classList.remove('active');
     
-    if (nfDestinoInput) nfDestinoInput.disabled = false;
-    if (nfUfInput) nfUfInput.disabled = false;
-    if (nfDestinoInput) nfDestinoInput.required = true;
-    if (nfUfInput) nfUfInput.required = true;
+    // Habilitar campos de endereço para Transporte
+    if (nfCepInput) nfCepInput.disabled = false;
+    if (nfCidadeInput) { nfCidadeInput.disabled = false; nfCidadeInput.required = true; }
+    if (nfUfInput) { nfUfInput.disabled = false; nfUfInput.required = true; }
+    if (nfEnderecoInput) nfEnderecoInput.disabled = false;
+    if (nfEnderecoNumeroInput) nfEnderecoNumeroInput.disabled = false;
     if (nfValorInput) { nfValorInput.disabled = false; nfValorInput.required = true; }
   });
 
@@ -818,8 +823,13 @@ if (btnTransporte && btnRetira && nfTipoInput) {
     btnRetira.classList.add('active');
     btnTransporte.classList.remove('active');
     
-    if (nfDestinoInput) { nfDestinoInput.disabled = true; nfDestinoInput.value = ''; nfDestinoInput.required = false; }
+    // Desabilitar campos de endereço para Retira e limpar valores
+    if (nfCepInput) { nfCepInput.disabled = true; nfCepInput.value = ''; }
+    if (nfCidadeInput) { nfCidadeInput.disabled = true; nfCidadeInput.value = ''; nfCidadeInput.required = false; }
     if (nfUfInput) { nfUfInput.disabled = true; nfUfInput.value = ''; nfUfInput.required = false; }
+    if (nfEnderecoInput) { nfEnderecoInput.disabled = true; nfEnderecoInput.value = ''; }
+    if (nfEnderecoNumeroInput) { nfEnderecoNumeroInput.disabled = true; nfEnderecoNumeroInput.value = ''; }
+    
     if (nfValorInput) { nfValorInput.disabled = true; nfValorInput.value = '0'; nfValorInput.required = false; }
   });
 }
@@ -837,7 +847,10 @@ async function handleSalvarNF(fecharAoSalvar = true) {
   // Adicionado verificação para nfNumeroInput etc. para evitar erro se forem nulos
   const nfId = nfIdHidden ? nfIdHidden.value : '';
   const numero = nfNumeroInput ? nfNumeroInput.value.trim() : '';
-  const destino = nfDestinoInput ? nfDestinoInput.value.trim() : '';
+  const cep = nfCepInput ? nfCepInput.value.trim() : '';
+  const cidade = nfCidadeInput ? nfCidadeInput.value.trim() : '';
+  const endereco = nfEnderecoInput ? nfEnderecoInput.value.trim() : '';
+  const numero_endereco = nfEnderecoNumeroInput ? nfEnderecoNumeroInput.value.trim() : '';
   const uf = nfUfInput ? nfUfInput.value.trim().toUpperCase() : '';
   const tipo = nfTipoInput ? nfTipoInput.value : 'transporte';
   const valor = (nfValorInput && nfValorInput.value) ? parseFloat(nfValorInput.value) : 0;
@@ -854,8 +867,8 @@ async function handleSalvarNF(fecharAoSalvar = true) {
   }
 
   // Validação condicional baseada no tipo
-  if (tipo === 'transporte' && (!destino || !uf || isNaN(valor))) {
-    mostrarAviso("Por favor, preencha todos os campos (Destino, UF e Valor) para NFs de Transporte.");
+  if (tipo === 'transporte' && (!cidade || !uf || isNaN(valor))) {
+    mostrarAviso("Por favor, preencha todos os campos (Cidade, UF e Valor) para NFs de Transporte.");
     return;
   }
 
@@ -874,7 +887,10 @@ async function handleSalvarNF(fecharAoSalvar = true) {
 
     const nfData = {
       numero,
-      destino: tipo === 'retira' ? 'RETIRA' : destino,
+      cep: tipo === 'retira' ? '' : cep,
+      cidade: tipo === 'retira' ? '' : cidade,
+      endereco: tipo === 'retira' ? '' : endereco,
+      numero_endereco: tipo === 'retira' ? '' : numero_endereco,
       uf: tipo === 'retira' ? 'RT' : uf,
       tipo,
       valor_frete: tipo === 'retira' ? 0 : valor,
@@ -894,6 +910,10 @@ async function handleSalvarNF(fecharAoSalvar = true) {
     } else {
       // Modo Criação
       nfData.rota_id = null;
+      
+      // Tarefa 4: Debug Temporário
+      console.log("Nova NF payload:", nfData);
+
       result = await supabaseClient.from("nfs").insert([nfData]).select();
     }
     const { data, error } = result;
@@ -1036,8 +1056,9 @@ async function carregarNFs() {
 
     const nfsFiltradas = data.filter(nf => {
       const numeroStr = String(nf.numero || "").toLowerCase();
-      const destinoStr = String(nf.destino || "").toLowerCase();
-      const correspondeBusca = numeroStr.includes(termoBusca) || destinoStr.includes(termoBusca);
+      const cidadeStr = String(nf.cidade || "").toLowerCase();
+      const destinoStr = String(nf.destino || "").toLowerCase(); // Fallback busca
+      const correspondeBusca = numeroStr.includes(termoBusca) || cidadeStr.includes(termoBusca) || destinoStr.includes(termoBusca);
       
       if (filtroAtual === 'transporte') return correspondeBusca && nf.uf !== 'RT';
       if (filtroAtual === 'retira') return correspondeBusca && nf.uf === 'RT';
@@ -1056,7 +1077,7 @@ async function carregarNFs() {
           <button class="icon-btn delete" title="Excluir" onclick="event.stopPropagation(); excluirNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
         </div>
         <strong>NF ${nf.numero} ${badge}</strong>
-        <span>${nf.destino}/${nf.uf}</span>
+        <span>${nf.cidade || nf.destino}/${nf.uf}</span>
         <small>R$ ${formatar(nf.valor_frete)}</small>
         ${nf.observacao ? `<br><span style="font-size: 11px; font-style: italic; color: var(--text-muted);">Obs: ${nf.observacao}</span>` : ''}
       `;
@@ -1093,7 +1114,7 @@ window.editarNF = async function(nfId) {
         if (btnRetira) btnRetira.click();
     } else {
         if (btnTransporte) btnTransporte.click();
-        if (nfDestinoInput) nfDestinoInput.value = data.destino;
+        if (nfCidadeInput) nfCidadeInput.value = data.cidade || (data.destino !== 'RETIRA' ? data.destino : '');
         if (nfUfInput) nfUfInput.value = data.uf;
         if (nfValorInput) nfValorInput.value = data.valor_frete;
     }
@@ -1286,7 +1307,7 @@ async function carregarRotas() {
 
       linha.innerHTML = `
         <span>NF ${nf.numero}</span>
-        <span>${nf.destino}/${nf.uf}</span>
+        <span>${nf.cidade || nf.destino}/${nf.uf}</span>
         <span>R$ ${formatar(nf.valor_frete)}</span>
       `;
 
@@ -1357,7 +1378,7 @@ window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
     resumo += `TOTAL FRETE: R$ ${formatar(totalFrete)}\n\n`;
 
     nfs.forEach(nf => {
-      resumo += `NF ${nf.numero} | ${nf.destino}/${nf.uf} | R$ ${formatar(nf.valor_frete)}\n`;
+      resumo += `NF ${nf.numero} | ${nf.cidade || nf.destino}/${nf.uf} | R$ ${formatar(nf.valor_frete)}\n`;
     });
 
     await navigator.clipboard.writeText(resumo);
@@ -1423,7 +1444,8 @@ function salvarRotaNoHistorico(rota, nfs, totalFrete) {
         nfs: nfs.map(n => ({
                 id: n.id, // TAREFA 1 & 5: Preservar ID real da NF no histórico
             numero: n.numero,
-            destino: n.destino,
+            cidade: n.cidade,
+            destino: n.destino, // Mantido para histórico legado
             uf: n.uf,
             valor_frete: n.valor_frete
         }))
@@ -1563,7 +1585,7 @@ window.copiarResumoHistorico = async function(rotaId) {
         resumo += `TOTAL FRETE: R$ ${formatar(totalFrete)}\n\n`;
 
         nfs.forEach(nf => {
-            resumo += `NF ${nf.numero} | ${nf.destino}/${nf.uf} | R$ ${formatar(nf.valor_frete)}\n`;
+            resumo += `NF ${nf.numero} | ${nf.cidade || nf.destino}/${nf.uf} | R$ ${formatar(nf.valor_frete)}\n`;
         });
 
         await navigator.clipboard.writeText(resumo);
@@ -1614,8 +1636,9 @@ function agruparDadosProgramacao(rotas, nfs, termoBusca = "") {
             const matchRota = rota.nome.toLowerCase().includes(termo);
             const matchNF = String(nf.numero).toLowerCase().includes(termo);
             const matchKam = String(nf.kam || "").toLowerCase().includes(termo);
-            const matchDestino = String(nf.destino || "").toLowerCase().includes(termo) || 
-                               String(nf.uf || "").toLowerCase().includes(termo);
+            const localizacao = (nf.cidade || nf.destino || "").toLowerCase();
+            const matchDestino = localizacao.includes(termo) || 
+                                String(nf.uf || "").toLowerCase().includes(termo);
 
             // Se nenhum dos campos bater, ignora esta NF
             if (!matchRota && !matchNF && !matchKam && !matchDestino) return;
@@ -1724,7 +1747,7 @@ function renderizarProgramacaoAutomatica(agrupado) {
                 html += `
                     <tr>
                         <td><strong>${nf.numero}</strong></td>
-                        <td>${nf.destino}/${nf.uf}</td>
+                        <td>${nf.cidade || nf.destino}/${nf.uf}</td>
                         <td style="text-transform: capitalize;">${nf.tipo}</td>
                         <td>${nf.qtd || '---'}</td>
                         <td>${nf.marca || '---'}</td>
@@ -1904,7 +1927,7 @@ window.handleExportExcel = async function (e, specificDate = null) {
                     dataRowIndices.push(sheetData.length);
                     sheetData.push([
                         nf.numero,
-                        `${nf.destino}/${nf.uf}`,
+                        `${nf.cidade || nf.destino}/${nf.uf}`,
                         nf.status || "",
                         nf.qtd || 0,
                         nf.marca || "---",
@@ -2117,7 +2140,7 @@ window.handleExportPDF = async function(e, specificDate = null) {
                 infoRota.nfs.forEach(nf => {
                     tableBody.push([
                         nf.numero,
-                        `${nf.destino}/${nf.uf}`,
+                        `${nf.cidade || nf.destino}/${nf.uf}`,
                         (nf.status || "").toUpperCase(),
                         nf.qtd || 0,
                         (nf.marca || "---").toUpperCase(), // TAREFA 6: Padronização
