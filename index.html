@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Rota Sirius</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- TELA DE LOGIN -->
+<div id="login-screen" class="login-overlay">
+    <div class="login-box">
+        <div class="login-header">
+            <div class="logo">🚛 Rota Sirius</div>
+            <p>Acesse o sistema de roteirização</p>
+        </div>
+        <form id="login-form">
+            <div class="form-group">
+                <label for="login-email">E-mail</label>
+                <input type="email" id="login-email" placeholder="nome.sobrenome@empresa.com" required autocomplete="username">
+            </div>
+            <div class="form-group" style="margin-top: 10px;">
+                <label for="login-password">Senha</label>
+                <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
+            </div>
+            <p id="login-error" class="hidden"></p>
+            <button type="submit" class="btn btn-login">Entrar</button>
+        </form>
+    </div>
+</div>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">🚛 Rota Sirius</div>
+
+    <button class="btn" id="open-nf-modal-btn">+ Nova NF</button>
+
+    <input type="text" placeholder="Buscar NF ou destino..." class="search">
+
+    <div class="filters">
+
+  <button onclick="trocarFiltro('todos')">
+    Todos <span id="count-todos">0</span>
+  </button>
+
+  <button onclick="trocarFiltro('transporte')">
+    Transporte <span id="count-transporte">0</span>
+  </button>
+
+  <button onclick="trocarFiltro('retira')">
+    Retira <span id="count-retira">0</span>
+  </button>
+
+</div>
+
+
+    <div class="nf-list"></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- Visão Principal (Dashboard) -->
+    <div id="dashboard-view">
+      <div class="topbar">
+        <h2>Roteirização</h2>
+        <div class="topbar-actions">
+          <!-- GRUPO 1: FILTROS -->
+          <div class="topbar-group">
+            <div class="view-toggle">
+              <button id="view-grid-btn" class="icon-btn active" title="Visualização em Grid">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+              </button>
+              <button id="view-list-btn" class="icon-btn" title="Visualização em Lista">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+              </button>
+            </div>
+            <input type="text" id="filtro-nome-rota" class="date-filter" placeholder="Filtrar por nome ou transportadora..." title="Filtrar por nome ou transportadora" style="cursor: text;">
+            <input type="date" id="filtro-data-rota" class="date-filter" title="Filtrar data">
+            <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
+          </div>
+
+          <!-- GRUPO 2: NAVEGAÇÃO / AÇÕES -->
+          <div class="topbar-group">
+            <button class="btn btn-outline" id="open-control-panel-btn">⚙ Painel</button>
+            <button class="btn btn-outline" id="open-programacao-btn">📅 Programação</button>
+            <button class="btn btn-primary" id="open-rota-modal-btn">+ Nova Rota</button>
+          </div>
+
+          <!-- GRUPO 3: PERFIL -->
+          <div class="topbar-group">
+            <div id="user-display-dashboard" class="user-display"></div>
+          </div>
+        </div>
+      </div>
+      <div class="rotas"></div>
+    </div>
+
+    <!-- Visão do Painel de Controle -->
+    <div id="control-panel-view" class="hidden">
+      <div class="topbar">
+        <h2>Painel de Controle</h2>
+        <div class="topbar-actions">
+          <button class="btn btn-outline" id="back-to-dashboard-btn">← Voltar</button>
+          <div id="user-display-panel" class="user-display"></div>
+        </div>
+      </div>
+      
+      <!-- FAIXA DE INDICADORES RÁPIDOS -->
+      <div class="dashboard-stats">
+        <div class="stat-card">
+          <div class="stat-icon" style="background: rgba(148, 163, 184, 0.1); color: #94a3b8;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">NFs Pendentes</span>
+            <h3 id="stat-nfs-pendentes">0</h3>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1); color: var(--primary);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">NFs em Rota</span>
+            <h3 id="stat-nfs-em-rota">0</h3>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: rgba(56, 189, 248, 0.1); color: var(--accent);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 18l-2-1-2 1V3l2 1 2-1 2 1 2-1v15l-2-1-2 1z"></path></svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Rotas Ativas</span>
+            <h3 id="stat-rotas-ativas">0</h3>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: rgba(168, 85, 247, 0.1); color: #a855f7;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Rotas Finalizadas</span>
+            <h3 id="stat-rotas-finalizadas">0</h3>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: rgba(251, 191, 36, 0.1); color: #fbbf24;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Em Produção</span>
+            <h3 id="stat-nfs-producao">0</h3>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1); color: var(--primary);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <div class="stat-info">
+            <span class="stat-label">Produzidas</span>
+            <h3 id="stat-nfs-produzidas">0</h3>
+          </div>
+        </div>
+      </div>
+      
+      <!-- SEGUNDA FAIXA: GRÁFICOS -->
+      <div class="dashboard-charts">
+        <div class="chart-container">
+          <h3>Status das NFs</h3>
+          <div class="chart-canvas-wrapper">
+            <canvas id="chart-status-nfs"></canvas>
+          </div>
+          <div id="msg-status-nfs" class="empty-chart-msg hidden">Sem dados suficientes no momento</div>
+        </div>
+        <div class="chart-container">
+          <h3>NFs por Dia (Em Rota)</h3>
+          <div class="chart-canvas-wrapper">
+            <canvas id="chart-nfs-dia"></canvas>
+          </div>
+          <div id="msg-nfs-dia" class="empty-chart-msg hidden">Sem dados suficientes no momento</div>
+        </div>
+        <div class="chart-container">
+          <h3>Rotas Ativas por Dia</h3>
+          <div class="chart-canvas-wrapper">
+            <canvas id="chart-rotas-dia"></canvas>
+          </div>
+          <div id="msg-rotas-dia" class="empty-chart-msg hidden">Sem dados suficientes no momento</div>
+        </div>
+      </div>
+      
+      <!-- TERCEIRA FAIXA: RANKINGS E ALERTAS -->
+      <div class="dashboard-rankings">
+        <div class="panel-container">
+          <h3 style="font-size: 12px; margin-bottom: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Top Transportadoras</h3>
+          <div id="ranking-transportadoras" class="ranking-list">
+            <!-- Dinâmico -->
+          </div>
+        </div>
+
+        <div class="panel-container">
+          <h3 style="font-size: 12px; margin-bottom: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Top KAMs</h3>
+          <div id="ranking-kams" class="ranking-list">
+            <!-- Dinâmico -->
+          </div>
+        </div>
+
+        <div class="panel-container">
+          <h3 style="font-size: 12px; margin-bottom: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Alertas de Preenchimento</h3>
+          <div id="alerts-summary" class="alerts-list">
+            <!-- Dinâmico -->
+          </div>
+        </div>
+      </div>
+      
+      <div class="panel-grid">
+        <!-- Coluna da Esquerda: Usuários -->
+        <div class="panel-container">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; display: flex; align-items: center;">Gerenciamento de Usuários <span id="count-users" style="font-size: 11px; color: var(--primary); background: rgba(34, 197, 94, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; margin-left: 12px; border: 1px solid rgba(34, 197, 94, 0.2);"></span></h3>
+            <button class="btn" id="add-user-btn" style="margin: 0;">+ Adicionar Usuário</button>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Cargo</th>
+                <th>E-mail</th>
+                <th>Permissão</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body">
+            <!-- Usuários carregados via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Coluna da Direita: KAM -->
+        <div class="panel-container">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; display: flex; align-items: center;">KAM <span id="count-kams" style="font-size: 11px; color: var(--primary); background: rgba(34, 197, 94, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; margin-left: 12px; border: 1px solid rgba(34, 197, 94, 0.2);"></span></h3>
+            <button class="btn" id="add-kam-btn" style="margin: 0;">+ Adicionar KAM</button>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nome do KAM</th>
+                <th style="width: 100px; text-align: center;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="kams-table-body">
+              <!-- KAMs carregados via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visão de Programação -->
+    <div id="programacao-view" class="hidden">
+      <div class="topbar">
+        <h2>Programação</h2>
+        <div class="topbar-actions">
+          <!-- GRUPO 1: FILTROS / HISTÓRICO -->
+          <div class="topbar-group">
+              <input type="text" id="filtro-nome-programacao" class="date-filter" placeholder="NF, KAM, Rota ou Destino..." title="Pesquisa global na programação" style="cursor: text;">
+              <input type="date" id="filtro-data-programacao" class="date-filter" title="Filtrar data">
+            <button class="btn btn-outline" id="open-programacao-history-btn">⏱ Histórico</button>
+          </div>
+          <!-- GRUPO 2: NAVEGAÇÃO -->
+          <div class="topbar-group">
+            <button class="btn btn-outline" id="open-control-panel-from-prog-btn">⚙ Painel</button>
+            <button class="btn btn-outline" id="back-to-dashboard-from-programacao-btn">🚛 Roteirização</button>
+            <div class="export-wrapper" style="position: relative; display: inline-block;">
+              <button class="btn btn-primary" id="export-programacao-btn">📥 Exportar</button>
+              <div id="export-dropdown" class="user-dropdown hidden">
+                <button type="button" onclick="handleExportExcel(event)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #22c55e;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+                  Excel
+                </button>
+                <button type="button" onclick="handleExportPDF(event)">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                  PDF
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- GRUPO 3: PERFIL -->
+          <div class="topbar-group">
+            <div id="user-display-programacao" class="user-display"></div>
+          </div>
+        </div>
+      </div>
+      <div id="programacao-dinamica-container" style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Conteúdo gerado automaticamente aparecerá aqui -->
+      </div>
+    </div>
+
+  </main>
+
+</div>
+
+<!-- Modal para Nova NF -->
+<div id="create-nf-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 500px;">
+        <h3 id="nf-modal-title">Adicionar Nova NF</h3>
+        <span class="close-button">&times;</span>
+        <form id="create-nf-form">
+            <input type="hidden" id="nf-id-hidden">
+            
+            <label for="nf-numero">Número da NF:</label>
+            <input type="text" id="nf-numero" required>
+
+            <label>Tipo de operação:</label>
+            <div class="nf-tipo-toggle">
+                <button type="button" id="btn-transporte" class="btn-toggle active">Transporte</button>
+                <button type="button" id="btn-retira" class="btn-toggle">Retira</button>
+                <input type="hidden" id="nf-tipo" value="transporte">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nf-destino">Destino:</label>
+                    <input type="text" id="nf-destino" required>
+                </div>
+                <div class="form-group" style="flex: 0 0 100px;">
+                    <label for="nf-uf">UF:</label>
+                    <select id="nf-uf" required>
+                        <option value="" disabled selected>UF</option>
+                        <option value="AC">AC</option><option value="AL">AL</option>
+                        <option value="AP">AP</option><option value="AM">AM</option>
+                        <option value="BA">BA</option><option value="CE">CE</option>
+                        <option value="DF">DF</option><option value="ES">ES</option>
+                        <option value="GO">GO</option><option value="MA">MA</option>
+                        <option value="MT">MT</option><option value="MS">MS</option>
+                        <option value="MG">MG</option><option value="PA">PA</option>
+                        <option value="PB">PB</option><option value="PR">PR</option>
+                        <option value="PE">PE</option><option value="PI">PI</option>
+                        <option value="RJ">RJ</option><option value="RN">RN</option>
+                        <option value="RS">RS</option><option value="RO">RO</option>
+                        <option value="RR">RR</option><option value="SC">SC</option>
+                        <option value="SP">SP</option><option value="SE">SE</option>
+                        <option value="TO">TO</option>
+                    </select>
+                </div>
+            </div>
+
+            <label for="nf-valor">Valor de Frete:</label>
+            <input type="number" id="nf-valor" step="0.01" required>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nf-quantidade">Quantidade:</label>
+                    <input type="number" id="nf-quantidade" placeholder="0">
+                </div>
+                <div class="form-group">
+                    <label for="nf-marca">Marca:</label>
+                    <input type="text" id="nf-marca" placeholder="Marca">
+                </div>
+                <div class="form-group">
+                    <label for="nf-potencia">Potência:</label>
+                    <input type="text" id="nf-potencia" placeholder="Ex: 650W">
+                </div>
+            </div>
+
+            <label for="nf-kam">KAM (Responsável):</label>
+            <select id="nf-kam">
+                <option value="" disabled selected>Carregando KAMs...</option>
+            </select>
+
+            <label for="nf-obs">Observação:</label>
+            <textarea id="nf-obs" placeholder="Observações adicionais..." style="width: 100%; padding: 10px; border: 1px solid #1e293b; background: #0f172a; color: #e2e8f0; border-radius: 5px; outline: none; resize: vertical; min-height: 60px;"></textarea>
+
+            <div class="form-row" style="margin-top: 20px;">
+                <button type="button" id="btn-save-nf" class="btn btn-outline" style="flex: 1; margin-top: 0;">Salvar</button>
+                <button type="button" id="btn-save-close-nf" class="btn" style="flex: 1; margin-top: 0;">Salvar e Fechar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Nova Rota -->
+<div id="create-rota-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="rota-modal-title">Adicionar Nova Rota</h3>
+        <span class="close-button">&times;</span>
+        <form id="create-rota-form">
+            <input type="hidden" id="rota-id-hidden">
+            <label for="rota-nome">Nome da rota (ex: Recife):</label>
+            <input type="text" id="rota-nome" placeholder="Ex: Recife" required>
+            
+            <label for="rota-data">Data da rota:</label>
+            <input type="date" id="rota-data" required>
+            
+            <label for="rota-transportadora">Transportadora:</label>
+            <input type="text" id="rota-transportadora" placeholder="Ex: TransLog Express">
+
+            <button type="submit" class="btn">Salvar Rota</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Genérico de Confirmação e Aviso -->
+<div id="generic-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="generic-modal-title">Aviso</h3>
+        <span class="close-button">&times;</span>
+        <p id="generic-modal-message" style="text-align: center; margin-bottom: 20px; color: var(--text-main); line-height: 1.5;"></p>
+        <div class="form-row">
+            <button id="generic-modal-cancel" class="btn-toggle">Cancelar</button>
+            <button id="generic-modal-ok" class="btn" style="margin-top: 0;">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Gerenciamento de KAM -->
+<div id="create-kam-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="kam-modal-title">Adicionar Novo KAM</h3>
+        <span class="close-button">&times;</span>
+        <form id="create-kam-form">
+            <input type="hidden" id="kam-id-hidden">
+            <label for="kam-nome">Nome do KAM:</label>
+            <input type="text" id="kam-nome" placeholder="Ex: João Silva" required>
+            <button type="submit" class="btn">Salvar KAM</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Alterar Senha -->
+<div id="change-password-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Alterar Senha</h3>
+        <span class="close-button">&times;</span>
+        <form id="change-password-form">
+            <label for="current-password">Senha Atual:</label>
+            <input type="password" id="current-password" required>
+            
+            <label for="new-password">Nova Senha:</label>
+            <input type="password" id="new-password" required minlength="6">
+            
+            <label for="confirm-password">Confirmar Nova Senha:</label>
+            <input type="password" id="confirm-password" required minlength="6">
+            
+            <button type="submit" class="btn">Atualizar Senha</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Novo Usuário -->
+<div id="create-user-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="user-modal-title">Adicionar Novo Usuário</h3>
+        <span class="close-button">&times;</span>
+        <form id="create-user-form">
+            <input type="hidden" id="user-id-hidden">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="user-nome">Nome:</label>
+                    <input type="text" id="user-nome" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-sobrenome">Sobrenome:</label>
+                    <input type="text" id="user-sobrenome" required>
+                </div>
+            </div>
+            <label for="user-email">E-mail:</label>
+            <input type="email" id="user-email" required>
+            
+            <label for="user-password">Senha:</label>
+            <input type="password" id="user-password" required>
+
+            <div class="form-row" style="margin-top: 10px;">
+                <div class="form-group">
+                    <label for="user-cargo">Cargo:</label>
+                    <input type="text" id="user-cargo" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-permissao">Permissão:</label>
+                    <select id="user-permissao" required>
+                        <option value="Administrador">Administrador</option>
+                        <option value="Operador" selected>Operador</option>
+                        <option value="Visualizador">Visualizador</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn">Salvar Usuário</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Agendamento de Rota -->
+<div id="schedule-rota-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Agendar Rota</h3>
+        <span class="close-button">&times;</span>
+        <form id="schedule-rota-form">
+            <label for="schedule-rota-select">Selecionar Rota Ativa:</label>
+            <select id="schedule-rota-select" required>
+                <option value="" disabled selected>Selecione uma rota...</option>
+            </select>
+            <label for="schedule-date">Data da Saída:</label>
+            <input type="date" id="schedule-date" required>
+            <label for="schedule-vehicle">Veículo / Motorista:</label>
+            <input type="text" id="schedule-vehicle" placeholder="Ex: Caminhão 01 - João" required>
+            <button type="submit" class="btn">Confirmar Agendamento</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal de Histórico -->
+<div id="history-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 600px;">
+        <h3>Histórico de Rotas Finalizadas</h3>
+        <span class="close-button">&times;</span>
+        
+        <!-- Campo de Pesquisa -->
+        <input type="text" id="history-search" class="search" style="margin-top: 0; margin-bottom: 20px;" placeholder="Pesquisar por nome ou data...">
+
+        <div id="history-container" class="history-list">
+            <!-- Itens do histórico aparecerão aqui -->
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Histórico da Programação -->
+<div id="programacao-history-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 800px; width: 95%;">
+        <h3>Histórico da Programação</h3>
+        <span class="close-button">&times;</span>
+
+        <!-- Campo de Pesquisa -->
+        <input type="text" id="programacao-history-search" class="search" style="margin-top: 0; margin-bottom: 20px;" placeholder="Pesquisar por nome ou data...">
+
+        <div id="programacao-history-container" style="max-height: 70vh; overflow-y: auto; padding-right: 10px;">
+            <!-- Conteúdo agrupado por data aparecerá aqui -->
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script src="js/supabase.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
