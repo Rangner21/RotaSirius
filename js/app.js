@@ -1118,6 +1118,8 @@ window.editarNF = async function(nfId) {
         if (nfCepInput) nfCepInput.value = data.cep ? data.cep.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9) : '';
         if (nfCidadeInput) nfCidadeInput.value = data.cidade || (data.destino !== 'RETIRA' ? data.destino : '');
         if (nfUfInput) nfUfInput.value = data.uf;
+        if (nfEnderecoInput) nfEnderecoInput.value = data.endereco || "";
+        if (nfEnderecoNumeroInput) nfEnderecoNumeroInput.value = data.numero_endereco || "";
         if (nfValorInput) nfValorInput.value = data.valor_frete;
     }
 
@@ -2545,7 +2547,13 @@ if (createRotaForm) {
 if (createNfModal) {
   const closeNfBtn = createNfModal.querySelector('.close-button');
   if (closeNfBtn) {
-    closeNfBtn.addEventListener('click', () => closeModal(createNfModal));
+    closeNfBtn.addEventListener('click', () => {
+      // Tarefa 3: Descartar todas as alterações não salvas ao fechar no X
+      closeModal(createNfModal);
+      // Tarefa 1: Garantir que o formulário seja limpo para não vazar estado temporário
+      if (createNfForm) createNfForm.reset();
+      if (nfIdHidden) nfIdHidden.value = "";
+    });
   }
 }
 
@@ -2595,19 +2603,38 @@ if (progHistoryModal) {
 // Máscara visual para o campo CEP (00000-000)
 if (nfCepInput) {
     nfCepInput.addEventListener('input', (e) => {
-        // Tarefa 2: Permitir apenas números e limitar a 8 dígitos (brutos)
-        let value = e.target.value.replace(/\D/g, ''); 
-        if (value.length > 8) value = value.slice(0, 8); 
+        // Tarefa 3: Remover caracteres extras e considerar apenas números
+        let numValue = e.target.value.replace(/\D/g, ''); 
+        if (numValue.length > 8) numValue = numValue.slice(0, 8); 
         
         // Tarefa 2: Aplicar máscara automática 00000-000
-        if (value.length > 5) {
-            value = value.replace(/^(\d{5})(\d)/, '$1-$2');
+        let maskedValue = numValue;
+        if (numValue.length > 5) {
+            maskedValue = numValue.replace(/^(\d{5})(\d)/, '$1-$2');
         }
         
-        e.target.value = value;
+        e.target.value = maskedValue;
         
         // Tarefa 4: Debug Temporário
         console.log("CEP formatado:", e.target.value);
+
+        // Tarefa 1: Busca automática por CEP quando atingir 8 números
+        if (numValue.length === 8) {
+            // Tarefa 4: Não executa se for Retira
+            if (nfTipoInput && nfTipoInput.value === 'retira') return;
+
+            fetch(`https://viacep.com.br/ws/${numValue}/json/`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.erro) {
+                        // Tarefa 1: Preencher automaticamente Cidade, UF e Endereço
+                        if (nfCidadeInput) nfCidadeInput.value = data.localidade;
+                        if (nfUfInput) nfUfInput.value = data.uf;
+                        if (nfEnderecoInput) nfEnderecoInput.value = data.logradouro;
+                    }
+                })
+                .catch(err => console.error("Erro na busca de CEP:", err));
+        }
     });
 }
 
