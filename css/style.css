@@ -462,6 +462,24 @@ input:-webkit-autofill:active {
   min-width: 120px;
 }
 
+/* Novo botão de Maps */
+.btn-map-route {
+  background: var(--bg-sidebar); /* Fundo escuro */
+  border: 1px solid var(--border); /* Borda fina e sutil */
+  color: var(--text-muted); /* Texto discreto */
+  /* Herda padding, font-size, min-width, border-radius de .btn */
+}
+
+.btn-map-route:hover {
+  background: var(--border); /* Levemente mais escuro no hover */
+  border-color: var(--text-main); /* Borda mais visível */
+  color: var(--text-main); /* Texto mais claro */
+  transform: scale(1.02); /* Leve escala como outros botões */
+}
+.btn-map-route:hover svg {
+  color: var(--primary); /* Ícone ganha destaque de cor */
+}
+
 .btn-outline {
   background: transparent;
   border: 1px solid var(--border);
