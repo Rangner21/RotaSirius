@@ -63,6 +63,10 @@ body {
   margin-bottom: 8px;
 }
 
+.login-header .logo-img {
+  height: 48px; /* Logo levemente maior na tela de login */
+}
+
 .login-header p {
   color: var(--text-muted);
   font-size: 14px;
@@ -144,6 +148,13 @@ input:-webkit-autofill:active {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.logo-img {
+  height: 45px; /* Tamanho médio/pequeno para a sidebar */
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .search {
