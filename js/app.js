@@ -847,7 +847,8 @@ async function handleSalvarNF(fecharAoSalvar = true) {
   // Adicionado verificação para nfNumeroInput etc. para evitar erro se forem nulos
   const nfId = nfIdHidden ? nfIdHidden.value : '';
   const numero = nfNumeroInput ? nfNumeroInput.value.trim() : '';
-  const cep = nfCepInput ? nfCepInput.value.trim() : '';
+  // TAREFA: Limpa o CEP (remove o traço) para processamento interno/banco
+  const cep = nfCepInput ? nfCepInput.value.replace(/\D/g, '') : '';
   const cidade = nfCidadeInput ? nfCidadeInput.value.trim() : '';
   const endereco = nfEnderecoInput ? nfEnderecoInput.value.trim() : '';
   const numero_endereco = nfEnderecoNumeroInput ? nfEnderecoNumeroInput.value.trim() : '';
@@ -1114,6 +1115,7 @@ window.editarNF = async function(nfId) {
         if (btnRetira) btnRetira.click();
     } else {
         if (btnTransporte) btnTransporte.click();
+        if (nfCepInput) nfCepInput.value = data.cep ? data.cep.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9) : '';
         if (nfCidadeInput) nfCidadeInput.value = data.cidade || (data.destino !== 'RETIRA' ? data.destino : '');
         if (nfUfInput) nfUfInput.value = data.uf;
         if (nfValorInput) nfValorInput.value = data.valor_frete;
@@ -2588,6 +2590,25 @@ if (progHistoryModal) {
     if (closeBtn) {
         closeBtn.addEventListener('click', () => closeModal(progHistoryModal));
     }
+}
+
+// Máscara visual para o campo CEP (00000-000)
+if (nfCepInput) {
+    nfCepInput.addEventListener('input', (e) => {
+        // Tarefa 2: Permitir apenas números e limitar a 8 dígitos (brutos)
+        let value = e.target.value.replace(/\D/g, ''); 
+        if (value.length > 8) value = value.slice(0, 8); 
+        
+        // Tarefa 2: Aplicar máscara automática 00000-000
+        if (value.length > 5) {
+            value = value.replace(/^(\d{5})(\d)/, '$1-$2');
+        }
+        
+        e.target.value = value;
+        
+        // Tarefa 4: Debug Temporário
+        console.log("CEP formatado:", e.target.value);
+    });
 }
 
 // Evento global para deselecionar rota ao clicar fora
