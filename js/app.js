@@ -2925,4 +2925,73 @@ window.handleExportPowerBiCSV = async function(e) {
     }
 };
 
+// FUNÇÃO PARA EXPORTAR BASE ANALÍTICA EXCEL (POWER BI)
+window.handleExportPowerBiExcel = async function(e) {
+    if (e) e.stopPropagation();
+    
+    // Fecha o dropdown
+    const dropdown = document.getElementById('export-powerbi-dropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+
+    try {
+        if (window.mostrarAviso) window.mostrarAviso("Preparando base analítica completa (Excel)... O download iniciará em breve.");
+
+        // 1. Busca todos os dados necessários (NFs e Rotas - Ativas e Finalizadas)
+        const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*");
+        const { data: rotas, error: errR } = await supabaseClient.from("rotas").select("*");
+
+        if (errN || errR) throw new Error("Erro ao carregar dados do Supabase.");
+
+        // 2. Definir Colunas da Exportação (Idênticas ao CSV)
+        const columns = [
+            "data_rota", "status_rota", "finalizada_em", "nome_rota", "transportadora",
+            "nf_numero", "tipo_operacao", "cidade", "uf", "cep", "endereco",
+            "numero_endereco", "quantidade", "marca", "potencia", "kam",
+            "frete", "status_nf", "observacao"
+        ];
+
+        // 3. Montar as linhas (Uma linha por NF)
+        const excelData = [];
+        excelData.push(columns); // Cabeçalho sutil
+
+        nfs.forEach(nf => {
+            const rota = rotas.find(r => r.id === nf.rota_id) || {};
+            
+            excelData.push([
+                rota.data || "",
+                rota.status || (nf.rota_id ? "ativa" : "pendente"),
+                rota.finalizada_em || "",
+                rota.nome || "",
+                rota.transportadora || "",
+                nf.numero || "",
+                nf.tipo || "",
+                nf.cidade || "",
+                nf.uf || "",
+                nf.cep || "",
+                nf.endereco || "",
+                nf.numero_endereco || "",
+                nf.qtd || "",
+                nf.marca || "",
+                nf.potencia || "",
+                nf.kam || "",
+                nf.valor_frete || 0,
+                nf.status || "",
+                (nf.observacao || "").replace(/\n/g, " ").replace(/\r/g, "")
+            ]);
+        });
+
+        // 4. Gerar o arquivo Excel usando a biblioteca XLSX
+        const worksheet = XLSX.utils.aoa_to_sheet(excelData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Base Analítica Power BI");
+
+        const dataHoje = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(workbook, `base_power_bi_${dataHoje}.xlsx`);
+
+    } catch (err) {
+        console.error("Erro na exportação Excel Power BI:", err);
+        if (window.mostrarAviso) window.mostrarAviso("Erro ao exportar base Excel. Verifique sua conexão.");
+    }
+};
+
 document.addEventListener('DOMContentLoaded', checkAuth);
