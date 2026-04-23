@@ -105,6 +105,132 @@ window.toggleUserMenu = function(event) {
     dropdown.classList.toggle('hidden');
 };
 
+window.toggleMapsMenu = function(event) {
+    if (event) event.stopPropagation();
+    const btn = event.currentTarget;
+    const dropdown = btn.nextElementSibling;
+    
+    // Fecha outros dropdowns abertos
+    document.querySelectorAll('.maps-dropdown, .user-dropdown').forEach(d => {
+        if (d !== dropdown) d.classList.add('hidden');
+    });
+    
+    dropdown.classList.toggle('hidden');
+};
+
+// Função auxiliar para montar a URL do Google Maps com paradas (waypoints)
+function montarUrlGoogleMaps(nfs) {
+    if (!nfs || nfs.length === 0) return null;
+
+    const destinos = nfs.map(nf => {
+        const parts = [];
+
+        // 1. Endereço e Número
+        let streetPart = String(nf.endereco || '').trim().replace(/ - /g, ", ");
+        let numberPart = String(nf.numero_endereco || '').trim();
+
+        if (streetPart && numberPart) {
+            parts.push(`${streetPart}, ${numberPart}`);
+        } else if (streetPart) {
+            parts.push(streetPart);
+        } else if (numberPart) {
+            parts.push(numberPart);
+        }
+
+        // 2. Cidade, UF e CEP
+        if (nf.cidade && String(nf.cidade).trim() !== "") parts.push(String(nf.cidade).trim());
+        if (nf.uf && String(nf.uf).trim() !== "" && String(nf.uf).toUpperCase() !== 'RT') parts.push(String(nf.uf).trim());
+        
+        if (nf.cep && String(nf.cep).trim() !== "") {
+            let formattedCep = String(nf.cep).replace(/\D/g, '');
+            if (formattedCep.length === 8) formattedCep = formattedCep.replace(/^(\d{5})(\d)/, '$1-$2');
+            parts.push(formattedCep);
+        }
+        
+        return parts
+            .filter(p => p !== "")
+            .join(", ")
+            .replace(/,\s*,/g, ',')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }).filter(addr => addr.trim() !== "");
+
+    if (destinos.length === 0) return null;
+
+    const destination = destinos[destinos.length - 1];
+    const waypoints = destinos.slice(0, destinos.length - 1);
+    
+    let rotaUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+    if (waypoints.length > 0) {
+        rotaUrl += `&waypoints=${encodeURIComponent(waypoints.join('|'))}`;
+    }
+    return rotaUrl;
+}
+
+window.handleAbrirNoMaps = async function(rotaId) {
+    if (!rotaId) return;
+    
+    try {
+        // Tarefa 1: Pegar as NFs da rota na ordem atual (pela criação)
+        const { data: nfs, error } = await supabaseClient
+            .from("nfs")
+            .select("*")
+            .eq("rota_id", rotaId)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (!nfs || nfs.length === 0) {
+            mostrarAviso("Esta rota não possui Notas Fiscais vinculadas.");
+            return;
+        }
+
+        const rotaUrl = montarUrlGoogleMaps(nfs);
+        if (!rotaUrl) {
+            mostrarAviso("Dados insuficientes para abrir a rota no Maps.");
+            return;
+        }
+
+        window.open(rotaUrl, "_blank");
+        document.querySelectorAll('.maps-dropdown').forEach(d => d.classList.add('hidden'));
+    } catch (err) {
+        console.error("Erro ao gerar link do Maps:", err);
+        mostrarAviso("Erro ao processar a rota para o Google Maps.");
+    }
+};
+
+window.handleCopiarLinkMaps = async function(rotaId) {
+    if (!rotaId) return;
+    
+    try {
+        const { data: nfs, error } = await supabaseClient
+            .from("nfs")
+            .select("*")
+            .eq("rota_id", rotaId)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (!nfs || nfs.length === 0) {
+            mostrarAviso("Esta rota não possui Notas Fiscais vinculadas.");
+            return;
+        }
+
+        const rotaUrl = montarUrlGoogleMaps(nfs);
+        if (!rotaUrl) {
+            mostrarAviso("Dados insuficientes para copiar o link da rota.");
+            return;
+        }
+
+        await navigator.clipboard.writeText(rotaUrl);
+        mostrarAviso("Link da rota copiado!");
+        document.querySelectorAll('.maps-dropdown').forEach(d => d.classList.add('hidden'));
+    } catch (err) {
+        console.error("Erro ao copiar link do Maps:", err);
+        mostrarAviso("Erro ao copiar o link da rota.");
+    }
+};
+
 window.handleOpenChangePasswordModal = function(event) {
     if (event) event.stopPropagation();
     // Fecha o menu suspenso
@@ -1298,13 +1424,25 @@ async function carregarRotas() {
       </div>
 
       <div class="rota-footer">
-        <button class="btn btn-map-route">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
-          Maps
-        </button>
+        <div class="maps-wrapper">
+          <button class="btn btn-map-route" onclick="toggleMapsMenu(event)">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 5px;">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+              <circle cx="12" cy="10" r="3"></circle>
+            </svg>
+            Maps
+          </button>
+          <div class="maps-dropdown hidden">
+            <button type="button" onclick="event.stopPropagation(); handleAbrirNoMaps('${rota.id}')">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              Abrir no Maps
+            </button>
+            <button type="button" onclick="event.stopPropagation(); handleCopiarLinkMaps('${rota.id}')">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              Copiar link
+            </button>
+          </div>
+        </div>
         <button class="btn btn-outline" onclick="event.stopPropagation(); copiarResumo('${rota.id}', '${rota.nome}', ${total})">Copiar Resumo</button>
         <button class="btn" onclick="event.stopPropagation(); finalizarRota('${rota.id}')">Finalizar Rota</button>
       </div>
@@ -2648,8 +2786,8 @@ if (nfCepInput) {
 // Evento global para deselecionar rota ao clicar fora
 document.addEventListener('click', (e) => {
   // Fecha dropdown do usuário ao clicar fora
-  if (!e.target.closest('.user-display') && !e.target.closest('.export-wrapper') && !e.target.closest('.export-day-wrapper')) {
-    document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
+  if (!e.target.closest('.user-display') && !e.target.closest('.export-wrapper') && !e.target.closest('.export-day-wrapper') && !e.target.closest('.maps-wrapper')) {
+    document.querySelectorAll('.user-dropdown, .maps-dropdown').forEach(d => d.classList.add('hidden'));
   }
 
   // Se o clique não foi em uma rota nem em uma NF da lista lateral, limpa a seleção
