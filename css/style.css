@@ -539,6 +539,13 @@ input:-webkit-autofill:active {
   transform: scale(1.05);
 }
 
+/* Estilo específico para o botão Power BI (hover mais discreto e elegante) */
+#export-powerbi-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* HISTÓRICO STYLES */
 .history-list {
   display: flex;

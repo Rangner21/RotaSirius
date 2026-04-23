@@ -2786,7 +2786,7 @@ if (nfCepInput) {
 // Evento global para deselecionar rota ao clicar fora
 document.addEventListener('click', (e) => {
   // Fecha dropdown do usuário ao clicar fora
-  if (!e.target.closest('.user-display') && !e.target.closest('.export-wrapper') && !e.target.closest('.export-day-wrapper') && !e.target.closest('.maps-wrapper')) {
+  if (!e.target.closest('.user-display') && !e.target.closest('.export-wrapper') && !e.target.closest('.export-day-wrapper') && !e.target.closest('.maps-wrapper') && !e.target.closest('.export-powerbi-wrapper')) {
     document.querySelectorAll('.user-dropdown, .maps-dropdown').forEach(d => d.classList.add('hidden'));
   }
 
@@ -2821,5 +2821,108 @@ if (viewGridBtn && viewListBtn) {
         carregarRotas();
     });
 }
+
+// Listener visual para o novo botão de exportação Power BI
+const exportPowerBiBtn = document.getElementById('export-powerbi-btn');
+const exportPowerBiDropdown = document.getElementById('export-powerbi-dropdown');
+if (exportPowerBiBtn && exportPowerBiDropdown) {
+    exportPowerBiBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Fecha outros dropdowns abertos
+        document.querySelectorAll('.user-dropdown, .maps-dropdown').forEach(d => {
+            if (d !== exportPowerBiDropdown) d.classList.add('hidden');
+        });
+        
+        // Alterna o menu atual
+        exportPowerBiDropdown.classList.toggle('hidden');
+    });
+}
+
+// FUNÇÃO PARA EXPORTAR BASE ANALÍTICA CSV (POWER BI)
+window.handleExportPowerBiCSV = async function(e) {
+    if (e) e.stopPropagation();
+    
+    // Fecha o dropdown
+    const dropdown = document.getElementById('export-powerbi-dropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+
+    try {
+        if (window.mostrarAviso) window.mostrarAviso("Preparando base analítica completa... O download iniciará em breve.");
+
+        // 1. Busca todos os dados necessários (NFs e Rotas - Ativas e Finalizadas)
+        const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*");
+        const { data: rotas, error: errR } = await supabaseClient.from("rotas").select("*");
+
+        if (errN || errR) throw new Error("Erro ao carregar dados do Supabase.");
+
+        // 2. Definir Colunas da Exportação (Conforme solicitado)
+        const columns = [
+            "data_rota", "status_rota", "finalizada_em", "nome_rota", "transportadora",
+            "nf_numero", "tipo_operacao", "cidade", "uf", "cep", "endereco",
+            "numero_endereco", "quantidade", "marca", "potencia", "kam",
+            "frete", "status_nf", "observacao"
+        ];
+
+        // 3. Montar as linhas (Uma linha por NF)
+        const csvRows = [];
+        csvRows.push(columns.join(",")); // Header
+
+        nfs.forEach(nf => {
+            const rota = rotas.find(r => r.id === nf.rota_id) || {};
+            
+            const rowData = [
+                rota.data || "",
+                rota.status || (nf.rota_id ? "ativa" : "pendente"),
+                rota.finalizada_em || "",
+                rota.nome || "",
+                rota.transportadora || "",
+                nf.numero || "",
+                nf.tipo || "",
+                nf.cidade || "",
+                nf.uf || "",
+                nf.cep || "",
+                nf.endereco || "",
+                nf.numero_endereco || "",
+                nf.qtd || "",
+                nf.marca || "",
+                nf.potencia || "",
+                nf.kam || "",
+                nf.valor_frete || 0,
+                nf.status || "",
+                (nf.observacao || "").replace(/\n/g, " ").replace(/\r/g, "")
+            ];
+
+            // Escapar valores para formato CSV seguro
+            const escapedRow = rowData.map(val => {
+                let text = (val === null || val === undefined) ? "" : String(val);
+                text = text.replace(/"/g, '""'); // Escapa aspas duplas internas
+                if (text.includes(",") || text.includes('"') || text.includes("\n")) {
+                    text = `"${text}"`;
+                }
+                return text;
+            });
+
+            csvRows.push(escapedRow.join(","));
+        });
+
+        // 4. Download do Arquivo
+        const csvString = "\uFEFF" + csvRows.join("\n"); // UTF-8 BOM para compatibilidade Excel/Power BI
+        const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        
+        const dataHoje = new Date().toISOString().slice(0, 10);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `base_power_bi_${dataHoje}.csv`);
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+    } catch (err) {
+        console.error("Erro na exportação CSV Power BI:", err);
+        if (window.mostrarAviso) window.mostrarAviso("Erro ao exportar base CSV. Verifique sua conexão.");
+    }
+};
 
 document.addEventListener('DOMContentLoaded', checkAuth);
