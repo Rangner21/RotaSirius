@@ -44,10 +44,11 @@ function exibirUsuarioLogado() {
     const dashElem = document.getElementById('user-display-dashboard');
     const panelElem = document.getElementById('user-display-panel');
     const programacaoElem = document.getElementById('user-display-programacao');
+    const newHistoryElem = document.getElementById('user-display-new-history');
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
 
     if (!usuarioLogado) {
-        [dashElem, panelElem, programacaoElem].forEach(el => { if (el) el.innerHTML = ""; });
+        [dashElem, panelElem, programacaoElem, newHistoryElem].forEach(el => { if (el) el.innerHTML = ""; });
         return;
     }
 
@@ -58,12 +59,16 @@ function exibirUsuarioLogado() {
     const isAdmin = usuarioLogado.permissao === "Administrador";
     const btnControlDash = document.getElementById('open-control-panel-btn');
     const btnControlProg = document.getElementById('open-control-panel-from-prog-btn');
+    const btnTestHistory = document.getElementById('open-new-history-btn');
 
     if (btnControlDash) {
         isAdmin ? btnControlDash.classList.remove('hidden') : btnControlDash.classList.add('hidden');
     }
     if (btnControlProg) {
         isAdmin ? btnControlProg.classList.remove('hidden') : btnControlProg.classList.add('hidden');
+    }
+    if (btnTestHistory) {
+        isAdmin ? btnTestHistory.classList.remove('hidden') : btnTestHistory.classList.add('hidden');
     }
 
     const primeiroNome = usuarioLogado.nome.split(" ")[0];
@@ -87,7 +92,7 @@ function exibirUsuarioLogado() {
         </div>
     `;
 
-    [dashElem, panelElem, programacaoElem].forEach(el => {
+    [dashElem, panelElem, programacaoElem, newHistoryElem].forEach(el => {
         if (el) {
             el.innerHTML = html;
             el.onclick = toggleUserMenu;
@@ -457,10 +462,12 @@ function closeModal(modalElement) {
 const dashboardView = document.getElementById('dashboard-view');
 const controlPanelView = document.getElementById('control-panel-view');
 const programacaoView = document.getElementById('programacao-view'); // Nova referência
+const newHistoryView = document.getElementById('new-history-view');
 
 const openControlPanelBtn = document.getElementById('open-control-panel-btn');
 const openProgramacaoBtn = document.getElementById('open-programacao-btn'); // Novo botão
 const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
+const openNewHistoryBtn = document.getElementById('open-new-history-btn');
 const openProgHistoryBtn = document.getElementById('open-programacao-history-btn');
 const progHistoryModal = document.getElementById('programacao-history-modal');
 const openControlPanelFromProgBtn = document.getElementById('open-control-panel-from-prog-btn');
@@ -733,9 +740,10 @@ if (openControlPanelBtn) {
             mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
             return;
         }
-        if (dashboardView && controlPanelView && programacaoView) {
+        if (dashboardView && controlPanelView && programacaoView && newHistoryView) {
             dashboardView.classList.add('hidden');
             programacaoView.classList.add('hidden'); // Esconde programação também
+            newHistoryView.classList.add('hidden');
             controlPanelView.classList.remove('hidden');
             document.querySelector('.app').classList.add('panel-active');
             carregarDashboard();
@@ -753,6 +761,7 @@ if (openControlPanelFromProgBtn) {
             return;
         }
         programacaoView.classList.add('hidden');
+        if (newHistoryView) newHistoryView.classList.add('hidden');
         controlPanelView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
@@ -765,12 +774,31 @@ if (openProgramacaoBtn) {
     openProgramacaoBtn.addEventListener('click', () => {
         // Não há verificação de permissão específica para "Programação" por enquanto,
         // mas pode ser adicionada aqui se necessário.
-        if (dashboardView && controlPanelView && programacaoView) {
+        if (dashboardView && controlPanelView && programacaoView && newHistoryView) {
             dashboardView.classList.add('hidden');
             controlPanelView.classList.add('hidden'); // Esconde painel de controle
+            newHistoryView.classList.add('hidden');
             programacaoView.classList.remove('hidden');
             document.querySelector('.app').classList.remove('panel-active');
             carregarProgramacao();
+        }
+    });
+}
+
+if (openNewHistoryBtn) {
+    openNewHistoryBtn.addEventListener('click', () => {
+        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
+            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar a nova página de Histórico.");
+            return;
+        }
+        if (dashboardView && controlPanelView && programacaoView && newHistoryView) {
+            dashboardView.classList.add('hidden');
+            controlPanelView.classList.add('hidden');
+            programacaoView.classList.add('hidden');
+            newHistoryView.classList.remove('hidden');
+            document.querySelector('.app').classList.add('panel-active');
+            toggleNewHistoryViewMode(currentNewHistoryViewMode); // Inicializa o modo de visualização
         }
     });
 }
@@ -784,6 +812,7 @@ if (openProgHistoryBtn) {
     });
 }
 
+const backToDashboardFromNewHistoryBtn = document.getElementById('back-to-dashboard-from-new-history-btn');
 const backToDashboardFromProgramacaoBtn = document.getElementById('back-to-dashboard-from-programacao-btn');
 
 if (backToDashboardBtn) {
@@ -807,6 +836,18 @@ if (backToDashboardFromProgramacaoBtn) {
             dashboardView.classList.remove('hidden');
             document.querySelector('.app').classList.remove('panel-active');
             carregarTudo(); // Garante que os dados estejam atualizados ao voltar
+        }
+    });
+}
+
+if (backToDashboardFromNewHistoryBtn) {
+    backToDashboardFromNewHistoryBtn.addEventListener('click', () => {
+        // Este botão é do Novo Histórico
+        if (dashboardView && newHistoryView) {
+            newHistoryView.classList.add('hidden');
+            dashboardView.classList.remove('hidden');
+            document.querySelector('.app').classList.remove('panel-active');
+            carregarTudo();
         }
     });
 }
@@ -2456,6 +2497,158 @@ window.retornarRotaProgramacao = async function(id) {
     await retornarRota(id);
     closeModal(progHistoryModal);
 };
+
+// --- LÓGICA DA NOVA PÁGINA DE HISTÓRICO ---
+
+// Referências para os novos elementos do toggle e conteúdo
+const newHistoryRoteirizacaoBtn = document.getElementById('new-history-roteirizacao-btn');
+const newHistoryProgramacaoBtn = document.getElementById('new-history-programacao-btn');
+const newHistoryRoteirizacaoContent = document.getElementById('new-history-roteirizacao-content');
+const newHistoryProgramacaoContent = document.getElementById('new-history-programacao-content');
+const newHistoryCurrentTitle = document.getElementById('new-history-current-title'); // O span com o título
+const newHistoryCount = document.getElementById('new-history-count'); // O span com a contagem
+
+// Estado inicial: 'roteirizacao' por padrão, ou o último salvo
+let currentNewHistoryViewMode = localStorage.getItem('new_history_view_mode') || 'roteirizacao';
+
+function toggleNewHistoryViewMode(mode) {
+    currentNewHistoryViewMode = mode;
+    localStorage.setItem('new_history_view_mode', mode);
+
+    // Atualiza a classe 'active' nos botões
+    if (newHistoryRoteirizacaoBtn) {
+        newHistoryRoteirizacaoBtn.classList.toggle('active', mode === 'roteirizacao');
+    }
+    if (newHistoryProgramacaoBtn) {
+        newHistoryProgramacaoBtn.classList.toggle('active', mode === 'programacao');
+    }
+
+    // Mostra/esconde as áreas de conteúdo
+    if (newHistoryRoteirizacaoContent) {
+        newHistoryRoteirizacaoContent.classList.toggle('hidden', mode !== 'roteirizacao');
+    }
+    if (newHistoryProgramacaoContent) {
+        newHistoryProgramacaoContent.classList.toggle('hidden', mode !== 'programacao');
+    }
+
+    // Atualiza o título e a contagem
+    if (newHistoryCurrentTitle) {
+        newHistoryCurrentTitle.innerText = mode === 'roteirizacao' ? 'Rotas Finalizadas' : 'Programação Histórica';
+    }
+    if (newHistoryCount) {
+        if (mode === 'roteirizacao') {
+            newHistoryCount.style.color = 'var(--accent)';
+            newHistoryCount.style.background = 'rgba(56, 189, 248, 0.1)';
+            newHistoryCount.style.borderColor = 'rgba(56, 189, 248, 0.2)';
+            newHistoryCount.innerText = 'Carregando...'; // Placeholder enquanto carrega
+            carregarNovoHistorico(); // Carrega os dados para o modo Roteirização
+        } else { // 'programacao'
+            newHistoryCount.style.color = 'var(--text-muted)';
+            newHistoryCount.style.background = 'rgba(148, 163, 184, 0.1)';
+            newHistoryCount.style.borderColor = 'rgba(148, 163, 184, 0.2)';
+            newHistoryCount.innerText = 'Em desenvolvimento';
+        }
+    }
+}
+
+async function carregarNovoHistorico() {
+    // Garante que só carrega se o modo atual for 'roteirizacao'
+    if (currentNewHistoryViewMode !== 'roteirizacao') return;
+
+    const container = document.getElementById('new-history-roteirizacao-content');
+    const countElem = document.getElementById('new-history-count'); // Já é o span correto
+    if (!container) return;
+
+    // Feedback visual de carregamento
+    container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Carregando histórico...</p>`;
+
+    try {
+        const { data: rotas, error: errR } = await supabaseClient
+            .from("rotas")
+            .select("*")
+            .eq("status", "finalizada")
+            .order("finalizada_em", { ascending: false });
+
+        if (errR) throw errR;
+
+        if (!rotas || rotas.length === 0) {
+            container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Nenhuma rota finalizada encontrada.</p>`;
+            if (countElem) countElem.innerText = "0 Rotas";
+            return; 
+        }
+
+        if (countElem) countElem.innerText = `${rotas.length} Rota(s)`;
+
+        const rotaIds = rotas.map(r => r.id);
+        const { data: nfs, error: errN } = await supabaseClient
+            .from("nfs")
+            .select("*")
+            .in("rota_id", rotaIds);
+
+        if (errN) throw errN;
+
+        container.innerHTML = "";
+
+        rotas.forEach(rota => {
+            const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
+            const total = nfsDaRota.reduce((acc, n) => acc + Number(n.valor_frete), 0);
+            const dataFin = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
+            const dataRotaFormatada = rota.data ? rota.data.split('-').reverse().join('/') : '---';
+
+            const card = document.createElement("div");
+            card.className = "rota-card";
+            card.style.cursor = "default"; // No histórico a seleção de card não é necessária
+
+            card.innerHTML = `
+                <div class="rota-header">
+                    <div>
+                        <div class="rota-title-group">
+                            <h3>${rota.nome}</h3>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Data: ${dataRotaFormatada} | Finalizada em: ${dataFin}</div>
+                        ${rota.transportadora ? `<div style="font-size: 11px; color: var(--text-muted);">Transportadora: ${rota.transportadora}</div>` : ''}
+                        <span style="display: block; margin-top: 4px;">${nfsDaRota.length} NFs</span>
+                    </div>
+                    <div class="valor">R$ ${formatar(total)}</div>
+                </div>
+                <div class="rota-body">
+                    <div class="nf-header"><span>NF</span><span>DESTINO</span><span>FRETE</span></div>
+                    ${nfsDaRota.map(nf => `
+                        <div class="nf-row" style="pointer-events: none;">
+                            <span>NF ${nf.numero}</span>
+                            <span>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</span>
+                            <span>R$ ${formatar(nf.valor_frete)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="rota-footer" style="padding-top: 15px;">
+                    <button class="btn btn-outline" onclick="copiarResumoHistorico('${rota.id}')">Copiar Resumo</button>
+                    <button class="btn btn-outline" style="border-color: var(--accent); color: var(--accent);" onclick="retornarRotaNovaPagina('${rota.id}')">Retornar para Ativa</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    } catch (err) {
+        console.error("Erro ao carregar novo histórico:", err);
+        container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 40px;">Erro ao carregar dados do servidor.</p>`;
+    }
+}
+
+window.retornarRotaNovaPagina = async function(rotaId) {
+    confirmarAcao("Deseja retornar esta rota para a tela principal (Ativa)?", async () => {
+        await retornarRota(rotaId);
+        carregarNovoHistorico();
+    });
+};
+
+// Adiciona event listeners para os botões de alternância
+if (newHistoryRoteirizacaoBtn) {
+    newHistoryRoteirizacaoBtn.addEventListener('click', () => toggleNewHistoryViewMode('roteirizacao'));
+}
+
+if (newHistoryProgramacaoBtn) {
+    newHistoryProgramacaoBtn.addEventListener('click', () => toggleNewHistoryViewMode('programacao'));
+}
 
 // FORMATAR VALOR
 function formatar(valor) {
