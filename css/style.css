@@ -308,6 +308,19 @@ input:-webkit-autofill:active {
   flex: 1;
   padding: 32px;
   overflow-y: auto;
+  overflow-x: hidden; /* Evita barra horizontal indesejada na página toda */
+}
+
+/* Scrollbar discreto para a área principal */
+.main::-webkit-scrollbar {
+  width: 8px;
+}
+.main::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+.main::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 
 .topbar {
@@ -789,6 +802,17 @@ input:-webkit-autofill:active {
   padding: 28px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
   backdrop-filter: blur(4px);
+  overflow-x: auto; /* Permite scroll horizontal em tabelas se necessário */
+}
+
+/* Scrollbar discreto para containers de dados (tabelas) */
+.panel-container::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.panel-container::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
 }
 
 /* Estado especial para o Painel de Controle (Admin Mode) */
@@ -798,6 +822,12 @@ input:-webkit-autofill:active {
 
 .app.panel-active .main {
   padding: 40px;
+}
+
+/* Ajuste da Topbar Fixa quando no Painel de Controle (Padding 40px) */
+.app.panel-active .topbar {
+  top: -40px;
+  margin: -40px -40px 32px -40px;
 }
 
 /* Layout em colunas para o Painel de Controle */
