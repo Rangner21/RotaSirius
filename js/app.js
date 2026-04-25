@@ -2546,7 +2546,11 @@ function toggleNewHistoryViewMode(mode) {
             newHistoryCount.style.color = 'var(--accent)';
             newHistoryCount.style.background = 'rgba(56, 189, 248, 0.1)';
             newHistoryCount.style.borderColor = 'rgba(56, 189, 248, 0.2)';
+            newHistoryCount.style.color = 'var(--primary)'; // Corrigido para primary, como na programação normal
+            newHistoryCount.style.background = 'rgba(34, 197, 94, 0.1)'; // Corrigido para primary, como na programação normal
+            newHistoryCount.style.borderColor = 'rgba(34, 197, 94, 0.2)'; // Corrigido para primary, como na programação normal
             newHistoryCount.innerText = 'Carregando...';
+            newHistoryCurrentTitle.innerText = 'Programação Histórica'; // Atualiza o título
             carregarNovoHistoricoProgramacao();
         }
     }
@@ -2635,6 +2639,8 @@ async function carregarNovoHistorico() {
     }
 }
 
+let currentRouteDetailsId = null;
+
 async function carregarNovoHistoricoProgramacao() {
     if (currentNewHistoryViewMode !== 'programacao') return;
 
@@ -2649,12 +2655,13 @@ async function carregarNovoHistoricoProgramacao() {
             .from("rotas")
             .select("*")
             .eq("status", "finalizada")
-            .order("data", { ascending: false }); // Prioriza a data da rota
+            .order("data", { ascending: false });
 
         if (errR) throw errR;
 
         if (!rotas || rotas.length === 0) {
             container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Nenhuma rota finalizada encontrada.</p>`;
+            container.innerHTML = `<div class="panel-container"><p style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhuma rota finalizada encontrada.</p></div>`;
             if (countElem) countElem.innerText = "0 Rotas";
             return;
         }
@@ -2671,55 +2678,64 @@ async function carregarNovoHistoricoProgramacao() {
 
         container.innerHTML = "";
 
-        // Agrupamento por Data da Rota
-        const agrupado = {};
-        rotas.forEach(r => {
-            const d = r.data || "sem-data";
-            if (!agrupado[d]) agrupado[d] = [];
-            agrupado[d].push(r);
-        });
-
+        // Reutiliza a lógica de agrupamento existente (por data da rota)
+        const agrupado = agruparDadosProgramacao(rotas, nfs, "");
         const datas = Object.keys(agrupado).sort((a, b) => b.localeCompare(a));
 
         datas.forEach(dataKey => {
             const section = document.createElement('div');
             section.className = "panel-container";
             section.style.marginBottom = "32px";
-            section.style.background = "rgba(30, 41, 59, 0.15)";
-            
+
             let html = `
                 <h3 style="margin: 0 0 20px 0; color: var(--primary); font-size: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; display: flex; align-items: center; gap: 8px;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                     ${formatarDataComDiaSemana(dataKey)}
                 </h3>
-                <div class="rotas" style="grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>NF</th>
+                            <th>DESTINO</th>
+                            <th style="text-align:center">TIPO</th>
+                            <th>QTD</th>
+                            <th>MARCA</th>
+                            <th>POTÊNCIA</th>
+                            <th>KAM</th>
+                            <th>ROTA</th>
+                            <th>TRANSPORTADORA</th>
+                            <th style="text-align:center">STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
             `;
 
-            agrupado[dataKey].forEach(rota => {
-                const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
-                const total = nfsDaRota.reduce((acc, n) => acc + Number(n.valor_frete), 0);
-                const dataFin = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
+            // Ordena IDs de rotas por nome dentro do dia
+            const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) => 
+                agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome)
+            );
 
-                html += `
-                    <div class="rota-card" style="cursor: default;">
-                        <div class="rota-header" style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
-                            <div>
-                                <h3 style="font-size: 14px; margin-bottom: 4px;">${rota.nome}</h3>
-                                <div style="font-size: 10px; color: var(--text-muted);">Fin: ${dataFin}</div>
-                                <div style="font-size: 10px; color: var(--text-muted);">${rota.transportadora || 'Sem Transp.'}</div>
-                                <span style="display: block; margin-top: 4px; font-size: 11px;">${nfsDaRota.length} NFs</span>
-                            </div>
-                            <div class="valor" style="font-size: 16px;">R$ ${formatar(total)}</div>
-                        </div>
-                        <div class="rota-footer" style="padding-top: 15px; gap: 8px;">
-                            <button class="btn btn-outline" style="flex: 1; font-size: 11px;" onclick="copiarResumoHistorico('${rota.id}')">Resumo</button>
-                            <button class="btn btn-outline" style="flex: 1; font-size: 11px; border-color: var(--accent); color: var(--accent);" onclick="retornarRotaNovaPagina('${rota.id}')">Retornar</button>
-                        </div>
-                    </div>
-                `;
+            rotasIds.forEach(rotaId => {
+                const infoRota = agrupado[dataKey][rotaId];
+                infoRota.nfs.forEach(nf => {
+                    html += `
+                        <tr>
+                            <td><strong>${nf.numero}</strong></td>
+                            <td>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</td>
+                            <td style="text-transform: capitalize; text-align:center">${nf.tipo}</td>
+                            <td>${nf.qtd || '---'}</td>
+                            <td>${nf.marca || '---'}</td>
+                            <td>${nf.potencia || '---'}</td>
+                            <td>${nf.kam || '---'}</td>
+                            <td><span style="background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap;">${infoRota.nome}</span></td>
+                            <td>${infoRota.transportadora || '---'}</td>
+                            <td style="text-align:center"><span style="color: var(--text-muted); font-size: 11px;">${nf.status || '---'}</span></td>
+                        </tr>
+                    `;
+                });
             });
 
-            html += `</div>`;
+            html += `</tbody></table>`;
             section.innerHTML = html;
             container.appendChild(section);
         });
