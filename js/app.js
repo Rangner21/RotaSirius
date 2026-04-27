@@ -59,6 +59,7 @@ function exibirUsuarioLogado() {
     const isAdmin = usuarioLogado.permissao === "Administrador";
     const btnControlDash = document.getElementById('open-control-panel-btn');
     const btnControlProg = document.getElementById('open-control-panel-from-prog-btn');
+    const btnControlHistory = document.getElementById('open-control-panel-from-new-history-btn');
     const btnTestHistory = document.getElementById('open-new-history-btn');
 
     if (btnControlDash) {
@@ -66,6 +67,9 @@ function exibirUsuarioLogado() {
     }
     if (btnControlProg) {
         isAdmin ? btnControlProg.classList.remove('hidden') : btnControlProg.classList.add('hidden');
+    }
+    if (btnControlHistory) {
+        isAdmin ? btnControlHistory.classList.remove('hidden') : btnControlHistory.classList.add('hidden');
     }
     if (btnTestHistory) {
         isAdmin ? btnTestHistory.classList.remove('hidden') : btnTestHistory.classList.add('hidden');
@@ -471,6 +475,8 @@ const openNewHistoryBtn = document.getElementById('open-new-history-btn');
 const openProgHistoryBtn = document.getElementById('open-programacao-history-btn');
 const progHistoryModal = document.getElementById('programacao-history-modal');
 const openControlPanelFromProgBtn = document.getElementById('open-control-panel-from-prog-btn');
+const openControlPanelFromHistoryBtn = document.getElementById('open-control-panel-from-new-history-btn');
+const openProgramacaoFromHistoryBtn = document.getElementById('open-programacao-from-new-history-btn');
 const exportProgramacaoBtn = document.getElementById('export-programacao-btn');
 const openRotaModalFromProgBtn = document.getElementById('open-rota-modal-from-prog-btn');
 const addUserBtn = document.getElementById('add-user-btn');
@@ -767,6 +773,31 @@ if (openControlPanelFromProgBtn) {
         carregarDashboard();
         carregarUsuarios();
         carregarKams();
+    });
+}
+
+if (openControlPanelFromHistoryBtn) {
+    openControlPanelFromHistoryBtn.addEventListener('click', () => {
+        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
+            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
+            return;
+        }
+        newHistoryView.classList.add('hidden');
+        controlPanelView.classList.remove('hidden');
+        document.querySelector('.app').classList.add('panel-active');
+        carregarDashboard();
+        carregarUsuarios();
+        carregarKams();
+    });
+}
+
+if (openProgramacaoFromHistoryBtn) {
+    openProgramacaoFromHistoryBtn.addEventListener('click', () => {
+        newHistoryView.classList.add('hidden');
+        programacaoView.classList.remove('hidden');
+        document.querySelector('.app').classList.remove('panel-active');
+        carregarProgramacao();
     });
 }
 
@@ -1360,6 +1391,13 @@ const filtroDataProg = document.getElementById('filtro-data-programacao');
 if (filtroNomeProg) filtroNomeProg.addEventListener('input', carregarProgramacao);
 if (filtroDataProg) filtroDataProg.addEventListener('change', carregarProgramacao);
 
+// Referências dos filtros do novo histórico
+const filtroNomeNewHistory = document.getElementById('filtro-nome-new-history');
+const filtroDataNewHistory = document.getElementById('filtro-data-new-history');
+
+if (filtroNomeNewHistory) filtroNomeNewHistory.addEventListener('input', () => currentNewHistoryViewMode === 'roteirizacao' ? carregarNovoHistorico() : carregarNovoHistoricoProgramacao());
+if (filtroDataNewHistory) filtroDataNewHistory.addEventListener('change', () => currentNewHistoryViewMode === 'roteirizacao' ? carregarNovoHistorico() : carregarNovoHistoricoProgramacao());
+
 // CARREGAR ROTAS (COM 3 COLUNAS)
 async function carregarRotas() {
   if (typeof supabaseClient === 'undefined') {
@@ -1824,6 +1862,7 @@ function agruparDadosProgramacao(rotas, nfs, termoBusca = "") {
         // Lógica de busca multi-campo
         if (termo) {
             const matchRota = rota.nome.toLowerCase().includes(termo);
+            const matchTransp = (rota.transportadora || "").toLowerCase().includes(termo);
             const matchNF = String(nf.numero).toLowerCase().includes(termo);
             const matchKam = String(nf.kam || "").toLowerCase().includes(termo);
             const localizacao = (nf.cidade || nf.destino || "").toLowerCase();
@@ -1831,7 +1870,7 @@ function agruparDadosProgramacao(rotas, nfs, termoBusca = "") {
                                 String(nf.uf || "").toLowerCase().includes(termo);
 
             // Se nenhum dos campos bater, ignora esta NF
-            if (!matchRota && !matchNF && !matchKam && !matchDestino) return;
+            if (!matchRota && !matchTransp && !matchNF && !matchKam && !matchDestino) return;
         }
 
         const dataKey = rota.data || "sem-data";
@@ -2533,7 +2572,7 @@ function toggleNewHistoryViewMode(mode) {
 
     // Atualiza o título e a contagem
     if (newHistoryCurrentTitle) {
-        newHistoryCurrentTitle.innerText = mode === 'roteirizacao' ? 'Rotas Finalizadas' : 'Programação Histórica';
+        newHistoryCurrentTitle.innerText = mode === 'roteirizacao' ? 'Rotas Finalizadas' : 'Programação Finalizada';
     }
     if (newHistoryCount) {
         if (mode === 'roteirizacao') {
@@ -2550,7 +2589,7 @@ function toggleNewHistoryViewMode(mode) {
             newHistoryCount.style.background = 'rgba(34, 197, 94, 0.1)'; // Corrigido para primary, como na programação normal
             newHistoryCount.style.borderColor = 'rgba(34, 197, 94, 0.2)'; // Corrigido para primary, como na programação normal
             newHistoryCount.innerText = 'Carregando...';
-            newHistoryCurrentTitle.innerText = 'Programação Histórica'; // Atualiza o título
+            newHistoryCurrentTitle.innerText = 'Programação Finalizada'; // Atualiza o título
             carregarNovoHistoricoProgramacao();
         }
     }
@@ -2563,6 +2602,9 @@ async function carregarNovoHistorico() {
     const container = document.getElementById('new-history-roteirizacao-content');
     const countElem = document.getElementById('new-history-count'); // Já é o span correto
     if (!container) return;
+
+    const termoTexto = filtroNomeNewHistory ? filtroNomeNewHistory.value.toLowerCase() : "";
+    const termoData = filtroDataNewHistory ? filtroDataNewHistory.value : "";
 
     // Feedback visual de carregamento
     container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Carregando histórico...</p>`;
@@ -2582,8 +2624,6 @@ async function carregarNovoHistorico() {
             return; 
         }
 
-        if (countElem) countElem.innerText = `${rotas.length} Rota(s)`;
-
         const rotaIds = rotas.map(r => r.id);
         const { data: nfs, error: errN } = await supabaseClient
             .from("nfs")
@@ -2592,9 +2632,30 @@ async function carregarNovoHistorico() {
 
         if (errN) throw errN;
 
-        container.innerHTML = "";
+        // FILTRAGEM POR TEXTO
+        const rotasFiltradas = rotas.filter(rota => {
+            const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
+            const matchRotaNome = (rota.nome || "").toLowerCase().includes(termoTexto);
+            const matchTransportadora = (rota.transportadora || "").toLowerCase().includes(termoTexto);
+            const matchNfInfo = nfsDaRota.some(nf => {
+                const matchNfNum = String(nf.numero || "").toLowerCase().includes(termoTexto);
+                const matchCidade = (nf.cidade || nf.destino || "").toLowerCase().includes(termoTexto);
+                const matchUf = (nf.uf || "").toLowerCase().includes(termoTexto);
+                const matchKam = (nf.kam || "").toLowerCase().includes(termoTexto);
+                return matchNfNum || matchCidade || matchUf || matchKam;
+            });
+            return matchRotaNome || matchTransportadora || matchNfInfo;
+        });
 
-        rotas.forEach(rota => {
+        if (countElem) countElem.innerText = `${rotasFiltradas.length} Rota(s)`;
+
+        if (rotasFiltradas.length === 0) {
+            container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Nenhum resultado encontrado para a busca.</p>`;
+            return;
+        }
+
+        container.innerHTML = "";
+        rotasFiltradas.forEach(rota => {
             const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
             const total = nfsDaRota.reduce((acc, n) => acc + Number(n.valor_frete), 0);
             const dataFin = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
@@ -2648,6 +2709,9 @@ async function carregarNovoHistoricoProgramacao() {
     const countElem = document.getElementById('new-history-count');
     if (!container) return;
 
+    const termoTexto = filtroNomeNewHistory ? filtroNomeNewHistory.value : "";
+    const termoData = filtroDataNewHistory ? filtroDataNewHistory.value : "";
+
     container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Carregando histórico agrupado...</p>`;
 
     try {
@@ -2660,13 +2724,10 @@ async function carregarNovoHistoricoProgramacao() {
         if (errR) throw errR;
 
         if (!rotas || rotas.length === 0) {
-            container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Nenhuma rota finalizada encontrada.</p>`;
             container.innerHTML = `<div class="panel-container"><p style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhuma rota finalizada encontrada.</p></div>`;
             if (countElem) countElem.innerText = "0 Rotas";
             return;
         }
-
-        if (countElem) countElem.innerText = `${rotas.length} Rota(s)`;
 
         const rotaIds = rotas.map(r => r.id);
         const { data: nfs, error: errN } = await supabaseClient
@@ -2676,10 +2737,23 @@ async function carregarNovoHistoricoProgramacao() {
 
         if (errN) throw errN;
 
-        container.innerHTML = "";
+        // Reutiliza a lógica de agrupamento existente com o termo de busca
+        const agrupado = agruparDadosProgramacao(rotas, nfs, termoTexto);
+        
+        // Contabiliza rotas restantes após o filtro
+        let rotasContadas = 0;
+        Object.values(agrupado).forEach(dia => {
+            rotasContadas += Object.keys(dia).length;
+        });
 
-        // Reutiliza a lógica de agrupamento existente (por data da rota)
-        const agrupado = agruparDadosProgramacao(rotas, nfs, "");
+        if (countElem) countElem.innerText = `${rotasContadas} Rota(s)`;
+
+        if (rotasContadas === 0) {
+            container.innerHTML = `<div class="panel-container"><p style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum resultado encontrado para a busca.</p></div>`;
+            return;
+        }
+
+        container.innerHTML = "";
         const datas = Object.keys(agrupado).sort((a, b) => b.localeCompare(a));
 
         datas.forEach(dataKey => {
