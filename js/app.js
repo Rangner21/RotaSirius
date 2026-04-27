@@ -2632,7 +2632,7 @@ async function carregarNovoHistorico() {
 
         if (errN) throw errN;
 
-        // FILTRAGEM POR TEXTO
+        // FILTRAGEM (TEXTO E DATA)
         const rotasFiltradas = rotas.filter(rota => {
             const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
             const matchRotaNome = (rota.nome || "").toLowerCase().includes(termoTexto);
@@ -2644,7 +2644,10 @@ async function carregarNovoHistorico() {
                 const matchKam = (nf.kam || "").toLowerCase().includes(termoTexto);
                 return matchNfNum || matchCidade || matchUf || matchKam;
             });
-            return matchRotaNome || matchTransportadora || matchNfInfo;
+            
+            const matchTexto = matchRotaNome || matchTransportadora || matchNfInfo;
+            const matchData = termoData ? rota.data === termoData : true;
+            return matchTexto && matchData;
         });
 
         if (countElem) countElem.innerText = `${rotasFiltradas.length} Rota(s)`;
@@ -2737,8 +2740,12 @@ async function carregarNovoHistoricoProgramacao() {
 
         if (errN) throw errN;
 
-        // Reutiliza a lógica de agrupamento existente com o termo de busca
-        const agrupado = agruparDadosProgramacao(rotas, nfs, termoTexto);
+        // Filtra as rotas pela data antes de agrupar (mesma lógica da tela Programação ativa)
+        const rotasFiltradasPelaData = rotas.filter(rota => {
+            return termoData ? rota.data === termoData : true;
+        });
+
+        const agrupado = agruparDadosProgramacao(rotasFiltradasPelaData, nfs, termoTexto);
         
         // Contabiliza rotas restantes após o filtro
         let rotasContadas = 0;
