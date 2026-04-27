@@ -60,7 +60,6 @@ function exibirUsuarioLogado() {
     const btnControlDash = document.getElementById('open-control-panel-btn');
     const btnControlProg = document.getElementById('open-control-panel-from-prog-btn');
     const btnControlHistory = document.getElementById('open-control-panel-from-new-history-btn');
-    const btnTestHistory = document.getElementById('open-new-history-btn');
 
     if (btnControlDash) {
         isAdmin ? btnControlDash.classList.remove('hidden') : btnControlDash.classList.add('hidden');
@@ -70,9 +69,6 @@ function exibirUsuarioLogado() {
     }
     if (btnControlHistory) {
         isAdmin ? btnControlHistory.classList.remove('hidden') : btnControlHistory.classList.add('hidden');
-    }
-    if (btnTestHistory) {
-        isAdmin ? btnTestHistory.classList.remove('hidden') : btnTestHistory.classList.add('hidden');
     }
 
     const primeiroNome = usuarioLogado.nome.split(" ")[0];
@@ -471,7 +467,6 @@ const newHistoryView = document.getElementById('new-history-view');
 const openControlPanelBtn = document.getElementById('open-control-panel-btn');
 const openProgramacaoBtn = document.getElementById('open-programacao-btn'); // Novo botão
 const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
-const openNewHistoryBtn = document.getElementById('open-new-history-btn');
 const openProgHistoryBtn = document.getElementById('open-programacao-history-btn');
 const progHistoryModal = document.getElementById('programacao-history-modal');
 const openControlPanelFromProgBtn = document.getElementById('open-control-panel-from-prog-btn');
@@ -816,8 +811,8 @@ if (openProgramacaoBtn) {
     });
 }
 
-if (openNewHistoryBtn) {
-    openNewHistoryBtn.addEventListener('click', () => {
+if (openProgHistoryBtn) {
+    openProgHistoryBtn.addEventListener('click', () => {
         const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
         if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
             mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar a nova página de Histórico.");
@@ -829,17 +824,8 @@ if (openNewHistoryBtn) {
             programacaoView.classList.add('hidden');
             newHistoryView.classList.remove('hidden');
             document.querySelector('.app').classList.add('panel-active');
-            toggleNewHistoryViewMode(currentNewHistoryViewMode); // Inicializa o modo de visualização
+            toggleNewHistoryViewMode('programacao');
         }
-    });
-}
-
-if (openProgHistoryBtn) {
-    openProgHistoryBtn.addEventListener('click', () => {
-        const progHistorySearch = document.getElementById('programacao-history-search');
-        if (progHistorySearch) progHistorySearch.value = "";
-        renderizarHistoricoProgramacao();
-        openModal(progHistoryModal);
     });
 }
 
@@ -996,7 +982,21 @@ if (openRotaModalBtn) {
   console.warn('openRotaModalBtn não encontrado.');
 }
 if (openHistoryBtn) {
-  openHistoryBtn.addEventListener('click', () => { renderizarHistorico(); openModal(historyModal); });
+  openHistoryBtn.addEventListener('click', () => { 
+      const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+      if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
+          mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar a nova página de Histórico.");
+          return;
+      }
+      if (dashboardView && controlPanelView && programacaoView && newHistoryView) {
+          dashboardView.classList.add('hidden');
+          controlPanelView.classList.add('hidden');
+          programacaoView.classList.add('hidden');
+          newHistoryView.classList.remove('hidden');
+          document.querySelector('.app').classList.add('panel-active');
+          toggleNewHistoryViewMode(currentNewHistoryViewMode);
+      }
+  });
 }
 
 
