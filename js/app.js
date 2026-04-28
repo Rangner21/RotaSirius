@@ -1422,6 +1422,11 @@ window.salvarObservacaoNF = async function(nfId) {
         await carregarNFs();
         await carregarRotas();
         
+        // Se estiver na página de programação, atualiza também para refletir a mudança
+        if (programacaoView && !programacaoView.classList.contains('hidden')) {
+            await carregarProgramacao();
+        }
+
         // Se estiver na página de histórico, atualiza também para refletir a mudança
         if (newHistoryView && !newHistoryView.classList.contains('hidden')) {
             if (currentNewHistoryViewMode === 'roteirizacao') await carregarNovoHistorico();
@@ -1589,6 +1594,10 @@ async function carregarRotas() {
   rotasFiltradas.forEach(rota => {
     const card = document.createElement("div");
     card.className = "rota-card";
+
+    // Destaque visual para observação da rota
+    const hasObs = rota.observacao_historico && rota.observacao_historico.trim() !== "";
+    const iconStyle = hasObs ? 'color: #fbbf24; opacity: 1;' : 'color: var(--accent); opacity: 0.7;';
     
     // Mantém o destaque se a rota já estiver selecionada
     if (rotaSelecionada === rota.id) {
@@ -1628,6 +1637,9 @@ async function carregarRotas() {
           <div class="rota-title-group">
             <h3>${displayNome}</h3>
             <div class="rota-actions">
+              <button class="icon-btn" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle}" onclick="event.stopPropagation(); abrirModalDetalhesRota('${rota.id}')">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              </button>
               <button class="icon-btn edit" title="Editar rota" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}', '${rota.data || ''}', '${rota.transportadora || ''}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
               <button class="icon-btn delete" title="Excluir rota" onclick="event.stopPropagation(); deletarRota('${rota.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
             </div>
@@ -2124,6 +2136,11 @@ function renderizarProgramacaoAutomatica(agrupado) {
         rotasIds.forEach(rotaId => {
             const infoRota = agrupado[dataKey][rotaId];
             infoRota.nfs.forEach(nf => {
+                // Destaque visual para observação da NF
+                const temObsNF = nf.observacao && nf.observacao.trim() !== "";
+                const infoStyleNF = temObsNF ? 'color: #fbbf24; opacity: 1;' : '';
+                const infoTitleNF = temObsNF ? "Informações (Possui Observação)" : "Informações";
+
                 const statusAtual = nf.status || "";
                 const statusDisplay = statusAtual || "---";
                 // Atributo de clique apenas se tiver permissão
@@ -2131,7 +2148,14 @@ function renderizarProgramacaoAutomatica(agrupado) {
 
                 html += `
                     <tr>
-                        <td><strong>${nf.numero}</strong></td>
+                        <td>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <strong>${nf.numero}</strong>
+                                <button class="icon-btn info" title="${infoTitleNF}" style="padding: 2px; ${infoStyleNF}" onclick="event.stopPropagation(); abrirModalInfoNF('${nf.id}');">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                </button>
+                            </div>
+                        </td>
                         <td>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</td>
                         <td style="text-transform: capitalize;">${nf.tipo}</td>
                         <td>${nf.qtd || '---'}</td>
@@ -2875,12 +2899,16 @@ window.salvarObservacaoHistorico = async function(rotaId) {
         // Fecha o modal após o salvamento bem-sucedido
         closeModal(routeDetailsModal);
 
-        // 2. Atualiza a lista da página atual e 3. Reflete o novo estado do ícone 'i'
-        // sem fechar o modal ou recarregar a página
-        if (currentNewHistoryViewMode === 'roteirizacao') {
-            await carregarNovoHistorico();
-        } else {
-            await carregarNovoHistoricoProgramacao();
+        // Atualiza a visualização principal (Dashboard)
+        await carregarRotas();
+
+        // Atualiza a lista da página de histórico se estiver aberta
+        if (newHistoryView && !newHistoryView.classList.contains('hidden')) {
+            if (currentNewHistoryViewMode === 'roteirizacao') {
+                await carregarNovoHistorico();
+            } else {
+                await carregarNovoHistoricoProgramacao();
+            }
         }
 
         mostrarAviso("Observação salva com sucesso!");
