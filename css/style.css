@@ -1213,12 +1213,14 @@ input:-webkit-autofill:active {
 /* Esconde botões de ação global e ícones de edição/exclusão */
 body.is-viewer #open-nf-modal-btn,
 body.is-viewer #open-rota-modal-btn,
-body.is-viewer .nf-actions-top,
-body.is-viewer .rota-actions,
-body.is-viewer .rota-footer .btn:not(.btn-outline),
+body.is-viewer .nf-actions-top .edit,
+body.is-viewer .nf-actions-top .delete,
+body.is-viewer .rota-actions .edit,
+body.is-viewer .rota-actions .delete,
+body.is-viewer .rota-footer .btn:not(.btn-outline):not(.btn-map-route),
 body.is-viewer .history-card .btn[onclick*="retornar"],
 body.is-viewer .history-card .btn[onclick*="excluirHistorico"],
-body.is-viewer .panel-container .btn[onclick*="retornar"] {
+body.is-viewer .rota-footer .btn[onclick*="retornar"] {
   display: none !important;
 }
 
@@ -1226,8 +1228,14 @@ body.is-viewer .panel-container .btn[onclick*="retornar"] {
 body.is-viewer .nf-card,
 body.is-viewer .nf-row,
 body.is-viewer .rota-card {
-  pointer-events: none !important;
   cursor: default !important;
+}
+
+/* Libera especificamente o clique no botão de informação (i) para Visualizadores */
+body.is-viewer .icon-btn.info,
+body.is-viewer .rota-actions .icon-btn.info {
+  pointer-events: auto !important;
+  cursor: pointer !important;
 }
 
 /* Garante que áreas de leitura e botões permitidos (Resumo/Exportar/Modal) continuem clicáveis */

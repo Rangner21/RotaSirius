@@ -236,6 +236,11 @@ window.handleCopiarLinkMaps = async function(rotaId) {
     }
 };
 
+function isUserViewer() {
+    const user = JSON.parse(localStorage.getItem("usuarioLogado"));
+    return user && user.permissao === "Visualizador";
+}
+
 window.handleOpenChangePasswordModal = function(event) {
     if (event) event.stopPropagation();
     // Fecha o menu suspenso
@@ -814,11 +819,6 @@ if (openProgramacaoBtn) {
 
 if (openProgHistoryBtn) {
     openProgHistoryBtn.addEventListener('click', () => {
-        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
-            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar a nova página de Histórico.");
-            return;
-        }
         if (dashboardView && controlPanelView && programacaoView && newHistoryView) {
             dashboardView.classList.add('hidden');
             controlPanelView.classList.add('hidden');
@@ -984,11 +984,6 @@ if (openRotaModalBtn) {
 }
 if (openHistoryBtn) {
   openHistoryBtn.addEventListener('click', () => { 
-      const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-      if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
-          mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar a nova página de Histórico.");
-          return;
-      }
       if (dashboardView && controlPanelView && programacaoView && newHistoryView) {
           dashboardView.classList.add('hidden');
           controlPanelView.classList.add('hidden');
@@ -1036,6 +1031,7 @@ if (btnTransporte && btnRetira && nfTipoInput) {
 // SALVAR NF (UNIFICADO)
 async function handleSalvarNF(fecharAoSalvar = true) {
   console.log('handleSalvarNF: Função chamada. Fechar:', fecharAoSalvar);
+  if (isUserViewer()) return;
 
   if (typeof supabaseClient === 'undefined') {
     console.error('handleSalvarNF: Cliente supabaseClient não está definido.');
@@ -1157,6 +1153,7 @@ async function handleSalvarNF(fecharAoSalvar = true) {
 async function handleCriarRota(event) {
   event.preventDefault(); // Previne o recarregamento da página
 
+  if (isUserViewer()) return;
   console.log('handleCriarRota: Função chamada.');
 
   if (typeof supabaseClient === 'undefined') {
@@ -1301,6 +1298,8 @@ window.abrirModalInfoNF = async function(nfId, readOnly = false) {
     const content = document.getElementById('nf-info-content');
     if (!modal || !content) return;
 
+    const actualReadOnly = readOnly || isUserViewer();
+
     // Feedback visual de carregamento (mantido)
     content.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 40px;">Buscando informações da NF...</p>`;
     openModal(modal);
@@ -1386,8 +1385,8 @@ window.abrirModalInfoNF = async function(nfId, readOnly = false) {
 
                 <div style="grid-column: span 2; margin-top: 10px; padding: 16px; background: rgba(30, 41, 59, 0.4); border-radius: 12px; border: 1px solid var(--border);">
                     <label for="nf-info-observacao" style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Observação da NF</label>
-                    <textarea id="nf-info-observacao" ${readOnly ? 'readonly' : ''} style="width: 100%; padding: 10px; border: 1px solid var(--border); background: #0f172a; color: var(--text-main); border-radius: 5px; outline: none; resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.6; ${readOnly ? 'cursor: default;' : ''}">${nf.observacao || ''}</textarea>
-                    ${!readOnly ? `
+                    <textarea id="nf-info-observacao" ${actualReadOnly ? 'readonly' : ''} style="width: 100%; padding: 10px; border: 1px solid var(--border); background: #0f172a; color: var(--text-main); border-radius: 5px; outline: none; resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.6; ${actualReadOnly ? 'cursor: default;' : ''}">${nf.observacao || ''}</textarea>
+                    ${!actualReadOnly ? `
                     <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
                         <button class="btn" style="width: auto; font-size: 11px; height: 32px; background: var(--primary); border-color: var(--primary); color: white;" onclick="salvarObservacaoNF('${nf.id}')">Salvar Observação</button>
                     </div>` : ''}
@@ -1403,6 +1402,7 @@ window.abrirModalInfoNF = async function(nfId, readOnly = false) {
 // Nova função para salvar a observação da NF
 window.salvarObservacaoNF = async function(nfId) {
     const textarea = document.getElementById('nf-info-observacao');
+    if (isUserViewer()) return;
     if (!textarea) return;
 
     const novaObs = textarea.value.trim();
@@ -1442,6 +1442,7 @@ window.salvarObservacaoNF = async function(nfId) {
 
 // EDITAR NF
 window.editarNF = async function(nfId) {
+  if (isUserViewer()) return;
   try {
     const { data, error } = await supabaseClient.from("nfs").select("*").eq("id", nfId).single();
     if (error) throw error;
@@ -1480,6 +1481,7 @@ window.editarNF = async function(nfId) {
 
 // EXCLUIR NF
 window.excluirNF = async function(nfId) {
+  if (isUserViewer()) return;
   confirmarAcao("Tem certeza que deseja excluir esta Nota Fiscal permanentemente?", async () => {
     try {
       const { error } = await supabaseClient.from("nfs").delete().eq("id", nfId);
@@ -1509,6 +1511,7 @@ if (progHistorySearchInput) {
 
 // ENVIAR PARA ROTA
 async function enviarParaRota(nfId) {
+  if (isUserViewer()) return;
   if (typeof supabaseClient === 'undefined') {
     console.error('enviarParaRota: Cliente supabaseClient não está definido.');
     mostrarAviso('Erro: O serviço de banco de dados não está disponível.');
@@ -1637,7 +1640,7 @@ async function carregarRotas() {
           <div class="rota-title-group">
             <h3>${displayNome}</h3>
             <div class="rota-actions">
-              <button class="icon-btn" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle}" onclick="event.stopPropagation(); abrirModalDetalhesRota('${rota.id}')">
+              <button class="icon-btn info" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle}" onclick="event.stopPropagation(); abrirModalDetalhesRota('${rota.id}')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
               </button>
               <button class="icon-btn edit" title="Editar rota" onclick="event.stopPropagation(); editarRota('${rota.id}', '${rota.nome}', '${rota.data || ''}', '${rota.transportadora || ''}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
@@ -1717,6 +1720,7 @@ async function carregarRotas() {
 
 // REMOVER DA ROTA
 async function removerDaRota(nfId) {
+  if (isUserViewer()) return;
   if (typeof supabaseClient === 'undefined') {
     console.error('removerDaRota: Cliente supabaseClient não está definido.');
     alert('Erro: O serviço de banco de dados não está disponível.');
@@ -1732,6 +1736,7 @@ async function removerDaRota(nfId) {
 
 // EDITAR NOME DA ROTA
 window.editarRota = async function(rotaId, nomeAtual, dataAtual, transportadoraAtual) {
+  if (isUserViewer()) return;
   if (rotaModalTitle) rotaModalTitle.innerText = "Editar Rota";
   if (rotaIdHidden) rotaIdHidden.value = rotaId;
   if (rotaNomeInput) rotaNomeInput.value = nomeAtual;
@@ -1786,6 +1791,7 @@ window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
 
 // FINALIZAR ROTA (Deleta a rota sem devolver NFs para pendentes)
 window.finalizarRota = async function(rotaId) {
+  if (isUserViewer()) return;
   confirmarAcao("Deseja finalizar esta rota? Ela será movida para o histórico.", async () => {
     try {
       // TAREFA 2: Garantir que os dados sejam capturados antes da exclusão
@@ -1929,6 +1935,7 @@ window.renderizarHistorico = async function(termoBusca = "") {
 
 // EXCLUIR ROTA DO HISTÓRICO
 window.excluirHistorico = function(historicoId) {
+    if (isUserViewer()) return;
     confirmarAcao("Tem certeza que deseja excluir esta rota permanentemente do histórico?", () => {
         let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
         historico = historico.filter(h => h.id !== historicoId);
@@ -1940,6 +1947,7 @@ window.excluirHistorico = function(historicoId) {
 
 // RETORNAR ROTA PARA ATIVA
 window.retornarRota = async function(rotaId) {
+    if (isUserViewer()) return;
     try {
         const { error } = await supabaseClient
             .from("rotas")
@@ -1991,6 +1999,7 @@ window.copiarResumoHistorico = async function(rotaId) {
     }
 };
 window.deletarRota = async function(rotaId) {
+  if (isUserViewer()) return;
   confirmarAcao("Tem certeza que deseja excluir esta rota? As Notas Fiscais vinculadas retornarão para a lista de pendentes.", async () => {
     try {
       // Primeiro removemos o vínculo das NFs com esta rota
@@ -2212,6 +2221,7 @@ window.abrirEdicaoStatus = function(event, nfId, statusAtual) {
 };
 
 window.salvarStatusNF = async function(nfId, novoStatus) {
+    if (isUserViewer()) return;
     try {
         const { error } = await supabaseClient.from("nfs").update({ status: novoStatus }).eq("id", nfId);
         if (error) throw error;
@@ -2777,6 +2787,7 @@ function toggleNewHistoryViewMode(mode) {
 
 window.abrirModalDetalhesRota = async function(rotaId) {
     if (!rotaId) return;
+    const isViewer = isUserViewer();
 
     const content = document.getElementById('route-details-content');
     if (!content) return;
@@ -2869,10 +2880,11 @@ window.abrirModalDetalhesRota = async function(rotaId) {
             <!-- Área de Observação -->
             <div style="margin-top: 25px; padding: 20px; background: rgba(30, 41, 59, 0.4); border-radius: 12px; border: 1px solid var(--border);">
                 <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Observação da Rota Finalizada</label>
-                <textarea id="hist-obs-${rota.id}" placeholder="Adicione uma observação sobre esta rota..." style="width: 100%; padding: 12px; border: 1px solid var(--border); background: #0f172a; color: #e2e8f0; border-radius: 8px; outline: none; resize: vertical; min-height: 80px; font-size: 13px; transition: border-color 0.2s;">${rota.observacao_historico || ''}</textarea>
+                <textarea id="hist-obs-${rota.id}" ${isViewer ? 'readonly' : ''} placeholder="Adicione uma observação sobre esta rota..." style="width: 100%; padding: 12px; border: 1px solid var(--border); background: #0f172a; color: #e2e8f0; border-radius: 8px; outline: none; resize: vertical; min-height: 80px; font-size: 13px; transition: border-color 0.2s; ${isViewer ? 'cursor: default;' : ''}">${rota.observacao_historico || ''}</textarea>
+                ${!isViewer ? `
                 <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
                     <button class="btn" style="width: auto; font-size: 11px; height: 32px; background: var(--primary); border-color: var(--primary); color: white;" onclick="salvarObservacaoHistorico('${rota.id}')">Salvar Observação</button>
-                </div>
+                </div>` : ''}
             </div>
         `;
 
@@ -2883,6 +2895,7 @@ window.abrirModalDetalhesRota = async function(rotaId) {
 };
 
 window.salvarObservacaoHistorico = async function(rotaId) {
+    if (isUserViewer()) return;
     const textarea = document.getElementById(`hist-obs-${rotaId}`);
     if (!textarea) return;
 
@@ -3000,7 +3013,7 @@ async function carregarNovoHistorico() {
                         <div class="rota-title-group">
                             <h3>${rota.nome}</h3>
                             <div class="rota-actions">
-                                <button class="icon-btn" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle}" onclick="abrirModalDetalhesRota('${rota.id}')">
+                                <button class="icon-btn info" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle}" onclick="abrirModalDetalhesRota('${rota.id}')">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                                 </button>
                             </div>
@@ -3153,7 +3166,7 @@ async function carregarNovoHistoricoProgramacao() {
                             <td>
                                 <div style="display: flex; align-items: center; gap: 6px;">
                                     <span style="background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap;">${infoRota.nome}</span>
-                                    <button class="icon-btn" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle} padding: 2px;" onclick="abrirModalDetalhesRota('${rotaId}')">
+                                    <button class="icon-btn info" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle} padding: 2px;" onclick="abrirModalDetalhesRota('${rotaId}')">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                                     </button>
                                 </div>
@@ -3176,6 +3189,7 @@ async function carregarNovoHistoricoProgramacao() {
 }
 
 window.retornarRotaNovaPagina = async function(rotaId) {
+    if (isUserViewer()) return;
     confirmarAcao("Deseja retornar esta rota para a tela principal (Ativa)?", async () => {
         await retornarRota(rotaId);
         carregarNovoHistorico();
