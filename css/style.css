@@ -287,6 +287,10 @@ input:-webkit-autofill:active {
   color: var(--primary);
 }
 
+.icon-btn.info:hover {
+  color: var(--accent);
+}
+
 .icon-btn.delete:hover {
   color: #ef4444;
 }

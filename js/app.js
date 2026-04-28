@@ -1270,9 +1270,15 @@ async function carregarNFs() {
       div.className = "nf-card";
 
       const badge = nf.uf === 'RT' ? '<small style="color: #f87171;">[RETIRA]</small>' : '';
+      
+      // Verifica se a NF possui observação para aplicar o destaque visual
+      const temObs = nf.observacao && nf.observacao.trim() !== "";
+      const infoStyle = temObs ? 'style="color: #fbbf24; opacity: 1;"' : '';
+      const infoTitle = temObs ? "Informações (Possui Observação)" : "Informações";
 
       div.innerHTML = `
         <div class="nf-actions-top">
+          <button class="icon-btn info" title="${infoTitle}" ${infoStyle} onclick="event.stopPropagation(); abrirModalInfoNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg></button>
           <button class="icon-btn edit" title="Editar" onclick="event.stopPropagation(); editarNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
           <button class="icon-btn delete" title="Excluir" onclick="event.stopPropagation(); excluirNF('${nf.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg></button>
         </div>
@@ -1289,6 +1295,135 @@ async function carregarNFs() {
     console.error("Erro em carregarNFs:", err);
   }
 }
+
+window.abrirModalInfoNF = async function(nfId) {
+    const modal = document.getElementById('nf-info-modal');
+    const content = document.getElementById('nf-info-content');
+    if (!modal || !content) return;
+
+    // Feedback visual de carregamento (mantido)
+    content.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 40px;">Buscando informações da NF...</p>`;
+    openModal(modal);
+
+    try {
+        const { data: nf, error } = await supabaseClient
+            .from("nfs")
+            .select("*")
+            .eq("id", nfId)
+            .single();
+
+        if (error) throw error;
+
+        const valorFrete = formatar(nf.valor_frete || 0);
+        
+        // Máscara de CEP para exibição
+        let cepExibicao = nf.cep || "";
+        if (cepExibicao.length === 8) {
+            cepExibicao = cepExibicao.replace(/^(\d{5})(\d)/, '$1-$2');
+        }
+
+        content.innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div style="grid-column: span 2; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 4px;">
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Número da NF</label>
+                    <div style="font-size: 20px; font-weight: 800; color: var(--primary);">NF ${nf.numero || '---'}</div>
+                </div>
+                
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Tipo da Operação</label>
+                    <div style="font-weight: 600; text-transform: capitalize;">${nf.tipo || '---'}</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">KAM</label>
+                    <div style="font-weight: 600;">${nf.kam || '---'}</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Cidade</label>
+                    <div style="font-weight: 500;">${nf.cidade || '---'}</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">UF</label>
+                    <div style="font-weight: 500;">${nf.uf || '---'}</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">CEP</label>
+                    <div>${cepExibicao || '---'}</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Nº do Endereço</label>
+                    <div>${nf.numero_endereco || '---'}</div>
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Endereço Completo</label>
+                    <div>${nf.endereco || '---'}</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Quantidade</label>
+                    <div>${nf.qtd || '---'}</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Marca</label>
+                    <div>${nf.marca || '---'}</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Potência</label>
+                    <div>${nf.potencia || '---'}</div>
+                </div>
+
+                <div>
+                    <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Valor de Frete</label>
+                    <div style="color: var(--primary); font-weight: 700;">R$ ${valorFrete}</div>
+                </div>
+
+                <div style="grid-column: span 2; margin-top: 10px; padding: 16px; background: rgba(30, 41, 59, 0.4); border-radius: 12px; border: 1px solid var(--border);">
+                    <label for="nf-info-observacao" style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Observação da NF</label>
+                    <textarea id="nf-info-observacao" style="width: 100%; padding: 10px; border: 1px solid var(--border); background: #0f172a; color: var(--text-main); border-radius: 5px; outline: none; resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.6;">${nf.observacao || ''}</textarea>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+                        <button class="btn" style="width: auto; font-size: 11px; height: 32px; background: var(--primary); border-color: var(--primary); color: white;" onclick="salvarObservacaoNF('${nf.id}')">Salvar Observação</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch (err) {
+        console.error("Erro ao carregar detalhes da NF:", err);
+        content.innerHTML = `<p style="text-align: center; color: #ef4444; padding: 40px;">Erro ao buscar os dados desta NF no servidor.</p>`;
+    }
+};
+
+// Nova função para salvar a observação da NF
+window.salvarObservacaoNF = async function(nfId) {
+    const textarea = document.getElementById('nf-info-observacao');
+    if (!textarea) return;
+
+    const novaObs = textarea.value.trim();
+
+    try {
+        const { error } = await supabaseClient
+            .from("nfs")
+            .update({ observacao: novaObs })
+            .eq("id", nfId);
+
+        if (error) throw error;
+
+        // Fecha o modal e atualiza a lista lateral imediatamente para refletir o novo estado do ícone 'i'
+        closeModal(document.getElementById('nf-info-modal'));
+        await carregarNFs();
+
+        mostrarAviso("Observação da NF salva com sucesso!");
+    } catch (err) {
+        console.error("Erro ao salvar observação da NF:", err);
+        mostrarAviso("Erro ao salvar observação no servidor.");
+    }
+};
 
 // EDITAR NF
 window.editarNF = async function(nfId) {
@@ -3264,6 +3399,14 @@ if (historyModal) {
     const closeHistoryBtn = historyModal.querySelector('.close-button');
     if (closeHistoryBtn) {
         closeHistoryBtn.addEventListener('click', () => closeModal(historyModal));
+    }
+}
+
+const nfInfoModal = document.getElementById('nf-info-modal');
+if (nfInfoModal) {
+    const closeBtn = nfInfoModal.querySelector('.close-button');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => closeModal(nfInfoModal));
     }
 }
 
