@@ -1296,7 +1296,7 @@ async function carregarNFs() {
   }
 }
 
-window.abrirModalInfoNF = async function(nfId) {
+window.abrirModalInfoNF = async function(nfId, readOnly = false) {
     const modal = document.getElementById('nf-info-modal');
     const content = document.getElementById('nf-info-content');
     if (!modal || !content) return;
@@ -1386,10 +1386,11 @@ window.abrirModalInfoNF = async function(nfId) {
 
                 <div style="grid-column: span 2; margin-top: 10px; padding: 16px; background: rgba(30, 41, 59, 0.4); border-radius: 12px; border: 1px solid var(--border);">
                     <label for="nf-info-observacao" style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Observação da NF</label>
-                    <textarea id="nf-info-observacao" style="width: 100%; padding: 10px; border: 1px solid var(--border); background: #0f172a; color: var(--text-main); border-radius: 5px; outline: none; resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.6;">${nf.observacao || ''}</textarea>
+                    <textarea id="nf-info-observacao" ${readOnly ? 'readonly' : ''} style="width: 100%; padding: 10px; border: 1px solid var(--border); background: #0f172a; color: var(--text-main); border-radius: 5px; outline: none; resize: vertical; min-height: 80px; font-size: 13px; line-height: 1.6; ${readOnly ? 'cursor: default;' : ''}">${nf.observacao || ''}</textarea>
+                    ${!readOnly ? `
                     <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
                         <button class="btn" style="width: auto; font-size: 11px; height: 32px; background: var(--primary); border-color: var(--primary); color: white;" onclick="salvarObservacaoNF('${nf.id}')">Salvar Observação</button>
-                    </div>
+                    </div>` : ''}
                 </div>
             </div>
         `;
@@ -1414,9 +1415,18 @@ window.salvarObservacaoNF = async function(nfId) {
 
         if (error) throw error;
 
-        // Fecha o modal e atualiza a lista lateral imediatamente para refletir o novo estado do ícone 'i'
+        // Fecha o modal
         closeModal(document.getElementById('nf-info-modal'));
+
+        // Atualiza as visualizações (Side list e Rotas ativas)
         await carregarNFs();
+        await carregarRotas();
+        
+        // Se estiver na página de histórico, atualiza também para refletir a mudança
+        if (newHistoryView && !newHistoryView.classList.contains('hidden')) {
+            if (currentNewHistoryViewMode === 'roteirizacao') await carregarNovoHistorico();
+            else await carregarNovoHistoricoProgramacao();
+        }
 
         mostrarAviso("Observação da NF salva com sucesso!");
     } catch (err) {
@@ -1634,6 +1644,7 @@ async function carregarRotas() {
           <span>NF</span>
           <span>DESTINO</span>
           <span>FRETE</span>
+          <span></span>
         </div>
 
       </div>
@@ -1668,11 +1679,19 @@ async function carregarRotas() {
     nfsDaRota.forEach(nf => {
       const linha = document.createElement("div");
       linha.className = "nf-row";
+      
+      // Destaque visual para observação
+      const temObs = nf.observacao && nf.observacao.trim() !== "";
+      const infoStyle = temObs ? 'color: #fbbf24; opacity: 1;' : '';
+      const infoTitle = temObs ? "Informações (Possui Observação)" : "Informações";
 
       linha.innerHTML = `
         <span>NF ${nf.numero}</span>
         <span>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</span>
         <span>R$ ${formatar(nf.valor_frete)}</span>
+        <button class="icon-btn info" title="${infoTitle}" onclick="event.stopPropagation(); abrirModalInfoNF('${nf.id}');" style="padding: 2px; ${infoStyle}">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        </button>
       `;
 
       linha.onclick = () => removerDaRota(nf.id);
@@ -2965,14 +2984,22 @@ async function carregarNovoHistorico() {
                     <div class="valor">R$ ${formatar(total)}</div>
                 </div>
                 <div class="rota-body">
-                    <div class="nf-header"><span>NF</span><span>DESTINO</span><span>FRETE</span></div>
-                    ${nfsDaRota.map(nf => `
-                        <div class="nf-row" style="pointer-events: none;">
+                    <div class="nf-header"><span>NF</span><span>DESTINO</span><span>FRETE</span><span></span></div>
+                    ${nfsDaRota.map(nf => {
+                        // Destaque visual para observação
+                        const temObs = nf.observacao && nf.observacao.trim() !== "";
+                        const infoStyle = temObs ? 'color: #fbbf24; opacity: 1;' : '';
+                        const infoTitle = temObs ? "Informações (Possui Observação)" : "Informações";
+                        return `
+                        <div class="nf-row" style="cursor: default;">
                             <span>NF ${nf.numero}</span>
                             <span>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</span>
                             <span>R$ ${formatar(nf.valor_frete)}</span>
+                            <button class="icon-btn info" title="${infoTitle}" style="padding: 2px; ${infoStyle}" onclick="event.stopPropagation(); abrirModalInfoNF('${nf.id}');">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                            </button>
                         </div>
-                    `).join('')}
+                    `}).join('')}
                 </div>
                 <div class="rota-footer" style="padding-top: 15px;">
                     <button class="btn btn-outline" onclick="copiarResumoHistorico('${rota.id}')">Copiar Resumo</button>
@@ -3408,6 +3435,10 @@ if (nfInfoModal) {
     if (closeBtn) {
         closeBtn.addEventListener('click', () => closeModal(nfInfoModal));
     }
+    // Fechar ao clicar fora (no overlay)
+    nfInfoModal.addEventListener('click', (e) => {
+        if (e.target === nfInfoModal) closeModal(nfInfoModal);
+    });
 }
 
 if (routeDetailsModal) {

@@ -441,7 +441,7 @@ input:-webkit-autofill:active {
 /* HEADER DAS COLUNAS NO CARD */
 .nf-header {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1.2fr 0.8fr 30px;
   text-align: center;
   padding: 10px 8px;
   font-weight: 600;
@@ -457,7 +457,7 @@ input:-webkit-autofill:active {
 /* LINHAS */
 .nf-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1.2fr 0.8fr 30px;
   text-align: center;
   padding: 8px 8px;
   border-bottom: 1px solid rgba(30, 41, 59, 0.5);
