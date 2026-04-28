@@ -2717,6 +2717,9 @@ window.salvarObservacaoHistorico = async function(rotaId) {
             .eq("id", rotaId);
 
         if (error) throw error;
+        
+        // Fecha o modal após o salvamento bem-sucedido
+        closeModal(routeDetailsModal);
 
         // 2. Atualiza a lista da página atual e 3. Reflete o novo estado do ícone 'i'
         // sem fechar o modal ou recarregar a página
