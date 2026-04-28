@@ -361,6 +361,7 @@ const createNfModal = document.getElementById('create-nf-modal');
 const createRotaModal = document.getElementById('create-rota-modal');
 const genericModal = document.getElementById('generic-modal');
 const historyModal = document.getElementById('history-modal');
+const routeDetailsModal = document.getElementById('route-details-modal');
 
 const openNfModalBtn = document.getElementById('open-nf-modal-btn');
 const openRotaModalBtn = document.getElementById('open-rota-modal-btn');
@@ -1880,6 +1881,7 @@ function agruparDadosProgramacao(rotas, nfs, termoBusca = "") {
             agrupado[dataKey][rota.id] = {
                 nome: rota.nome,
                 transportadora: rota.transportadora,
+                observacao_historico: rota.observacao_historico,
                 nfs: []
             };
         }
@@ -2595,6 +2597,142 @@ function toggleNewHistoryViewMode(mode) {
     }
 }
 
+window.abrirModalDetalhesRota = async function(rotaId) {
+    if (!rotaId) return;
+
+    const content = document.getElementById('route-details-content');
+    if (!content) return;
+
+    // Feedback visual de carregamento
+    content.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 40px;">Buscando informações da rota...</p>`;
+    openModal(routeDetailsModal);
+
+    try {
+        // Busca os dados da rota e das NFs em paralelo para melhor performance
+        const [rotaRes, nfsRes] = await Promise.all([
+            supabaseClient.from("rotas").select("*").eq("id", rotaId).single(),
+            supabaseClient.from("nfs").select("*").eq("rota_id", rotaId).order("numero", { ascending: true })
+        ]);
+
+        if (rotaRes.error) throw rotaRes.error;
+        if (nfsRes.error) throw nfsRes.error;
+
+        const rota = rotaRes.data;
+        const nfs = nfsRes.data || [];
+        const totalFrete = nfs.reduce((acc, nf) => acc + Number(nf.valor_frete || 0), 0);
+        
+        const dataRota = rota.data ? rota.data.split('-').reverse().join('/') : '---';
+        const dataFin = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
+
+        // Construção do conteúdo dinâmico do modal
+        content.innerHTML = `
+            <!-- Área de Resumo -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin-bottom: 25px; padding: 20px; background: rgba(30, 41, 59, 0.4); border-radius: 12px; border: 1px solid var(--border);">
+                <div>
+                    <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Nome da Rota</label>
+                    <div style="font-weight: 700; color: var(--text-main); font-size: 14px;">${rota.nome}</div>
+                </div>
+                <div>
+                    <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Data da Rota</label>
+                    <div style="font-weight: 700; color: var(--text-main); font-size: 14px;">${dataRota}</div>
+                </div>
+                <div>
+                    <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Finalizada em</label>
+                    <div style="font-weight: 700; color: var(--text-main); font-size: 14px;">${dataFin}</div>
+                </div>
+                <div>
+                    <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Transportadora</label>
+                    <div style="font-weight: 700; color: var(--text-main); font-size: 14px;">${rota.transportadora || '---'}</div>
+                </div>
+                <div>
+                    <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Quantidade NFs</label>
+                    <div style="font-weight: 700; color: var(--text-main); font-size: 14px;">${nfs.length}</div>
+                </div>
+                <div>
+                    <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 4px;">Valor Total</label>
+                    <div style="font-weight: 700; color: var(--primary); font-size: 14px;">R$ ${formatar(totalFrete)}</div>
+                </div>
+            </div>
+
+            <!-- Tabela de NFs Detalhada -->
+            <div style="overflow-x: auto; max-height: 400px; border-radius: 8px; border: 1px solid var(--border);">
+                <table class="data-table" style="margin-top: 0; width: 100%;">
+                    <thead style="position: sticky; top: 0; z-index: 10; background: var(--bg-sidebar);">
+                        <tr>
+                            <th>NF</th>
+                            <th>DESTINO</th>
+                            <th style="text-align: center;">TIPO</th>
+                            <th style="text-align: center;">QTD</th>
+                            <th>MARCA</th>
+                            <th>POTÊNCIA</th>
+                            <th>KAM</th>
+                            <th>TRANSPORTADORA</th>
+                            <th style="text-align: center;">STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${nfs.map(nf => `
+                            <tr>
+                                <td><strong>${nf.numero}</strong></td>
+                                <td style="font-size: 11px;">${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</td>
+                                <td style="text-align: center; text-transform: capitalize; font-size: 11px;">${nf.tipo || '---'}</td>
+                                <td style="text-align: center; font-size: 11px;">${nf.qtd || '---'}</td>
+                                <td style="font-size: 11px;">${nf.marca || '---'}</td>
+                                <td style="font-size: 11px;">${nf.potencia || '---'}</td>
+                                <td style="font-size: 11px;">${nf.kam || '---'}</td>
+                                <td style="font-size: 11px;">${rota.transportadora || '---'}</td>
+                                <td style="text-align: center;"><span style="color: var(--text-muted); font-size: 10px;">${nf.status || '---'}</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Área de Observação -->
+            <div style="margin-top: 25px; padding: 20px; background: rgba(30, 41, 59, 0.4); border-radius: 12px; border: 1px solid var(--border);">
+                <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Observação da Rota Finalizada</label>
+                <textarea id="hist-obs-${rota.id}" placeholder="Adicione uma observação sobre esta rota..." style="width: 100%; padding: 12px; border: 1px solid var(--border); background: #0f172a; color: #e2e8f0; border-radius: 8px; outline: none; resize: vertical; min-height: 80px; font-size: 13px; transition: border-color 0.2s;">${rota.observacao_historico || ''}</textarea>
+                <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+                    <button class="btn" style="width: auto; font-size: 11px; height: 32px; background: var(--primary); border-color: var(--primary); color: white;" onclick="salvarObservacaoHistorico('${rota.id}')">Salvar Observação</button>
+                </div>
+            </div>
+        `;
+
+    } catch (err) {
+        console.error("Erro ao carregar detalhes da rota:", err);
+        content.innerHTML = `<p style="text-align: center; color: #ef4444; padding: 40px;">Erro ao carregar os dados desta rota no servidor.</p>`;
+    }
+};
+
+window.salvarObservacaoHistorico = async function(rotaId) {
+    const textarea = document.getElementById(`hist-obs-${rotaId}`);
+    if (!textarea) return;
+
+    const novaObs = textarea.value.trim();
+
+    try {
+        const { error } = await supabaseClient
+            .from("rotas")
+            .update({ observacao_historico: novaObs })
+            .eq("id", rotaId);
+
+        if (error) throw error;
+
+        // 2. Atualiza a lista da página atual e 3. Reflete o novo estado do ícone 'i'
+        // sem fechar o modal ou recarregar a página
+        if (currentNewHistoryViewMode === 'roteirizacao') {
+            await carregarNovoHistorico();
+        } else {
+            await carregarNovoHistoricoProgramacao();
+        }
+
+        mostrarAviso("Observação salva com sucesso!");
+    } catch (err) {
+        console.error("Erro ao salvar observação da rota:", err);
+        mostrarAviso("Erro ao salvar observação no servidor.");
+    }
+};
+
 async function carregarNovoHistorico() {
     // Garante que só carrega se o modo atual for 'roteirizacao'
     if (currentNewHistoryViewMode !== 'roteirizacao') return;
@@ -2659,6 +2797,9 @@ async function carregarNovoHistorico() {
 
         container.innerHTML = "";
         rotasFiltradas.forEach(rota => {
+            const hasObs = rota.observacao_historico && rota.observacao_historico.trim() !== "";
+            const iconStyle = hasObs ? 'color: #fbbf24; opacity: 1;' : 'color: var(--accent); opacity: 0.7;';
+
             const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
             const total = nfsDaRota.reduce((acc, n) => acc + Number(n.valor_frete), 0);
             const dataFin = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
@@ -2673,6 +2814,11 @@ async function carregarNovoHistorico() {
                     <div>
                         <div class="rota-title-group">
                             <h3>${rota.nome}</h3>
+                            <div class="rota-actions">
+                                <button class="icon-btn" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle}" onclick="abrirModalDetalhesRota('${rota.id}')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                </button>
+                            </div>
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Data: ${dataRotaFormatada} | Finalizada em: ${dataFin}</div>
                         ${rota.transportadora ? `<div style="font-size: 11px; color: var(--text-muted);">Transportadora: ${rota.transportadora}</div>` : ''}
@@ -2798,6 +2944,9 @@ async function carregarNovoHistoricoProgramacao() {
 
             rotasIds.forEach(rotaId => {
                 const infoRota = agrupado[dataKey][rotaId];
+                const hasObs = infoRota.observacao_historico && infoRota.observacao_historico.trim() !== "";
+                const iconStyle = hasObs ? 'color: #fbbf24; opacity: 1;' : 'color: var(--accent); opacity: 0.7;';
+
                 infoRota.nfs.forEach(nf => {
                     html += `
                         <tr>
@@ -2808,7 +2957,14 @@ async function carregarNovoHistoricoProgramacao() {
                             <td>${nf.marca || '---'}</td>
                             <td>${nf.potencia || '---'}</td>
                             <td>${nf.kam || '---'}</td>
-                            <td><span style="background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap;">${infoRota.nome}</span></td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap;">${infoRota.nome}</span>
+                                    <button class="icon-btn" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle} padding: 2px;" onclick="abrirModalDetalhesRota('${rotaId}')">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                    </button>
+                                </div>
+                            </td>
                             <td>${infoRota.transportadora || '---'}</td>
                             <td style="text-align:center"><span style="color: var(--text-muted); font-size: 11px;">${nf.status || '---'}</span></td>
                         </tr>
@@ -3105,6 +3261,13 @@ if (historyModal) {
     const closeHistoryBtn = historyModal.querySelector('.close-button');
     if (closeHistoryBtn) {
         closeHistoryBtn.addEventListener('click', () => closeModal(historyModal));
+    }
+}
+
+if (routeDetailsModal) {
+    const closeBtn = routeDetailsModal.querySelector('.close-button');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => closeModal(routeDetailsModal));
     }
 }
 
