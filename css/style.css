@@ -64,7 +64,7 @@ body {
 }
 
 .login-header .logo-img {
-  height: 48px; /* Logo levemente maior na tela de login */
+  height: 35px; /* Ajustado para um tamanho mais proporcional na tela de login */
 }
 
 .login-header p {
@@ -135,7 +135,7 @@ input:-webkit-autofill:active {
 .sidebar {
   width: 350px;
   background: var(--bg-sidebar);
-  padding: 24px;
+  padding: 24px 24px 24px 24px;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -147,11 +147,12 @@ input:-webkit-autofill:active {
   margin-bottom: 24px;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
 }
 
 .logo-img {
-  height: 45px; /* Tamanho médio/pequeno para a sidebar */
+  height: 25px; /* Ajustado para alinhar com a escala do título da página */
   width: auto;
   object-fit: contain;
   flex-shrink: 0;
@@ -1248,4 +1249,3 @@ body.is-viewer .rota-footer .btn-outline,
 body.is-viewer .history-card .btn[onclick*="copiar"] {
   pointer-events: auto !important;
   }
-.
