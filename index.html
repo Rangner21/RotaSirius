@@ -6,6 +6,7 @@
   <link rel="icon" type="image/png" href="img/favicon.png">
   <link rel="shortcut icon" href="img/favicon.png">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
 
@@ -94,6 +95,7 @@
           <div class="topbar-group">
             <button class="btn btn-outline" id="open-control-panel-btn">⚙ Painel</button>
             <button class="btn btn-outline" id="open-programacao-btn">📅 Programação</button>
+            <button class="btn btn-outline" id="open-simulate-route-btn">🗺 Simular Rota</button>
             <button class="btn btn-primary" id="open-rota-modal-btn">+ Nova Rota</button>
           </div>
 
@@ -394,6 +396,102 @@
       </div>
     </div>
 
+    <!-- Visão de Simulação de Rota -->
+    <div id="simulate-route-view" class="hidden">
+      <div class="topbar">
+        <h2>Simular Rota</h2>
+        <div class="topbar-actions">
+          <div class="topbar-group">
+            <button class="btn btn-outline" id="back-to-dashboard-from-simulate-btn">← Voltar</button>
+          </div>
+          <div class="topbar-group">
+            <div id="user-display-simulate" class="user-display"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="simulate-grid">
+        <!-- Coluna Esquerda: Painel de Configuração -->
+        <div class="panel-container simulate-config-panel">
+          <h3>Configurações da Simulação</h3>
+          <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 13px;">Defina os parâmetros para a simulação de rota.</p>
+
+          <!-- 1. Toggle/botões no topo: CEP / Roteirizado -->
+          <div class="nf-tipo-toggle" style="margin-bottom: 20px;">
+              <button type="button" id="simulate-mode-cep-btn" class="btn-toggle active">CEP</button>
+              <button type="button" id="simulate-mode-routed-btn" class="btn-toggle">Roteirizado</button>
+          </div>
+
+          <!-- CONTEÚDO MODO CEP -->
+          <div id="simulate-cep-content">
+              <div id="simulate-stops-container">
+                  <div class="simulation-address-block">
+                      <label class="address-label">Origem</label>
+                      <input type="text" id="simulate-origin-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
+                  </div>
+                  <div class="simulation-address-block">
+                      <label class="address-label">Parada 1</label>
+                      <input type="text" id="simulate-stop1-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
+                  </div>
+              </div>
+              <button id="simulate-add-stop-btn" class="btn btn-outline" style="width: 100%; margin-top: 15px;">+ Adicionar Parada</button>
+              <div style="margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px;">
+                  <button class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">Calcular Rota</button>
+                  <button class="btn btn-outline" style="width: 100%;">Importar Planilha</button>
+              </div>
+          </div>
+
+          <!-- CONTEÚDO MODO ROTEIRIZADO -->
+          <div id="simulate-routed-content" class="hidden">
+              <label class="address-label">Selecionar Rota Ativa</label>
+              <select id="simulate-route-selector" class="search" style="margin-top: 5px; margin-bottom: 20px; width: 100%;">
+                  <option value="" disabled selected>Carregando rotas...</option>
+              </select>
+              <div id="simulate-route-details-container">
+                  <!-- Preenchido via JS ao selecionar rota -->
+              </div>
+          </div>
+
+          <!-- RESULTADOS DA SIMULAÇÃO (Distância e Tempo) -->
+          <div id="simulate-stats-container" class="hidden" style="margin-top: 20px; padding: 15px; background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 8px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                  <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Distância Total</span>
+                  <span id="simulate-total-distance" style="font-weight: 700; color: var(--primary); font-size: 14px;">0 km</span>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                  <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Tempo Estimado</span>
+                  <span id="simulate-total-duration" style="font-weight: 700; color: var(--primary); font-size: 14px;">0 min</span>
+              </div>
+          </div>
+
+          <!-- 5. Opções visuais: Menor distância, Menor tempo, Retornar à origem, Manter última parada como destino fixo -->
+          <div style="margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px;">
+              <label class="checkbox-option">
+                  <input type="checkbox" id="simulate-opt-distance" checked>
+                  Menor distância
+              </label>
+              <label class="checkbox-option">
+                  <input type="checkbox" id="simulate-opt-time">
+                  Menor tempo
+              </label>
+              <label class="checkbox-option">
+                  <input type="checkbox" id="simulate-opt-return">
+                  Retornar à origem
+              </label>
+              <label class="checkbox-option">
+                  <input type="checkbox" id="simulate-opt-last-fixed">
+                  Manter última parada como destino fixo
+              </label>
+          </div>
+        </div>
+
+        <!-- Coluna Direita: Área do Mapa -->
+        <div class="panel-container simulate-map-area" style="padding: 0; overflow: hidden; border-style: solid;">
+          <div id="map-simulate" style="width: 100%; height: 100%;"></div>
+        </div>
+      </div>
+    </div>
+
   </main>
 
 </div>
@@ -679,6 +777,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="js/supabase.js"></script>
 <script src="js/app.js"></script>
 

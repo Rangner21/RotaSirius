@@ -45,6 +45,7 @@ function exibirUsuarioLogado() {
     const panelElem = document.getElementById('user-display-panel');
     const programacaoElem = document.getElementById('user-display-programacao');
     const newHistoryElem = document.getElementById('user-display-new-history');
+    const simulateElem = document.getElementById('user-display-simulate');
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
 
     if (!usuarioLogado) {
@@ -92,7 +93,7 @@ function exibirUsuarioLogado() {
         </div>
     `;
 
-    [dashElem, panelElem, programacaoElem, newHistoryElem].forEach(el => {
+    [dashElem, panelElem, programacaoElem, newHistoryElem, simulateElem].forEach(el => {
         if (el) {
             el.innerHTML = html;
             el.onclick = toggleUserMenu;
@@ -469,6 +470,448 @@ const dashboardView = document.getElementById('dashboard-view');
 const controlPanelView = document.getElementById('control-panel-view');
 const programacaoView = document.getElementById('programacao-view'); // Nova referência
 const newHistoryView = document.getElementById('new-history-view');
+const simulateRouteView = document.getElementById('simulate-route-view');
+
+let simulateMap = null;
+let simulateMarkersLayer = null;
+let simulateRouteLayer = null;
+let simulateMarkersData = {};
+let simulateStopCounter = 1;
+
+function initSimulateMap() {
+    if (!simulateMap) {
+        // Inicializa o mapa com opções de animação otimizadas
+        simulateMap = L.map('map-simulate', {
+            zoomAnimation: true,
+            fadeAnimation: true,
+            markerZoomAnimation: true
+        }).setView([-15.7801, -47.9292], 4);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            maxZoom: 19
+        }).addTo(simulateMap);
+
+        // Inicializa o grupo de camadas para os marcadores
+        simulateMarkersLayer = L.layerGroup().addTo(simulateMap);
+        simulateRouteLayer = L.layerGroup().addTo(simulateMap);
+    }
+
+    // O delay de 300ms é vital para que o Leaflet espere o fim das transições de CSS do layout
+    setTimeout(() => {
+        simulateMap.invalidateSize({ animate: true });
+    }, 300);
+}
+
+async function buscarLocalizacaoPorCep(cep) {
+    const cleanCep = cep.replace(/\D/g, '');
+    if (cleanCep.length !== 8) return null;
+
+    try {
+        const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const data = await response.json();
+        if (data.erro) return null;
+
+        // Tenta geocodificar o endereço retornado pelo ViaCEP usando Nominatim (OSM)
+        const query = `${data.logradouro}, ${data.localidade}, ${data.uf}, Brasil`;
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        const geoData = await geoRes.json();
+
+        if (geoData && geoData.length > 0) {
+            return {
+                lat: parseFloat(geoData[0].lat),
+                lng: parseFloat(geoData[0].lon),
+                label: `${data.logradouro || 'CEP ' + cleanCep}, ${data.localidade}`
+            };
+        }
+    } catch (err) {
+        console.error("Erro ao converter CEP em localização:", err);
+    }
+    return null;
+}
+
+async function geocodificarNF(nf) {
+    const parts = [];
+    if (nf.endereco) parts.push(nf.endereco);
+    if (nf.numero_endereco) parts.push(nf.numero_endereco);
+    if (nf.cidade) parts.push(nf.cidade);
+    if (nf.uf && nf.uf !== 'RT') parts.push(nf.uf);
+    if (nf.cep) {
+        let cleanCep = String(nf.cep).replace(/\D/g, '');
+        if (cleanCep.length === 8) parts.push(cleanCep);
+    }
+    parts.push("Brasil");
+
+    const query = parts.filter(p => p).join(", ");
+    if (!query) return null;
+
+    try {
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        const geoData = await geoRes.json();
+
+        if (geoData && geoData.length > 0) {
+            return {
+                lat: parseFloat(geoData[0].lat),
+                lng: parseFloat(geoData[0].lon),
+                label: `NF ${nf.numero}: ${nf.cidade || ''}`
+            };
+        }
+    } catch (err) {
+        console.error("Erro ao geocodificar NF:", nf.numero, err);
+    }
+    return null;
+}
+
+window.atualizarMapaRoteirizado = async function(nfs) {
+    if (!simulateMap || !simulateMarkersLayer || !simulateRouteLayer) return;
+    
+    const statsContainer = document.getElementById('simulate-stats-container');
+    const distElem = document.getElementById('simulate-total-distance');
+    const durElem = document.getElementById('simulate-total-duration');
+
+    // Limpa o mapa antes de começar
+    simulateMarkersLayer.clearLayers();
+    simulateRouteLayer.clearLayers();
+    
+    const coords = [];
+    // Esconde os stats por padrão até que uma nova rota seja calculada com sucesso
+    if (statsContainer) statsContainer.classList.add('hidden');
+
+    // 1. ADICIONAR ORIGEM FIXA (CD / Galpão) - PONTO INICIAL OBRIGATÓRIO
+    // Definimos o CD como o primeiro ponto real da lista de coordenadas.
+    const enderecoExibicaoCD = "LF Transporte, Distrito Industrial Santo Estevão, Cabo de Santo Agostinho - PE";
+    const queryBuscaCD = "Distrito Industrial Santo Estevão, Cabo de Santo Agostinho - PE";
+
+    try {
+        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryBuscaCD)}&limit=1`);
+        const geoData = await geoRes.json();
+
+        if (geoData && geoData.length > 0) {
+            const lat = parseFloat(geoData[0].lat);
+            const lng = parseFloat(geoData[0].lon);
+            
+            // Adiciona o marcador de Origem (CD)
+            L.marker([lat, lng])
+                .addTo(simulateMarkersLayer)
+                .bindPopup(`<b>Origem Fixa: CD LF Transporte</b><br>${enderecoExibicaoCD}`);
+            
+            // Coloca o CD como o primeiro ponto do trajeto
+            coords.push({ lat, lng });
+        }
+    } catch (err) {
+        console.error("Erro ao geocodificar origem fixa do CD:", err);
+    }
+
+    // Geocodifica cada NF mantendo a ordem sequencial da rota
+    for (const nf of nfs) {
+        const loc = await geocodificarNF(nf);
+        if (loc) {
+            const marker = L.marker([loc.lat, loc.lng])
+                .addTo(simulateMarkersLayer)
+                .bindPopup(`<b>${loc.label}</b>`);
+            coords.push({ lat: loc.lat, lng: loc.lng });
+        }
+    }
+
+    // Desenha a rota real no mapa se houver pelo menos 2 pontos encontrados
+    if (coords.length >= 2) {
+        try {
+            const waypoints = coords.map(c => `${c.lng},${c.lat}`).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.routes && data.routes.length > 0) {
+                const route = data.routes[0];
+                L.geoJSON(route.geometry, {
+                    style: { color: '#38bdf8', weight: 5, opacity: 0.7, lineJoin: 'round' }
+                }).addTo(simulateRouteLayer);
+                
+                // EXIBIÇÃO DE DISTÂNCIA E TEMPO (MODO ROTEIRIZADO)
+                if (statsContainer && distElem && durElem) {
+                    const distanceKm = (route.distance / 1000).toFixed(1);
+                    const durationMins = Math.round(route.duration / 60);
+                    
+                    let durationText = `${durationMins} min`;
+                    if (durationMins >= 60) {
+                        const h = Math.floor(durationMins / 60);
+                        const m = durationMins % 60;
+                        durationText = m > 0 ? `${h}h ${m}min` : `${h}h`;
+                    }
+
+                    distElem.innerText = `${distanceKm} km`;
+                    durElem.innerText = durationText;
+                    statsContainer.classList.remove('hidden'); // Mostra as estatísticas
+                }
+            }
+        } catch (err) {
+            console.error("Erro ao calcular rota roteirizada:", err);
+            // Fallback para linha reta em caso de erro na API de roteamento (e stats permanecem ocultos)
+            const latLngs = coords.map(c => [c.lat, c.lng]);
+            L.polyline(latLngs, { color: '#38bdf8', weight: 5, opacity: 0.7, dashArray: '10, 10' }).addTo(simulateRouteLayer);
+        }
+    }
+
+    // Ajusta o zoom para enquadrar todos os pontos e o traçado
+    const markers = simulateMarkersLayer.getLayers();
+    const routes = simulateRouteLayer.getLayers();
+    if (markers.length > 0) {
+        const group = L.featureGroup([...markers, ...routes]);
+        simulateMap.fitBounds(group.getBounds().pad(0.4), { animate: true });
+    }
+};
+
+async function lidarComInputCepSimulacao(e, tipo) {
+    let val = e.target.value;
+    let clean = val.replace(/\D/g, '');
+    
+    // Aplica máscara visual 00000-000
+    if (clean.length > 5) {
+        e.target.value = clean.replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9);
+    } else {
+        e.target.value = clean;
+    }
+
+    // Se o campo for alterado ou apagado, removemos o marcador atual desse tipo
+    if (clean.length < 8) {
+        if (simulateMarkersData[tipo]) {
+            simulateMarkersLayer.removeLayer(simulateMarkersData[tipo]);
+            delete simulateMarkersData[tipo];
+            await ajustarMapaSimulacao();
+        }
+        return;
+    }
+
+    if (clean.length === 8) {
+        const loc = await buscarLocalizacaoPorCep(clean);
+        if (loc) {
+            if (simulateMarkersData[tipo]) {
+                simulateMarkersLayer.removeLayer(simulateMarkersData[tipo]);
+            }
+            
+            const label = tipo === 'origin' ? 'Origem' : `Parada ${tipo.replace('stop', '')}`;
+            const marker = L.marker([loc.lat, loc.lng])
+                .addTo(simulateMarkersLayer)
+                .bindPopup(`<b>${label}: ${loc.label}</b>`);
+            
+            simulateMarkersData[tipo] = marker;
+            await ajustarMapaSimulacao();
+        }
+    }
+}
+
+function adicionarNovaParadaSimulacao() {
+    simulateStopCounter++;
+    const container = document.getElementById('simulate-stops-container');
+    if (!container) return;
+
+    const div = document.createElement('div');
+    div.className = 'simulation-address-block';
+    div.innerHTML = `
+        <label class="address-label">Parada ${simulateStopCounter}</label>
+        <input type="text" id="simulate-stop${simulateStopCounter}-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
+    `;
+    container.appendChild(div);
+
+    const input = div.querySelector('input');
+    const tipo = `stop${simulateStopCounter}`;
+    input.addEventListener('input', (e) => lidarComInputCepSimulacao(e, tipo));
+}
+
+async function carregarOpcoesRotasSimulacao() {
+    const selector = document.getElementById('simulate-route-selector');
+    if (!selector) return;
+
+    try {
+        const { data: rotas, error } = await supabaseClient
+            .from("rotas")
+            .select("id, nome, data")
+            .eq("status", "ativa")
+            .order("data", { ascending: false });
+
+        if (error) throw error;
+
+        selector.innerHTML = '<option value="" disabled selected>Escolha uma rota...</option>';
+        rotas.forEach(r => {
+            const dataFmt = r.data ? r.data.split('-').reverse().join('/') : 'S/D';
+            const option = document.createElement('option');
+            option.value = r.id;
+            option.textContent = `${r.nome} (${dataFmt})`;
+            selector.appendChild(option);
+        });
+
+        // Listener para mudança de rota
+        if (!selector.dataset.listener) {
+            selector.addEventListener('change', (e) => exibirDetalhesRotaSimulacao(e.target.value));
+            selector.dataset.listener = "true";
+        }
+    } catch (err) {
+        console.error("Erro ao carregar rotas para simulação:", err);
+        selector.innerHTML = '<option value="" disabled>Erro ao carregar rotas</option>';
+    }
+}
+
+async function exibirDetalhesRotaSimulacao(rotaId) {
+    const container = document.getElementById('simulate-route-details-container');
+    const statsContainer = document.getElementById('simulate-stats-container');
+    if (!container) return;
+
+    container.innerHTML = '<p style="text-align: center; color: var(--text-muted); padding: 20px;">Carregando dados da rota...</p>';
+    // Oculta as estatísticas enquanto carrega ou se houver erro
+    if (statsContainer) statsContainer.classList.add('hidden');
+    try {
+        const [rotaRes, nfsRes] = await Promise.all([
+            supabaseClient.from("rotas").select("*").eq("id", rotaId).single(),
+            supabaseClient.from("nfs").select("*").eq("rota_id", rotaId).order('created_at', { ascending: true })
+        ]);
+
+        if (rotaRes.error) throw rotaRes.error;
+        const rota = rotaRes.data;
+        const nfs = nfsRes.data || [];
+
+        const dataFmt = rota.data ? rota.data.split('-').reverse().join('/') : '---';
+
+        container.innerHTML = `
+            <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 15px; border: 1px solid var(--border); margin-bottom: 20px;">
+                <div style="margin-bottom: 12px;">
+                    <span class="address-label" style="margin-bottom: 2px;">Rota</span>
+                    <div style="font-weight: 700; color: var(--text-main);">${rota.nome}</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <span class="address-label" style="margin-bottom: 2px;">Data</span>
+                        <div style="font-size: 13px;">${dataFmt}</div>
+                    </div>
+                    <div>
+                        <span class="address-label" style="margin-bottom: 2px;">Transportadora</span>
+                        <div style="font-size: 13px;">${rota.transportadora || '---'}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span class="address-label">Notas Fiscais</span>
+                <span style="font-size: 11px; background: var(--primary); color: white; padding: 2px 8px; border-radius: 10px; font-weight: 700;">${nfs.length}</span>
+            </div>
+            <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+                ${nfs.map(nf => `
+                    <div style="padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; display: flex; justify-content: space-between;">
+                        <span><strong>NF ${nf.numero}</strong></span>
+                        <span style="color: var(--text-muted);">${nf.cidade || '---'}/${nf.uf || '--'}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+        // Aciona a atualização do mapa com as NFs da rota
+        atualizarMapaRoteirizado(nfs);
+    } catch (err) {
+        console.error("Erro ao exibir detalhes da rota na simulação:", err);
+        container.innerHTML = '<p style="color: #ef4444; font-size: 13px;">Erro ao carregar dados da rota.</p>';
+        if (statsContainer) statsContainer.classList.add('hidden'); // Garante que as stats estejam ocultas em caso de erro
+    }
+}
+
+function initSimulateOptionsListeners() {
+    const options = ['simulate-opt-distance', 'simulate-opt-time', 'simulate-opt-return', 'simulate-opt-last-fixed'];
+    options.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.listener) {
+            el.addEventListener('change', ajustarMapaSimulacao);
+            el.dataset.listener = "true";
+        }
+    });
+}
+
+async function ajustarMapaSimulacao() {
+    if (!simulateMap || !simulateMarkersLayer || !simulateRouteLayer) return;
+
+    const statsContainer = document.getElementById('simulate-stats-container');
+    const distElem = document.getElementById('simulate-total-distance');
+    const durElem = document.getElementById('simulate-total-duration');
+
+    // Limpa o traçado anterior antes de redesenhar
+    simulateRouteLayer.clearLayers();
+
+    // Esconde os stats por padrão até que uma nova rota seja calculada
+    if (statsContainer) statsContainer.classList.add('hidden');
+
+    // Coleta coordenadas em ordem (Origem -> Parada 1 -> Parada 2...)
+    const coords = [];
+    if (simulateMarkersData.origin) {
+        coords.push(simulateMarkersData.origin.getLatLng());
+    }
+
+    const stopKeys = Object.keys(simulateMarkersData)
+        .filter(k => k.startsWith('stop'))
+        .sort((a, b) => {
+            const numA = parseInt(a.replace('stop', ''));
+            const numB = parseInt(b.replace('stop', ''));
+            return numA - numB;
+        });
+
+    stopKeys.forEach(k => {
+        if (simulateMarkersData[k]) {
+            coords.push(simulateMarkersData[k].getLatLng());
+        }
+    });
+
+    // Adiciona o retorno à origem ao final da lista de coordenadas se a opção estiver marcada
+    const returnToOrigin = document.getElementById('simulate-opt-return')?.checked;
+    if (returnToOrigin && simulateMarkersData.origin) {
+        coords.push(simulateMarkersData.origin.getLatLng());
+    }
+
+    if (coords.length >= 2) {
+        try {
+            // Chamada à API do OSRM para obter a rota real pelas ruas
+            const waypoints = coords.map(c => `${c.lng},${c.lat}`).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.routes && data.routes.length > 0) {
+                const route = data.routes[0];
+                L.geoJSON(route.geometry, {
+                    style: { color: '#22c55e', weight: 5, opacity: 0.7, lineJoin: 'round' }
+                }).addTo(simulateRouteLayer);
+
+                // EXIBIÇÃO DE DISTÂNCIA E TEMPO
+                if (statsContainer && distElem && durElem) {
+                    const distanceKm = (route.distance / 1000).toFixed(1);
+                    const durationMins = Math.round(route.duration / 60);
+                    
+                    let durationText = `${durationMins} min`;
+                    if (durationMins >= 60) {
+                        const h = Math.floor(durationMins / 60);
+                        const m = durationMins % 60;
+                        durationText = m > 0 ? `${h}h ${m}min` : `${h}h`;
+                    }
+
+                    distElem.innerText = `${distanceKm} km`;
+                    durElem.innerText = durationText;
+                    statsContainer.classList.remove('hidden');
+                }
+            }
+        } catch (err) {
+            console.error("Erro ao calcular rota real:", err);
+            // Fallback para linha reta em caso de erro na API
+            L.polyline(coords, { color: '#22c55e', weight: 5, opacity: 0.7, dashArray: '10, 10' }).addTo(simulateRouteLayer);
+        }
+    }
+    
+    const markers = Object.values(simulateMarkersData).filter(m => m !== null);
+    const routes = simulateRouteLayer.getLayers();
+
+    if (markers.length > 0) {
+        const group = L.featureGroup([...markers, ...routes]);
+        simulateMap.fitBounds(group.getBounds().pad(0.4), { animate: true });
+    } else {
+        // Se não houver pontos, volta para o zoom padrão do Brasil
+        simulateMap.setView([-15.7801, -47.9292], 4);
+    }
+}
+
 
 const openControlPanelBtn = document.getElementById('open-control-panel-btn');
 const openProgramacaoBtn = document.getElementById('open-programacao-btn'); // Novo botão
@@ -480,6 +923,7 @@ const openControlPanelFromHistoryBtn = document.getElementById('open-control-pan
 const openProgramacaoFromHistoryBtn = document.getElementById('open-programacao-from-new-history-btn');
 const exportProgramacaoBtn = document.getElementById('export-programacao-btn');
 const openRotaModalFromProgBtn = document.getElementById('open-rota-modal-from-prog-btn');
+const openSimulateRouteBtn = document.getElementById('open-simulate-route-btn');
 const addUserBtn = document.getElementById('add-user-btn');
 const createUserModal = document.getElementById('create-user-modal');
 const createUserForm = document.getElementById('create-user-form');
@@ -751,6 +1195,7 @@ if (openControlPanelBtn) {
             dashboardView.classList.add('hidden');
             programacaoView.classList.add('hidden'); // Esconde programação também
             newHistoryView.classList.add('hidden');
+            simulateRouteView.classList.add('hidden');
             controlPanelView.classList.remove('hidden');
             document.querySelector('.app').classList.add('panel-active');
             carregarDashboard();
@@ -769,6 +1214,7 @@ if (openControlPanelFromProgBtn) {
         }
         programacaoView.classList.add('hidden');
         if (newHistoryView) newHistoryView.classList.add('hidden');
+        simulateRouteView.classList.add('hidden');
         controlPanelView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
@@ -785,6 +1231,7 @@ if (openControlPanelFromHistoryBtn) {
             return;
         }
         newHistoryView.classList.add('hidden');
+        simulateRouteView.classList.add('hidden');
         controlPanelView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
@@ -810,6 +1257,7 @@ if (openProgramacaoBtn) {
             dashboardView.classList.add('hidden');
             controlPanelView.classList.add('hidden'); // Esconde painel de controle
             newHistoryView.classList.add('hidden');
+            simulateRouteView.classList.add('hidden');
             programacaoView.classList.remove('hidden');
             document.querySelector('.app').classList.remove('panel-active');
             carregarProgramacao();
@@ -823,6 +1271,7 @@ if (openProgHistoryBtn) {
             dashboardView.classList.add('hidden');
             controlPanelView.classList.add('hidden');
             programacaoView.classList.add('hidden');
+            simulateRouteView.classList.add('hidden');
             newHistoryView.classList.remove('hidden');
             document.querySelector('.app').classList.add('panel-active');
             toggleNewHistoryViewMode('programacao');
@@ -830,8 +1279,77 @@ if (openProgHistoryBtn) {
     });
 }
 
+if (openSimulateRouteBtn) {
+    openSimulateRouteBtn.addEventListener('click', () => {
+        dashboardView.classList.add('hidden');
+        controlPanelView.classList.add('hidden');
+        programacaoView.classList.add('hidden');
+        newHistoryView.classList.add('hidden');
+        simulateRouteView.classList.remove('hidden');
+        document.querySelector('.app').classList.add('panel-active');
+        initSimulateMap();
+
+        // Configura os listeners para os campos de entrada de CEP da simulação
+        const originInput = document.getElementById('simulate-origin-cep');
+        const stop1Input = document.getElementById('simulate-stop1-cep');
+        
+        if (originInput && !originInput.dataset.listener) {
+            originInput.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'origin'));
+            originInput.dataset.listener = "true";
+        }
+        
+        if (stop1Input && !stop1Input.dataset.listener) {
+            stop1Input.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'stop1'));
+            stop1Input.dataset.listener = "true";
+        }
+
+        const addStopBtn = document.getElementById('simulate-add-stop-btn');
+        if (addStopBtn && !addStopBtn.dataset.listener) {
+            addStopBtn.addEventListener('click', adicionarNovaParadaSimulacao);
+            addStopBtn.dataset.listener = "true";
+        }
+
+        // Configura os botões de modo (CEP / Roteirizado)
+        const cepModeBtn = document.getElementById('simulate-mode-cep-btn');
+        const routedModeBtn = document.getElementById('simulate-mode-routed-btn');
+        const cepContent = document.getElementById('simulate-cep-content');
+        const routedContent = document.getElementById('simulate-routed-content');
+
+        if (cepModeBtn && routedModeBtn && cepContent && routedContent) {
+            cepModeBtn.onclick = () => {
+                cepModeBtn.classList.add('active');
+                routedModeBtn.classList.remove('active');
+                cepContent.classList.remove('hidden');
+                routedContent.classList.add('hidden');
+                
+                // Limpa o mapa ao voltar para CEP para não misturar visualmente
+                simulateMarkersLayer.clearLayers();
+                simulateRouteLayer.clearLayers();
+                ajustarMapaSimulacao(); 
+            };
+            routedModeBtn.onclick = () => {
+                routedModeBtn.classList.add('active');
+                cepModeBtn.classList.remove('active');
+                routedContent.classList.remove('hidden');
+                cepContent.classList.add('hidden');
+                carregarOpcoesRotasSimulacao();
+            };
+        }
+
+        // Vincula o botão "Calcular Rota" para disparar o ajuste manual se necessário
+        const calcBtn = document.querySelector('#simulate-route-view .simulate-config-panel .btn-primary');
+        if (calcBtn && !calcBtn.dataset.listener) {
+            calcBtn.addEventListener('click', ajustarMapaSimulacao);
+            calcBtn.dataset.listener = "true";
+        }
+
+        initSimulateOptionsListeners();
+    });
+}
+
 const backToDashboardFromNewHistoryBtn = document.getElementById('back-to-dashboard-from-new-history-btn');
 const backToDashboardFromProgramacaoBtn = document.getElementById('back-to-dashboard-from-programacao-btn');
+const backToDashboardFromSimulateBtn = document.getElementById('back-to-dashboard-from-simulate-btn');
 
 if (backToDashboardBtn) {
     backToDashboardBtn.addEventListener('click', () => {
@@ -867,6 +1385,15 @@ if (backToDashboardFromNewHistoryBtn) {
             document.querySelector('.app').classList.remove('panel-active');
             carregarTudo();
         }
+    });
+}
+
+if (backToDashboardFromSimulateBtn) {
+    backToDashboardFromSimulateBtn.addEventListener('click', () => {
+        simulateRouteView.classList.add('hidden');
+        dashboardView.classList.remove('hidden');
+        document.querySelector('.app').classList.remove('panel-active');
+        carregarTudo();
     });
 }
 
