@@ -1330,3 +1330,112 @@ body.is-viewer .history-card .btn[onclick*="copiar"] {
   margin-bottom: 0;
 }
 }
+
+/* --- ESTILOS PARA O MODO ROTEIRIZADO DA PÁGINA SIMULAR ROTA --- */
+
+/* Container geral para cada item de parada/NF */
+.simulate-stop-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+/* Efeito de hover para destacar o item */
+.simulate-stop-item:hover {
+  border-color: var(--accent); /* Cor de destaque */
+  background: rgba(56, 189, 248, 0.05); /* Fundo sutil */
+}
+
+/* Badge com o número da parada ou "CD" */
+.stop-order-badge {
+  width: 28px;
+  height: 28px;
+  min-width: 28px; /* Garante que o badge não encolha */
+  background: var(--primary); /* Cor principal para números */
+  color: white;
+  border-radius: 50%; /* Formato circular */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  flex-shrink: 0; /* Impede que o badge seja comprimido */
+}
+
+/* Container para os detalhes da parada (NF, localização) */
+.stop-details {
+  flex: 1; /* Ocupa o espaço restante */
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* Permite que o conteúdo interno encolha se necessário */
+}
+
+/* Linha principal de informações (NF e Cidade/UF) */
+.stop-main-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline; /* Alinha o texto base */
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+/* Título principal (ex: NF 12345) */
+.stop-title {
+  font-weight: 700;
+  color: var(--text-main);
+  font-size: 14px;
+  white-space: nowrap; /* Evita quebra de linha */
+  overflow: hidden; /* Esconde o que transborda */
+  text-overflow: ellipsis; /* Adiciona "..." se o texto for muito longo */
+}
+
+/* Informação de localização (Cidade/UF) */
+.stop-location {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0; /* Impede que a localização encolha antes do título */
+}
+
+/* --- ESTILOS PARA OS MARCADORES DO MAPA DE SIMULAÇÃO --- */
+.custom-pin {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-app);
+  box-shadow: -2px 2px 5px rgba(0,0,0,0.5);
+  cursor: pointer;
+}
+
+.custom-pin span {
+  transform: rotate(45deg); /* Desfaz a rotação para o texto ficar reto */
+  color: white;
+  font-weight: 800;
+  font-size: 13px;
+  display: block;
+  text-align: center;
+  /* Pequena compensação para centralizar visualmente na parte gorda do pino */
+  margin-top: -3px;
+  margin-left: -3px;
+  width: 100%;
+}
+
+.custom-origin-pin {
+  background-color: var(--primary); /* Verde */
+}
+
+.custom-stop-pin {
+  background-color: var(--accent); /* Azul */
+}
+}

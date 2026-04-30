@@ -429,14 +429,20 @@
                       <label class="address-label">Origem</label>
                       <input type="text" id="simulate-origin-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
                   </div>
-                  <div class="simulation-address-block">
-                      <label class="address-label">Parada 1</label>
+                  <div class="simulation-address-block" data-stopId="1">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                          <label class="address-label" style="margin-bottom: 0;">Parada 1</label>
+                          <button class="icon-btn delete" onclick="removerParadaSimulacao(1)" style="padding: 2px;" title="Remover Parada">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                          </button>
+                      </div>
                       <input type="text" id="simulate-stop1-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
                   </div>
               </div>
               <button id="simulate-add-stop-btn" class="btn btn-outline" style="width: 100%; margin-top: 15px;">+ Adicionar Parada</button>
               <div style="margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px;">
                   <button class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">Calcular Rota</button>
+                  <button id="simulate-clear-btn" class="btn btn-outline" style="width: 100%; margin-bottom: 10px; border-color: #ef4444; color: #ef4444;">Limpar Rota</button>
                   <button class="btn btn-outline" style="width: 100%;">Importar Planilha</button>
               </div>
           </div>
@@ -462,6 +468,12 @@
                   <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Tempo Estimado</span>
                   <span id="simulate-total-duration" style="font-weight: 700; color: var(--primary); font-size: 14px;">0 min</span>
               </div>
+              
+              <!-- Ação de Abrir no Maps -->
+              <button id="simulate-open-maps-btn" class="btn" style="width: 100%; margin-top: 15px; background: var(--primary); color: white; border: none; font-weight: 700;">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                  Abrir no Google Maps
+              </button>
           </div>
 
           <!-- 5. Opções visuais: Menor distância, Menor tempo, Retornar à origem, Manter última parada como destino fixo -->

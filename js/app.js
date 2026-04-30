@@ -503,6 +503,30 @@ function initSimulateMap() {
     }, 300);
 }
 
+// --- FUNÇÕES PARA CRIAR ÍCONES PERSONALIZADOS DO LEAFLET ---
+
+// Ícone para a Origem (CD)
+function createOriginIcon() {
+    return L.divIcon({
+        className: 'custom-pin custom-origin-pin',
+        html: '<span>CD</span>',
+        iconSize: [32, 32],
+        iconAnchor: [16, 38], // Aponta exatamente para a extremidade inferior do pino
+        popupAnchor: [0, -35]
+    });
+}
+
+// Ícone para as Paradas Numeradas
+function createNumberedStopIcon(number) {
+    return L.divIcon({
+        className: 'custom-pin custom-stop-pin',
+        html: `<span>${number}</span>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 38], // Aponta exatamente para a extremidade inferior do pino
+        popupAnchor: [0, -35]
+    });
+}
+
 async function buscarLocalizacaoPorCep(cep) {
     const cleanCep = cep.replace(/\D/g, '');
     if (cleanCep.length !== 8) return null;
@@ -578,40 +602,32 @@ window.atualizarMapaRoteirizado = async function(nfs) {
     if (statsContainer) statsContainer.classList.add('hidden');
 
     // 1. ADICIONAR ORIGEM FIXA (CD / Galpão) - PONTO INICIAL OBRIGATÓRIO
-    // Definimos o CD como o primeiro ponto real da lista de coordenadas.
-    const enderecoExibicaoCD = "LF Transporte, Distrito Industrial Santo Estevão, Cabo de Santo Agostinho - PE";
-    const queryBuscaCD = "Distrito Industrial Santo Estevão, Cabo de Santo Agostinho - PE";
+    const latCD = -8.242185;
+    const lngCD = -34.996948;
+    const nomeExibicaoCD = "Centro de distribuição Grupo Via1";
 
-    try {
-        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryBuscaCD)}&limit=1`);
-        const geoData = await geoRes.json();
-
-        if (geoData && geoData.length > 0) {
-            const lat = parseFloat(geoData[0].lat);
-            const lng = parseFloat(geoData[0].lon);
-            
-            // Adiciona o marcador de Origem (CD)
-            L.marker([lat, lng])
-                .addTo(simulateMarkersLayer)
-                .bindPopup(`<b>Origem Fixa: CD LF Transporte</b><br>${enderecoExibicaoCD}`);
-            
-            // Coloca o CD como o primeiro ponto do trajeto
-            coords.push({ lat, lng });
-        }
-    } catch (err) {
-        console.error("Erro ao geocodificar origem fixa do CD:", err);
-    }
+    // Adiciona o marcador de Origem (CD) com ícone personalizado usando coordenadas fixas
+    L.marker([latCD, lngCD], { icon: createOriginIcon() }) 
+        .addTo(simulateMarkersLayer) 
+        .bindPopup(`<b>Origem Fixa:</b><br>${nomeExibicaoCD}`);
+    
+    // Coloca o CD como o primeiro ponto real do trajeto para a lógica de rota e Maps
+    coords.push({ lat: latCD, lng: lngCD });
 
     // Geocodifica cada NF mantendo a ordem sequencial da rota
+    let nfStopNumber = 1; // Contador para a numeração das paradas de NF
     for (const nf of nfs) {
         const loc = await geocodificarNF(nf);
         if (loc) {
-            const marker = L.marker([loc.lat, loc.lng])
-                .addTo(simulateMarkersLayer)
+            const marker = L.marker([loc.lat, loc.lng], { icon: createNumberedStopIcon(nfStopNumber) }) // Adiciona ícone numerado
+                .addTo(simulateMarkersLayer) 
                 .bindPopup(`<b>${loc.label}</b>`);
             coords.push({ lat: loc.lat, lng: loc.lng });
+            nfStopNumber++; // Incrementa para a próxima NF
         }
     }
+
+    window.currentSimulatedPoints = coords; // Armazena a sequência para o Google Maps
 
     // Desenha a rota real no mapa se houver pelo menos 2 pontos encontrados
     if (coords.length >= 2) {
@@ -688,10 +704,12 @@ async function lidarComInputCepSimulacao(e, tipo) {
             if (simulateMarkersData[tipo]) {
                 simulateMarkersLayer.removeLayer(simulateMarkersData[tipo]);
             }
-            
-            const label = tipo === 'origin' ? 'Origem' : `Parada ${tipo.replace('stop', '')}`;
-            const marker = L.marker([loc.lat, loc.lng])
-                .addTo(simulateMarkersLayer)
+
+            // Usa o ícone personalizado para origem ou paradas
+            const isOrigin = tipo === 'origin';
+            const label = isOrigin ? 'Origem' : `Parada ${parseInt(tipo.replace('stop', ''))}`;
+            const marker = L.marker([loc.lat, loc.lng], { icon: isOrigin ? createOriginIcon() : createNumberedStopIcon(parseInt(tipo.replace('stop', ''))) })
+                .addTo(simulateMarkersLayer) 
                 .bindPopup(`<b>${label}: ${loc.label}</b>`);
             
             simulateMarkersData[tipo] = marker;
@@ -707,8 +725,14 @@ function adicionarNovaParadaSimulacao() {
 
     const div = document.createElement('div');
     div.className = 'simulation-address-block';
+    div.dataset.stopId = simulateStopCounter;
     div.innerHTML = `
-        <label class="address-label">Parada ${simulateStopCounter}</label>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <label class="address-label" style="margin-bottom: 0;">Parada ${simulateStopCounter}</label>
+            <button class="icon-btn delete" onclick="removerParadaSimulacao(${simulateStopCounter})" style="padding: 2px;" title="Remover Parada">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+        </div>
         <input type="text" id="simulate-stop${simulateStopCounter}-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
     `;
     container.appendChild(div);
@@ -716,7 +740,70 @@ function adicionarNovaParadaSimulacao() {
     const input = div.querySelector('input');
     const tipo = `stop${simulateStopCounter}`;
     input.addEventListener('input', (e) => lidarComInputCepSimulacao(e, tipo));
+    reordenarLabelsParadas();
 }
+
+window.removerParadaSimulacao = async function(id) {
+    const tipo = `stop${id}`;
+    const block = document.querySelector(`.simulation-address-block[data-stopId="${id}"]`);
+    
+    if (simulateMarkersData[tipo]) {
+        simulateMarkersLayer.removeLayer(simulateMarkersData[tipo]);
+        delete simulateMarkersData[tipo];
+    }
+    
+    if (block) block.remove();
+
+    await ajustarMapaSimulacao();
+    reordenarLabelsParadas();
+};
+
+function reordenarLabelsParadas() {
+    const blocks = document.querySelectorAll('#simulate-stops-container .simulation-address-block');
+    let counter = 1;
+    blocks.forEach(block => {
+        const input = block.querySelector('input');
+        if (input && input.id !== 'simulate-origin-cep') {
+            const label = block.querySelector('.address-label');
+            if (label) label.innerText = `Parada ${counter++}`;
+        }
+    });
+}
+
+window.limparRotaSimulacao = async function() {
+    const container = document.getElementById('simulate-stops-container');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="simulation-address-block">
+            <label class="address-label">Origem</label>
+            <input type="text" id="simulate-origin-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
+        </div>
+        <div class="simulation-address-block" data-stopId="1">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <label class="address-label" style="margin-bottom: 0;">Parada 1</label>
+                <button class="icon-btn delete" onclick="removerParadaSimulacao(1)" style="padding: 2px;" title="Remover Parada">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <input type="text" id="simulate-stop1-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
+        </div>
+    `;
+
+    document.getElementById('simulate-origin-cep').addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'origin'));
+    document.getElementById('simulate-stop1-cep').addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'stop1'));
+
+    simulateMarkersData = {};
+    window.currentSimulatedPoints = null;
+    if (simulateMarkersLayer) simulateMarkersLayer.clearLayers();
+    if (simulateRouteLayer) simulateRouteLayer.clearLayers();
+    
+    const statsContainer = document.getElementById('simulate-stats-container');
+    if (statsContainer) statsContainer.classList.add('hidden');
+
+    simulateStopCounter = 1;
+    if (simulateMap) simulateMap.setView([-15.7801, -47.9292], 4);
+};
 
 async function carregarOpcoesRotasSimulacao() {
     const selector = document.getElementById('simulate-route-selector');
@@ -770,6 +857,8 @@ async function exibirDetalhesRotaSimulacao(rotaId) {
         const nfs = nfsRes.data || [];
 
         const dataFmt = rota.data ? rota.data.split('-').reverse().join('/') : '---';
+        
+        let nfsListHtml = ''; // Variável para construir a lista de NFs/paradas
 
         container.innerHTML = `
             <div style="background: rgba(255,255,255,0.03); border-radius: 8px; padding: 15px; border: 1px solid var(--border); margin-bottom: 20px;">
@@ -789,17 +878,45 @@ async function exibirDetalhesRotaSimulacao(rotaId) {
                 </div>
             </div>
 
+            <!-- Melhoria Visual: Lista de NFs/Paradas no Modo Roteirizado -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <span class="address-label">Notas Fiscais</span>
+                <span class="address-label">Paradas na Rota</span>
                 <span style="font-size: 11px; background: var(--primary); color: white; padding: 2px 8px; border-radius: 10px; font-weight: 700;">${nfs.length}</span>
             </div>
-            <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
-                ${nfs.map(nf => `
-                    <div style="padding: 10px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; display: flex; justify-content: space-between;">
-                        <span><strong>NF ${nf.numero}</strong></span>
-                        <span style="color: var(--text-muted);">${nf.cidade || '---'}/${nf.uf || '--'}</span>
+            <div style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 5px;">
+                ${nfs.length > 0 ? `
+                    <!-- Origem Fixa (CD) -->
+                    <div class="simulate-stop-item">
+                        <div class="stop-order-badge" style="background: var(--accent); color: white;">CD</div>
+                        <div class="stop-details">
+                            <div class="stop-main-info">
+                                <span class="stop-title">Origem Fixa</span>
+                                <span class="stop-location">CD Sirius</span>
+                            </div>
+                        </div>
                     </div>
-                `).join('')}
+                    <!-- Lista de NFs como paradas -->
+                    ${nfs.map((nf, index) => {
+                        const stopNumber = index + 1; // Parada 1, Parada 2, etc.
+                        const locationText = nf.uf === 'RT' ? 'RETIRA' : `${nf.cidade || '---'}/${nf.uf || '--'}`;
+                        return `
+                            <div class="simulate-stop-item">
+                                <div class="stop-order-badge">${stopNumber}</div>
+                                <div class="stop-details">
+                                    <div class="stop-main-info">
+                                        <span class="stop-title">NF ${nf.numero}</span>
+                                        <span class="stop-location">${locationText}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                ` : `
+                    <p style="text-align: center; color: var(--text-muted); padding: 20px;">
+                        Nenhuma NF vinculada a esta rota.
+                        <br>Apenas a origem (CD) será exibida no mapa.
+                    </p>
+                `}
             </div>
         `;
 
@@ -861,6 +978,8 @@ async function ajustarMapaSimulacao() {
     if (returnToOrigin && simulateMarkersData.origin) {
         coords.push(simulateMarkersData.origin.getLatLng());
     }
+
+    window.currentSimulatedPoints = coords; // Armazena a sequência para o Google Maps
 
     if (coords.length >= 2) {
         try {
@@ -1308,6 +1427,12 @@ if (openSimulateRouteBtn) {
             addStopBtn.addEventListener('click', adicionarNovaParadaSimulacao);
             addStopBtn.dataset.listener = "true";
         }
+        
+        const clearBtn = document.getElementById('simulate-clear-btn');
+        if (clearBtn && !clearBtn.dataset.listener) {
+            clearBtn.addEventListener('click', limparRotaSimulacao);
+            clearBtn.dataset.listener = "true";
+        }
 
         // Configura os botões de modo (CEP / Roteirizado)
         const cepModeBtn = document.getElementById('simulate-mode-cep-btn');
@@ -1325,6 +1450,7 @@ if (openSimulateRouteBtn) {
                 // Limpa o mapa ao voltar para CEP para não misturar visualmente
                 simulateMarkersLayer.clearLayers();
                 simulateRouteLayer.clearLayers();
+                window.currentSimulatedPoints = null;
                 ajustarMapaSimulacao(); 
             };
             routedModeBtn.onclick = () => {
@@ -1341,6 +1467,30 @@ if (openSimulateRouteBtn) {
         if (calcBtn && !calcBtn.dataset.listener) {
             calcBtn.addEventListener('click', ajustarMapaSimulacao);
             calcBtn.dataset.listener = "true";
+        }
+
+        // Configura o botão "Abrir no Google Maps"
+        const openMapsBtn = document.getElementById('simulate-open-maps-btn');
+        if (openMapsBtn && !openMapsBtn.dataset.listener) {
+            openMapsBtn.addEventListener('click', () => {
+                if (!window.currentSimulatedPoints || window.currentSimulatedPoints.length < 2) {
+                    mostrarAviso("Calcule uma rota primeiro para abrir no Maps.");
+                    return;
+                }
+                // A sequência em currentSimulatedPoints já respeita a ordem CD -> Paradas (Roteirizado)
+                // ou Origem -> Paradas na sequência informada (CEP)
+                const points = window.currentSimulatedPoints;
+                const origin = `${points[0].lat},${points[0].lng}`;
+                const destination = `${points[points.length - 1].lat},${points[points.length - 1].lng}`;
+                
+                let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+                if (points.length > 2) {
+                    const waypoints = points.slice(1, -1).map(p => `${p.lat},${p.lng}`).join('|');
+                    url += `&waypoints=${encodeURIComponent(waypoints)}`;
+                }
+                window.open(url, "_blank");
+            });
+            openMapsBtn.dataset.listener = "true";
         }
 
         initSimulateOptionsListeners();
