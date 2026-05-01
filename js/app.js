@@ -1399,6 +1399,98 @@ if (openProgHistoryBtn) {
     });
 }
 
+// Função auxiliar para inicializar a interface da simulação (listeners, mapa, etc)
+function inicializarInterfaceSimulacao() {
+    initSimulateMap();
+
+    // Configura os listeners para os campos de entrada de CEP da simulação
+    const originInput = document.getElementById('simulate-origin-cep');
+    const stop1Input = document.getElementById('simulate-stop1-cep');
+    
+    if (originInput && !originInput.dataset.listener) {
+        originInput.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'origin'));
+        originInput.dataset.listener = "true";
+    }
+    
+    if (stop1Input && !stop1Input.dataset.listener) {
+        stop1Input.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'stop1'));
+        stop1Input.dataset.listener = "true";
+    }
+
+    const addStopBtn = document.getElementById('simulate-add-stop-btn');
+    if (addStopBtn && !addStopBtn.dataset.listener) {
+        addStopBtn.addEventListener('click', adicionarNovaParadaSimulacao);
+        addStopBtn.dataset.listener = "true";
+    }
+    
+    const clearBtn = document.getElementById('simulate-clear-btn');
+    if (clearBtn && !clearBtn.dataset.listener) {
+        clearBtn.addEventListener('click', limparRotaSimulacao);
+        clearBtn.dataset.listener = "true";
+    }
+
+    // Configura os botões de modo (CEP / Roteirizado)
+    const cepModeBtn = document.getElementById('simulate-mode-cep-btn');
+    const routedModeBtn = document.getElementById('simulate-mode-routed-btn');
+    const cepContent = document.getElementById('simulate-cep-content');
+    const routedContent = document.getElementById('simulate-routed-content');
+
+    if (cepModeBtn && routedModeBtn && cepContent && routedContent) {
+        cepModeBtn.onclick = () => {
+            cepModeBtn.classList.add('active');
+            routedModeBtn.classList.remove('active');
+            cepContent.classList.remove('hidden');
+            routedContent.classList.add('hidden');
+            
+            // Limpa o mapa ao voltar para CEP para não misturar visualmente
+            simulateMarkersLayer.clearLayers();
+            simulateRouteLayer.clearLayers();
+            window.currentSimulatedPoints = null;
+            ajustarMapaSimulacao(); 
+        };
+        routedModeBtn.onclick = () => {
+            routedModeBtn.classList.add('active');
+            cepModeBtn.classList.remove('active');
+            routedContent.classList.remove('hidden');
+            cepContent.classList.add('hidden');
+            carregarOpcoesRotasSimulacao();
+        };
+    }
+
+    // Vincula o botão "Calcular Rota" para disparar o ajuste manual se necessário
+    const calcBtn = document.querySelector('#simulate-route-view .simulate-config-panel .btn-primary');
+    if (calcBtn && !calcBtn.dataset.listener) {
+        calcBtn.addEventListener('click', ajustarMapaSimulacao);
+        calcBtn.dataset.listener = "true";
+    }
+
+    // Configura o botão "Abrir no Google Maps"
+    const openMapsBtn = document.getElementById('simulate-open-maps-btn');
+    if (openMapsBtn && !openMapsBtn.dataset.listener) {
+        openMapsBtn.addEventListener('click', () => {
+            if (!window.currentSimulatedPoints || window.currentSimulatedPoints.length < 2) {
+                mostrarAviso("Calcule uma rota primeiro para abrir no Maps.");
+                return;
+            }
+            // A sequência em currentSimulatedPoints já respeita a ordem CD -> Paradas (Roteirizado)
+            // ou Origem -> Paradas na sequência informada (CEP)
+            const points = window.currentSimulatedPoints;
+            const origin = `${points[0].lat},${points[0].lng}`;
+            const destination = `${points[points.length - 1].lat},${points[points.length - 1].lng}`;
+            
+            let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+            if (points.length > 2) {
+                const waypoints = points.slice(1, -1).map(p => `${p.lat},${p.lng}`).join('|');
+                url += `&waypoints=${encodeURIComponent(waypoints)}`;
+            }
+            window.open(url, "_blank");
+        });
+        openMapsBtn.dataset.listener = "true";
+    }
+
+    initSimulateOptionsListeners();
+}
+
 if (openSimulateRouteBtn) {
     openSimulateRouteBtn.addEventListener('click', () => {
         dashboardView.classList.add('hidden');
@@ -1407,94 +1499,8 @@ if (openSimulateRouteBtn) {
         newHistoryView.classList.add('hidden');
         simulateRouteView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
-        initSimulateMap();
-
-        // Configura os listeners para os campos de entrada de CEP da simulação
-        const originInput = document.getElementById('simulate-origin-cep');
-        const stop1Input = document.getElementById('simulate-stop1-cep');
         
-        if (originInput && !originInput.dataset.listener) {
-            originInput.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'origin'));
-            originInput.dataset.listener = "true";
-        }
-        
-        if (stop1Input && !stop1Input.dataset.listener) {
-            stop1Input.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'stop1'));
-            stop1Input.dataset.listener = "true";
-        }
-
-        const addStopBtn = document.getElementById('simulate-add-stop-btn');
-        if (addStopBtn && !addStopBtn.dataset.listener) {
-            addStopBtn.addEventListener('click', adicionarNovaParadaSimulacao);
-            addStopBtn.dataset.listener = "true";
-        }
-        
-        const clearBtn = document.getElementById('simulate-clear-btn');
-        if (clearBtn && !clearBtn.dataset.listener) {
-            clearBtn.addEventListener('click', limparRotaSimulacao);
-            clearBtn.dataset.listener = "true";
-        }
-
-        // Configura os botões de modo (CEP / Roteirizado)
-        const cepModeBtn = document.getElementById('simulate-mode-cep-btn');
-        const routedModeBtn = document.getElementById('simulate-mode-routed-btn');
-        const cepContent = document.getElementById('simulate-cep-content');
-        const routedContent = document.getElementById('simulate-routed-content');
-
-        if (cepModeBtn && routedModeBtn && cepContent && routedContent) {
-            cepModeBtn.onclick = () => {
-                cepModeBtn.classList.add('active');
-                routedModeBtn.classList.remove('active');
-                cepContent.classList.remove('hidden');
-                routedContent.classList.add('hidden');
-                
-                // Limpa o mapa ao voltar para CEP para não misturar visualmente
-                simulateMarkersLayer.clearLayers();
-                simulateRouteLayer.clearLayers();
-                window.currentSimulatedPoints = null;
-                ajustarMapaSimulacao(); 
-            };
-            routedModeBtn.onclick = () => {
-                routedModeBtn.classList.add('active');
-                cepModeBtn.classList.remove('active');
-                routedContent.classList.remove('hidden');
-                cepContent.classList.add('hidden');
-                carregarOpcoesRotasSimulacao();
-            };
-        }
-
-        // Vincula o botão "Calcular Rota" para disparar o ajuste manual se necessário
-        const calcBtn = document.querySelector('#simulate-route-view .simulate-config-panel .btn-primary');
-        if (calcBtn && !calcBtn.dataset.listener) {
-            calcBtn.addEventListener('click', ajustarMapaSimulacao);
-            calcBtn.dataset.listener = "true";
-        }
-
-        // Configura o botão "Abrir no Google Maps"
-        const openMapsBtn = document.getElementById('simulate-open-maps-btn');
-        if (openMapsBtn && !openMapsBtn.dataset.listener) {
-            openMapsBtn.addEventListener('click', () => {
-                if (!window.currentSimulatedPoints || window.currentSimulatedPoints.length < 2) {
-                    mostrarAviso("Calcule uma rota primeiro para abrir no Maps.");
-                    return;
-                }
-                // A sequência em currentSimulatedPoints já respeita a ordem CD -> Paradas (Roteirizado)
-                // ou Origem -> Paradas na sequência informada (CEP)
-                const points = window.currentSimulatedPoints;
-                const origin = `${points[0].lat},${points[0].lng}`;
-                const destination = `${points[points.length - 1].lat},${points[points.length - 1].lng}`;
-                
-                let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
-                if (points.length > 2) {
-                    const waypoints = points.slice(1, -1).map(p => `${p.lat},${p.lng}`).join('|');
-                    url += `&waypoints=${encodeURIComponent(waypoints)}`;
-                }
-                window.open(url, "_blank");
-            });
-            openMapsBtn.dataset.listener = "true";
-        }
-
-        initSimulateOptionsListeners();
+        inicializarInterfaceSimulacao();
     });
 }
 
@@ -1506,21 +1512,12 @@ if (openSimulateRouteFromProgramacaoBtn) {
         newHistoryView.classList.add('hidden');
         simulateRouteView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
-        initSimulateMap();
+        
+        inicializarInterfaceSimulacao();
 
-        // Ativar o modo "Roteirizado" por padrão
-        const cepModeBtn = document.getElementById('simulate-mode-cep-btn');
+        // Ativar o modo "Roteirizado" por padrão chamando o handler configurado
         const routedModeBtn = document.getElementById('simulate-mode-routed-btn');
-        const cepContent = document.getElementById('simulate-cep-content');
-        const routedContent = document.getElementById('simulate-routed-content');
-
-        if (routedModeBtn && cepModeBtn && routedContent && cepContent) {
-            routedModeBtn.classList.add('active');
-            cepModeBtn.classList.remove('active');
-            routedContent.classList.remove('hidden');
-            cepContent.classList.add('hidden');
-            carregarOpcoesRotasSimulacao();
-        }
+        if (routedModeBtn) routedModeBtn.onclick();
 
         // Limpar o mapa e as estatísticas, pois não há rota pré-selecionada
         simulateMarkersData = {};
