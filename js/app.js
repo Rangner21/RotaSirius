@@ -1044,6 +1044,7 @@ const exportProgramacaoBtn = document.getElementById('export-programacao-btn');
 const openRotaModalFromProgBtn = document.getElementById('open-rota-modal-from-prog-btn');
 const openSimulateRouteBtn = document.getElementById('open-simulate-route-btn');
 const addUserBtn = document.getElementById('add-user-btn');
+const openSimulateRouteFromProgramacaoBtn = document.getElementById('open-simulate-route-from-programacao-btn'); // Novo botão
 const createUserModal = document.getElementById('create-user-modal');
 const createUserForm = document.getElementById('create-user-form');
 const userModalTitle = document.getElementById('user-modal-title');
@@ -1494,6 +1495,40 @@ if (openSimulateRouteBtn) {
         }
 
         initSimulateOptionsListeners();
+    });
+}
+
+if (openSimulateRouteFromProgramacaoBtn) {
+    openSimulateRouteFromProgramacaoBtn.addEventListener('click', () => {
+        dashboardView.classList.add('hidden');
+        controlPanelView.classList.add('hidden');
+        programacaoView.classList.add('hidden');
+        newHistoryView.classList.add('hidden');
+        simulateRouteView.classList.remove('hidden');
+        document.querySelector('.app').classList.add('panel-active');
+        initSimulateMap();
+
+        // Ativar o modo "Roteirizado" por padrão
+        const cepModeBtn = document.getElementById('simulate-mode-cep-btn');
+        const routedModeBtn = document.getElementById('simulate-mode-routed-btn');
+        const cepContent = document.getElementById('simulate-cep-content');
+        const routedContent = document.getElementById('simulate-routed-content');
+
+        if (routedModeBtn && cepModeBtn && routedContent && cepContent) {
+            routedModeBtn.classList.add('active');
+            cepModeBtn.classList.remove('active');
+            routedContent.classList.remove('hidden');
+            cepContent.classList.add('hidden');
+            carregarOpcoesRotasSimulacao();
+        }
+
+        // Limpar o mapa e as estatísticas, pois não há rota pré-selecionada
+        simulateMarkersData = {};
+        window.currentSimulatedPoints = null;
+        if (simulateMarkersLayer) simulateMarkersLayer.clearLayers();
+        if (simulateRouteLayer) simulateRouteLayer.clearLayers();
+        const statsContainer = document.getElementById('simulate-stats-container');
+        if (statsContainer) statsContainer.classList.add('hidden');
     });
 }
 
