@@ -1,798 +1,1117 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Rota Sirius</title>
-  <link rel="icon" type="image/png" href="img/favicon.png">
-  <link rel="shortcut icon" href="img/favicon.png">
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LF Transporte | Rapidez. Qualidade. Dedicação.</title>
+<meta name="description" content="LF Transporte — soluções de transporte rodoviário para todo o Brasil, com forte atuação no Nordeste. Solicite seu orçamento.">
+
+<style>
+  /* ============ TOKENS ============ */
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --blue: #173A63;
+    --blue-deep: #0E2A4A;
+    --orange: #F58220;
+    --orange-dark: #D96A0F;
+    --white: #FFFFFF;
+    --bg-alt: #F5F7FA;
+    --ink: #1B1F27;
+    --muted: #5B6472;
+    --line: #E3E7EE;
+    --shadow: 0 20px 50px -20px rgba(15, 42, 74, 0.25);
+    --radius: 14px;
+    --font-display: 'Barlow Condensed', 'Arial Narrow', Arial, sans-serif;
+    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html{ scroll-behavior:smooth; }
+  body{
+    font-family: var(--font-body);
+    color: var(--ink);
+    background: var(--white);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  img{ max-width:100%; display:block; }
+  a{ color:inherit; text-decoration:none; }
+  ul{ list-style:none; }
+  button{ font-family:inherit; cursor:pointer; border:none; background:none; }
+  section{ position:relative; }
+  .container{
+    width:100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 28px;
+  }
+  .eyebrow{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight:700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 14px;
+  }
+  .eyebrow::before{
+    content:"";
+    width: 22px;
+    height: 2px;
+    background: var(--orange);
+    display:inline-block;
+  }
+  h1,h2,h3,h4{
+    font-family: var(--font-display);
+    color: var(--blue);
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: 0.2px;
+  }
+  h2{ font-size: clamp(30px, 4vw, 44px); }
+  h3{ font-size: 22px; font-weight:600; }
+  p{ color: var(--muted); }
+  .section-head{
+    max-width: 640px;
+    margin-bottom: 52px;
+  }
+  .section-head.center{ margin-left:auto; margin-right:auto; text-align:center; }
+  .section-pad{ padding: 108px 0; }
+
+  :focus-visible{
+    outline: 2.5px solid var(--orange);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+
+  /* ============ ROUTE LINE SIGNATURE ============ */
+  .route-line{
+    height: 3px;
+    width: 100%;
+    background-image: repeating-linear-gradient(90deg, var(--orange) 0 22px, transparent 22px 40px);
+    background-size: 400px 3px;
+    opacity: 0.9;
+    animation: route-move 14s linear infinite;
+  }
+  @keyframes route-move{
+    from{ background-position: 0 0; }
+    to{ background-position: -400px 0; }
+  }
+
+  /* ============ BUTTONS ============ */
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    padding: 15px 30px;
+    border-radius: 999px;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 15px;
+    transition: transform .25s ease, box-shadow .25s ease, background .25s ease, color .25s ease;
+    white-space: nowrap;
+  }
+  .btn-primary{
+    background: var(--orange);
+    color: var(--white);
+    box-shadow: 0 14px 30px -10px rgba(245,130,32,0.55);
+  }
+  .btn-primary:hover{ background: var(--orange-dark); transform: translateY(-2px); }
+  .btn-ghost{
+    background: rgba(255,255,255,0.08);
+    color: var(--white);
+    border: 1.5px solid rgba(255,255,255,0.55);
+    backdrop-filter: blur(4px);
+  }
+  .btn-ghost:hover{ background: rgba(255,255,255,0.18); transform: translateY(-2px); }
+  .btn-block{ width:100%; }
+
+  /* ============ HEADER ============ */
+  header{
+    position: fixed;
+    top:0; left:0; right:0;
+    z-index: 500;
+    padding: 22px 0;
+    transition: background .35s ease, padding .35s ease, box-shadow .35s ease;
+  }
+  header .container{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  header.scrolled{
+    background: rgba(255,255,255,0.96);
+    backdrop-filter: blur(10px);
+    padding: 14px 0;
+    box-shadow: 0 8px 30px -20px rgba(15,42,74,0.35);
+  }
+  .logo{
+    display:flex; align-items:center; gap:10px;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 24px;
+    letter-spacing: 0.5px;
+    color: var(--white);
+    transition: color .35s ease;
+  }
+  header.scrolled .logo{ color: var(--blue); }
+  .logo-mark{
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: var(--orange);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--white);
+    font-weight: 800;
+    font-size: 17px;
+    flex-shrink:0;
+  }
+  .logo small{
+    display:block;
+    font-family: var(--font-body);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-top: -2px;
+  }
+
+  nav.main-nav{ display:flex; align-items:center; gap:38px; }
+  nav.main-nav a{
+    font-size: 14.5px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92);
+    position: relative;
+    padding: 4px 0;
+    transition: color .3s ease;
+  }
+  header.scrolled nav.main-nav a{ color: var(--blue); }
+  nav.main-nav a::after{
+    content:"";
+    position:absolute;
+    left:0; bottom:-4px;
+    width:0; height:2px;
+    background: var(--orange);
+    transition: width .3s ease;
+  }
+  nav.main-nav a:hover::after{ width:100%; }
+  .nav-cta{ display:flex; align-items:center; gap:22px; }
+  .nav-cta .btn-primary{ padding: 11px 24px; font-size:14px; }
+
+  .hamburger{
+    display:none;
+    width: 42px; height: 42px;
+    border-radius: 10px;
+    align-items:center; justify-content:center;
+    background: rgba(255,255,255,0.14);
+    border: 1px solid rgba(255,255,255,0.4);
+  }
+  header.scrolled .hamburger{ background: rgba(23,58,99,0.08); border-color: rgba(23,58,99,0.2); }
+  .hamburger span, .hamburger::before, .hamburger::after{ display:none; }
+  .hamburger svg{ width:20px; height:20px; stroke: var(--white); transition: stroke .3s ease; }
+  header.scrolled .hamburger svg{ stroke: var(--blue); }
+
+  .mobile-nav{
+    position: fixed;
+    inset: 0;
+    background: var(--blue-deep);
+    z-index: 600;
+    display:flex;
+    flex-direction:column;
+    padding: 28px 28px 40px;
+    transform: translateY(-100%);
+    transition: transform .4s cubic-bezier(.65,0,.35,1);
+  }
+  .mobile-nav.open{ transform: translateY(0); }
+  .mobile-nav-top{ display:flex; align-items:center; justify-content:space-between; margin-bottom: 50px; }
+  .mobile-nav-close svg{ width:22px; height:22px; stroke:var(--white); }
+  .mobile-nav a{
+    font-family: var(--font-display);
+    font-size: 30px;
+    font-weight:600;
+    color: var(--white);
+    padding: 16px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.12);
+  }
+  .mobile-nav .btn-primary{ margin-top: 34px; }
+
+  /* ============ HERO ============ */
+  .hero{
+    min-height: 100vh;
+    display:flex;
+    align-items:flex-end;
+    position: relative;
+    overflow:hidden;
+    background: var(--blue-deep);
+  }
+  .hero-bg{
+    position:absolute; inset:0;
+    background-image: linear-gradient(180deg, rgba(14,41,74,0.55) 0%, rgba(14,41,74,0.72) 55%, rgba(14,41,74,0.96) 100%), url('https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?q=80&w=1740&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center 62%;
+    animation: hero-zoom 20s ease-in-out infinite alternate;
+  }
+  @keyframes hero-zoom{ from{ transform: scale(1); } to{ transform: scale(1.06); } }
+  .hero-content{
+    position: relative;
+    z-index: 2;
+    padding: 200px 0 96px;
+    width:100%;
+  }
+  .hero-grid{
+    display:grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 60px;
+    align-items:end;
+  }
+  .hero h1{
+    color: var(--white);
+    font-size: clamp(42px, 6.4vw, 78px);
+    line-height: 0.98;
+    margin-bottom: 22px;
+  }
+  .hero h1 em{
+    font-style: normal;
+    color: var(--orange);
+  }
+  .hero p.lead{
+    color: rgba(255,255,255,0.86);
+    font-size: 18px;
+    max-width: 480px;
+    margin-bottom: 36px;
+  }
+  .hero-actions{ display:flex; gap:16px; flex-wrap:wrap; }
+  .hero-meta{
+    border-left: 2px solid rgba(255,255,255,0.25);
+    padding-left: 28px;
+    display:flex;
+    flex-direction:column;
+    gap: 22px;
+  }
+  .hero-meta-item{ color: rgba(255,255,255,0.85); }
+  .hero-meta-item strong{
+    display:block;
+    font-family: var(--font-display);
+    font-size: 30px;
+    color: var(--white);
+    font-weight:700;
+    line-height:1;
+    margin-bottom: 4px;
+  }
+  .hero-meta-item span{ font-size: 13px; color: rgba(255,255,255,0.65); }
+  .hero .route-line{ margin-top: 56px; opacity: 0.5; }
+
+  .scroll-cue{
+    position:absolute;
+    right: 28px; bottom: 28px;
+    z-index:2;
+    display:flex; align-items:center; gap:10px;
+    color: rgba(255,255,255,0.7);
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    writing-mode: vertical-rl;
+  }
+  .scroll-cue::after{
+    content:"";
+    width:1px; height: 46px;
+    background: rgba(255,255,255,0.4);
+  }
+
+  /* ============ QUEM SOMOS ============ */
+  .about{ background: var(--white); }
+  .about-grid{
+    display:grid;
+    grid-template-columns: 0.95fr 1.05fr;
+    gap: 70px;
+    align-items:center;
+  }
+  .about-media{ position:relative; }
+  .about-media img{
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    width:100%;
+    height: 460px;
+    object-fit: cover;
+  }
+  .about-badge{
+    position:absolute;
+    left: -28px; bottom: -28px;
+    background: var(--blue);
+    color: var(--white);
+    padding: 22px 26px;
+    border-radius: 12px;
+    box-shadow: 0 20px 40px -14px rgba(15,42,74,0.5);
+    max-width: 220px;
+  }
+  .about-badge strong{
+    display:block;
+    font-family: var(--font-display);
+    font-size: 34px;
+    color: var(--orange);
+    line-height:1;
+  }
+  .about-badge span{ font-size: 12.5px; color: rgba(255,255,255,0.85); line-height:1.4; display:block; margin-top:6px; }
+  .about-text p{ margin-bottom: 18px; font-size: 16px; }
+  .about-points{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 30px;
+  }
+  .about-point{
+    display:flex; align-items:center; gap:10px;
+    font-size: 14.5px;
+    font-weight:600;
+    color: var(--blue);
+  }
+  .about-point svg{ width:20px; height:20px; stroke: var(--orange); flex-shrink:0; }
+
+  /* ============ CARDS (SERVICES / SEGMENTS) ============ */
+  .bg-alt{ background: var(--bg-alt); }
+  .grid-cards{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 22px;
+  }
+  .card{
+    background: var(--white);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 34px 26px;
+    transition: transform .3s ease, box-shadow .3s ease, border-color .3s ease;
+  }
+  .card:hover{
+    transform: translateY(-6px);
+    box-shadow: var(--shadow);
+    border-color: transparent;
+  }
+  .card-icon{
+    width: 54px; height: 54px;
+    border-radius: 12px;
+    background: rgba(245,130,32,0.1);
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom: 20px;
+  }
+  .card-icon svg{ width:26px; height:26px; stroke: var(--orange); }
+  .card h3{ margin-bottom: 8px; }
+  .card p{ font-size: 14.5px; }
+
+  .segment-grid{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .segment-card{
+    position:relative;
+    border-radius: var(--radius);
+    overflow:hidden;
+    height: 220px;
+    box-shadow: 0 10px 24px -14px rgba(15,42,74,0.3);
+  }
+  .segment-card img{
+    width:100%; height:100%; object-fit:cover;
+    transition: transform .5s ease;
+  }
+  .segment-card:hover img{ transform: scale(1.08); }
+  .segment-card::after{
+    content:"";
+    position:absolute; inset:0;
+    background: linear-gradient(180deg, rgba(14,41,74,0) 40%, rgba(14,41,74,0.88) 100%);
+  }
+  .segment-label{
+    position:absolute; left:20px; bottom:16px; z-index:2;
+    color:var(--white);
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight:600;
+  }
+
+  /* ============ DIFERENCIAIS ============ */
+  .diff-grid{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow:hidden;
+  }
+  .diff-item{
+    background: var(--white);
+    padding: 40px 32px;
+    transition: background .3s ease;
+  }
+  .diff-item:hover{ background: var(--bg-alt); }
+  .diff-item svg{ width:28px; height:28px; stroke: var(--blue); margin-bottom: 18px; }
+  .diff-item h3{ font-size: 19px; margin-bottom: 8px; }
+  .diff-item p{ font-size: 14px; }
+
+  /* ============ CONTATO ============ */
+  .contact{ background: var(--blue-deep); position:relative; overflow:hidden; }
+  .contact::before{
+    content:"";
+    position:absolute; top:-140px; right:-140px;
+    width: 420px; height:420px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(245,130,32,0.22), transparent 70%);
+  }
+  .contact-grid{
+    display:grid;
+    grid-template-columns: 0.85fr 1.15fr;
+    gap: 64px;
+    position: relative;
+    z-index:1;
+  }
+  .contact-info .eyebrow{ color: var(--orange); }
+  .contact-info h2{ color: var(--white); margin-bottom: 20px; }
+  .contact-info p{ color: rgba(255,255,255,0.75); margin-bottom: 34px; font-size:15.5px; }
+  .contact-detail{
+    display:flex; gap:14px; align-items:flex-start;
+    margin-bottom: 24px;
+  }
+  .contact-detail svg{ width:22px; height:22px; stroke: var(--orange); flex-shrink:0; margin-top:2px; }
+  .contact-detail strong{ display:block; color: var(--white); font-size: 15px; margin-bottom: 2px; }
+  .contact-detail span{ color: rgba(255,255,255,0.65); font-size: 14px; }
+
+  .form-card{
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 40px;
+    box-shadow: var(--shadow);
+  }
+  .form-row{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  .field{ margin-bottom: 20px; }
+  .field label{
+    display:block;
+    font-size: 13px;
+    font-weight:600;
+    color: var(--blue);
+    margin-bottom: 7px;
+  }
+  .field label .opt{ color: var(--muted); font-weight:400; text-transform:none; }
+  .field input, .field select, .field textarea{
+    width:100%;
+    padding: 13px 15px;
+    border: 1.5px solid var(--line);
+    border-radius: 9px;
+    font-family: var(--font-body);
+    font-size: 14.5px;
+    color: var(--ink);
+    background: var(--white);
+    transition: border-color .25s ease, box-shadow .25s ease;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{
+    outline:none;
+    border-color: var(--orange);
+    box-shadow: 0 0 0 4px rgba(245,130,32,0.14);
+  }
+  .field textarea{ resize: vertical; min-height: 90px; }
+  .field.error input, .field.error select{ border-color:#D64545; }
+  .field .error-msg{
+    display:none;
+    color:#D64545;
+    font-size:12px;
+    margin-top:6px;
+    font-weight:500;
+  }
+  .field.error .error-msg{ display:block; }
+  .form-note{
+    font-size: 12.5px;
+    color: var(--muted);
+    margin-top: 14px;
+    text-align:center;
+  }
+  .form-success{
+    display:none;
+    align-items:center;
+    gap:10px;
+    background: rgba(38,166,91,0.1);
+    color:#1F8A4C;
+    padding: 13px 16px;
+    border-radius: 9px;
+    font-size: 13.5px;
+    font-weight:600;
+    margin-bottom: 18px;
+  }
+  .form-success.show{ display:flex; }
+  .form-success svg{ width:18px; height:18px; stroke:#1F8A4C; flex-shrink:0; }
+
+  /* ============ FOOTER ============ */
+  footer{ background: var(--blue-deep); border-top: 1px solid rgba(255,255,255,0.08); padding: 40px 0; }
+  .footer-grid{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap: 20px;
+  }
+  .footer-grid .logo{ color: var(--white); }
+  footer .footer-links{ display:flex; gap: 26px; flex-wrap:wrap; }
+  footer .footer-links a{ font-size: 13.5px; color: rgba(255,255,255,0.65); transition: color .25s ease; }
+  footer .footer-links a:hover{ color: var(--orange); }
+  footer .copyright{ font-size: 12.5px; color: rgba(255,255,255,0.45); }
+  .footer-bottom{
+    margin-top: 26px;
+    padding-top: 22px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display:flex;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+
+  /* ============ WHATSAPP FLOAT ============ */
+  .wa-float{
+    position: fixed;
+    right: 24px; bottom: 24px;
+    z-index: 400;
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: #25D366;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 14px 30px -8px rgba(37,211,102,0.6);
+    animation: wa-pulse 2.6s ease-in-out infinite;
+  }
+  .wa-float svg{ width:30px; height:30px; fill:var(--white); }
+  .wa-float:hover{ transform: scale(1.06); }
+  @keyframes wa-pulse{
+    0%, 100%{ box-shadow: 0 14px 30px -8px rgba(37,211,102,0.6); }
+    50%{ box-shadow: 0 14px 30px -8px rgba(37,211,102,0.9), 0 0 0 10px rgba(37,211,102,0.12); }
+  }
+
+  /* ============ REVEAL ON SCROLL ============ */
+  .reveal{ opacity:0; transform: translateY(28px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in{ opacity:1; transform: translateY(0); }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 980px){
+    .hero-grid{ grid-template-columns: 1fr; }
+    .hero-meta{ border-left:none; border-top: 1px solid rgba(255,255,255,0.25); padding-left:0; padding-top:24px; flex-direction:row; flex-wrap:wrap; }
+    .about-grid{ grid-template-columns: 1fr; }
+    .about-media img{ height: 360px; }
+    .contact-grid{ grid-template-columns: 1fr; }
+    .segment-grid{ grid-template-columns: repeat(2, 1fr); }
+    .diff-grid{ grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 760px){
+    nav.main-nav, .nav-cta .btn-primary{ display:none; }
+    .hamburger{ display:flex; }
+    .section-pad{ padding: 76px 0; }
+    .form-row{ grid-template-columns: 1fr; }
+    .form-card{ padding: 26px; }
+    .about-badge{ position:static; margin-top: -40px; margin-left: 20px; }
+    .segment-grid{ grid-template-columns: 1fr 1fr; }
+    .diff-grid{ grid-template-columns: 1fr; }
+    .hero-content{ padding-top: 150px; }
+    .footer-grid{ flex-direction:column; align-items:flex-start; }
+  }
+
+  @media (max-width: 480px){
+    .segment-grid{ grid-template-columns: 1fr; }
+    .hero-meta{ gap: 16px; }
+  }
+</style>
 </head>
 <body>
 
-<!-- TELA DE LOGIN -->
-<div id="login-screen" class="login-overlay">
-    <div class="login-box">
-        <div class="login-header">
-            <div class="logo">
-                <img src="img/logo.png" alt="Logo Rota Sirius" class="logo-img">
-                
-            </div>
-            <p>Acesse o sistema de roteirização</p>
-        </div>
-        <form id="login-form">
-            <div class="form-group">
-                <label for="login-email">E-mail</label>
-                <input type="email" id="login-email" placeholder="nome.sobrenome@empresa.com" required autocomplete="username">
-            </div>
-            <div class="form-group" style="margin-top: 10px;">
-                <label for="login-password">Senha</label>
-                <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
-            </div>
-            <p id="login-error" class="hidden"></p>
-            <button type="submit" class="btn btn-login">Entrar</button>
-        </form>
+<!-- ============ HEADER ============ -->
+<header id="siteHeader">
+  <div class="container">
+    <a href="#inicio" class="logo">
+      <span class="logo-mark">LF</span>
+      <span>LF Transporte<small>Rapidez · Qualidade · Dedicação</small></span>
+    </a>
+
+    <nav class="main-nav">
+      <a href="#inicio">Início</a>
+      <a href="#quem-somos">Quem Somos</a>
+      <a href="#servicos">Serviços</a>
+      <a href="#segmentos">Segmentos</a>
+      <a href="#diferenciais">Diferenciais</a>
+      <a href="#contato">Contato</a>
+    </nav>
+
+    <div class="nav-cta">
+      <a href="#contato" class="btn btn-primary">Solicitar orçamento</a>
+      <button class="hamburger" id="openMobileNav" aria-label="Abrir menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
     </div>
+  </div>
+</header>
+
+<!-- ============ MOBILE NAV ============ -->
+<div class="mobile-nav" id="mobileNav">
+  <div class="mobile-nav-top">
+    <span class="logo" style="color:#fff;"><span class="logo-mark">LF</span> LF Transporte</span>
+    <button class="mobile-nav-close" id="closeMobileNav" aria-label="Fechar menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><line x1="4" y1="4" x2="20" y2="20"/><line x1="20" y1="4" x2="4" y2="20"/></svg>
+    </button>
+  </div>
+  <a href="#inicio">Início</a>
+  <a href="#quem-somos">Quem Somos</a>
+  <a href="#servicos">Serviços</a>
+  <a href="#segmentos">Segmentos</a>
+  <a href="#diferenciais">Diferenciais</a>
+  <a href="#contato">Contato</a>
+  <a href="#contato" class="btn btn-primary btn-block">Solicitar orçamento</a>
 </div>
 
-<div class="app">
-
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="logo">
-        <img src="img/logo.png" alt="Logo Rota Sirius" class="logo-img">
-        
-    </div>
-
-    <button class="btn" id="open-nf-modal-btn">+ Nova NF</button>
-
-    <input type="text" placeholder="Buscar NF ou destino..." class="search">
-
-    <div class="filters">
-
-  <button onclick="trocarFiltro('todos')">
-    Todos <span id="count-todos">0</span>
-  </button>
-
-  <button onclick="trocarFiltro('transporte')">
-    Transporte <span id="count-transporte">0</span>
-  </button>
-
-  <button onclick="trocarFiltro('retira')">
-    Retira <span id="count-retira">0</span>
-  </button>
-
-</div>
-
-
-    <div class="nf-list"></div>
-  </aside>
-
-  <!-- MAIN -->
-  <main class="main">
-
-    <!-- Visão Principal (Dashboard) -->
-    <div id="dashboard-view">
-      <div class="topbar">
-        <h2>Roteirização</h2>
-        <div class="topbar-actions">
-          <!-- GRUPO 1: FILTROS -->
-          <div class="topbar-group">
-            <div class="view-toggle">
-              <button id="view-grid-btn" class="icon-btn active" title="Visualização em Grid">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-              </button>
-              <button id="view-list-btn" class="icon-btn" title="Visualização em Lista">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
-              </button>
-            </div>
-            <input type="text" id="filtro-nome-rota" class="date-filter" placeholder="Filtrar por nome ou transportadora..." title="Filtrar por nome ou transportadora" style="cursor: text;">
-            <input type="date" id="filtro-data-rota" class="date-filter" title="Filtrar data">
-            <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
-          </div>
-
-          <!-- GRUPO 2: NAVEGAÇÃO / AÇÕES -->
-          <div class="topbar-group">
-            <button class="btn btn-outline" id="open-control-panel-btn">⚙ Painel</button>
-            <button class="btn btn-outline" id="open-programacao-btn">📅 Programação</button>
-            <button class="btn btn-outline" id="open-simulate-route-btn">🗺 Simular Rota</button>
-            <button class="btn btn-primary" id="open-rota-modal-btn">+ Nova Rota</button>
-          </div>
-
-          <!-- GRUPO 3: PERFIL -->
-          <div class="topbar-group">
-            <div id="user-display-dashboard" class="user-display"></div>
-          </div>
+<!-- ============ HERO ============ -->
+<section class="hero" id="inicio">
+  <div class="hero-bg"></div>
+  <div class="hero-content container">
+    <div class="hero-grid">
+      <div>
+        <h1>Sua carga no <em>destino certo</em>, no prazo certo.</h1>
+        <p class="lead">Há mais de 10 anos conectando empresas de todo o Brasil por meio de uma rede de parceiros estratégicos, com atuação especialmente forte no Nordeste.</p>
+        <div class="hero-actions">
+          <a href="#contato" class="btn btn-primary">Solicitar orçamento</a>
+          <a href="#servicos" class="btn btn-ghost">Conheça nossos serviços</a>
         </div>
+        <div class="route-line"></div>
       </div>
-      <div class="rotas"></div>
-    </div>
-
-    <!-- Visão do Painel de Controle -->
-    <div id="control-panel-view" class="hidden">
-      <div class="topbar">
-        <h2>Painel de Controle</h2>
-        <div class="topbar-actions">
-          <div class="export-powerbi-wrapper" style="position: relative; display: inline-block;">
-            <button class="btn btn-outline" id="export-powerbi-btn">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; opacity: 0.8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
-              Exportar Base Power BI
-            </button>
-            <div id="export-powerbi-dropdown" class="user-dropdown hidden">
-              <button type="button" onclick="handleExportPowerBiExcel(event)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #22c55e;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
-                Excel
-              </button>
-              <button type="button" onclick="handleExportPowerBiCSV(event)">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #38bdf8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                CSV
-              </button>
-            </div>
-          </div>
-          <button class="btn btn-outline" id="back-to-dashboard-btn">← Voltar</button>
-          <div id="user-display-panel" class="user-display"></div>
+      <div class="hero-meta">
+        <div class="hero-meta-item">
+          <strong>2015</strong>
+          <span>Ano de fundação</span>
         </div>
-      </div>
-      
-      <!-- FAIXA DE INDICADORES RÁPIDOS -->
-      <div class="dashboard-stats">
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(148, 163, 184, 0.1); color: #94a3b8;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">NFs Pendentes</span>
-            <h3 id="stat-nfs-pendentes">0</h3>
-          </div>
+        <div class="hero-meta-item">
+          <strong>Nordeste</strong>
+          <span>Principal região de atuação</span>
         </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1); color: var(--primary);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">NFs em Rota</span>
-            <h3 id="stat-nfs-em-rota">0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(56, 189, 248, 0.1); color: var(--accent);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 18l-2-1-2 1V3l2 1 2-1 2 1 2-1v15l-2-1-2 1z"></path></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Rotas Ativas</span>
-            <h3 id="stat-rotas-ativas">0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(168, 85, 247, 0.1); color: #a855f7;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Rotas Finalizadas</span>
-            <h3 id="stat-rotas-finalizadas">0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(251, 191, 36, 0.1); color: #fbbf24;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Em Produção</span>
-            <h3 id="stat-nfs-producao">0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1); color: var(--primary);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Produzidas</span>
-            <h3 id="stat-nfs-produzidas">0</h3>
-          </div>
-        </div>
-      </div>
-      
-      <!-- SEGUNDA FAIXA: GRÁFICOS -->
-      <div class="dashboard-charts">
-        <div class="chart-container">
-          <h3>Status das NFs</h3>
-          <div class="chart-canvas-wrapper">
-            <canvas id="chart-status-nfs"></canvas>
-          </div>
-          <div id="msg-status-nfs" class="empty-chart-msg hidden">Sem dados suficientes no momento</div>
-        </div>
-        <div class="chart-container">
-          <h3>NFs por Dia (Em Rota)</h3>
-          <div class="chart-canvas-wrapper">
-            <canvas id="chart-nfs-dia"></canvas>
-          </div>
-          <div id="msg-nfs-dia" class="empty-chart-msg hidden">Sem dados suficientes no momento</div>
-        </div>
-        <div class="chart-container">
-          <h3>Rotas Ativas por Dia</h3>
-          <div class="chart-canvas-wrapper">
-            <canvas id="chart-rotas-dia"></canvas>
-          </div>
-          <div id="msg-rotas-dia" class="empty-chart-msg hidden">Sem dados suficientes no momento</div>
-        </div>
-      </div>
-      
-      <!-- TERCEIRA FAIXA: RANKINGS E ALERTAS -->
-      <div class="dashboard-rankings">
-        <div class="panel-container">
-          <h3 style="font-size: 12px; margin-bottom: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Top Transportadoras</h3>
-          <div id="ranking-transportadoras" class="ranking-list">
-            <!-- Dinâmico -->
-          </div>
-        </div>
-
-        <div class="panel-container">
-          <h3 style="font-size: 12px; margin-bottom: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Top KAMs</h3>
-          <div id="ranking-kams" class="ranking-list">
-            <!-- Dinâmico -->
-          </div>
-        </div>
-
-        <div class="panel-container">
-          <h3 style="font-size: 12px; margin-bottom: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Alertas de Preenchimento</h3>
-          <div id="alerts-summary" class="alerts-list">
-            <!-- Dinâmico -->
-          </div>
-        </div>
-      </div>
-      
-      <div class="panel-grid">
-        <!-- Coluna da Esquerda: Usuários -->
-        <div class="panel-container">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; display: flex; align-items: center;">Gerenciamento de Usuários <span id="count-users" style="font-size: 11px; color: var(--primary); background: rgba(34, 197, 94, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; margin-left: 12px; border: 1px solid rgba(34, 197, 94, 0.2);"></span></h3>
-            <button class="btn" id="add-user-btn" style="margin: 0;">+ Adicionar Usuário</button>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Cargo</th>
-                <th>E-mail</th>
-                <th>Permissão</th>
-                <th>Status</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="users-table-body">
-            <!-- Usuários carregados via JS -->
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Coluna da Direita: KAM -->
-        <div class="panel-container">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; display: flex; align-items: center;">KAM <span id="count-kams" style="font-size: 11px; color: var(--primary); background: rgba(34, 197, 94, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; margin-left: 12px; border: 1px solid rgba(34, 197, 94, 0.2);"></span></h3>
-            <button class="btn" id="add-kam-btn" style="margin: 0;">+ Adicionar KAM</button>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Nome do KAM</th>
-                <th style="width: 100px; text-align: center;">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="kams-table-body">
-              <!-- KAMs carregados via JS -->
-            </tbody>
-          </table>
+        <div class="hero-meta-item">
+          <strong>Brasil</strong>
+          <span>Cobertura em todo o território nacional</span>
         </div>
       </div>
     </div>
+  </div>
+  <div class="scroll-cue">Role para explorar</div>
+</section>
 
-    <!-- Visão de Programação -->
-    <div id="programacao-view" class="hidden">
-      <div class="topbar">
-        <h2>Programação</h2>
-        <div class="topbar-actions">
-          <!-- GRUPO 1: FILTROS / HISTÓRICO -->
-          <div class="topbar-group">
-              <input type="text" id="filtro-nome-programacao" class="date-filter" placeholder="NF, KAM, Rota ou Destino..." title="Pesquisa global na programação" style="cursor: text;">
-              <input type="date" id="filtro-data-programacao" class="date-filter" title="Filtrar data">
-            <button class="btn btn-outline" id="open-programacao-history-btn">⏱ Histórico</button>
-          </div>
-          <!-- GRUPO 2: NAVEGAÇÃO -->
-          <div class="topbar-group">
-            <button class="btn btn-outline" id="open-control-panel-from-prog-btn">⚙ Painel</button>
-            <button class="btn btn-outline" id="back-to-dashboard-from-programacao-btn">🚛 Roteirização</button>
-            <button class="btn btn-outline" id="open-simulate-route-from-programacao-btn">🗺 Simular Rota</button>
-            <div class="export-wrapper" style="position: relative; display: inline-block;">
-              <button class="btn btn-primary" id="export-programacao-btn">📥 Exportar</button>
-              <div id="export-dropdown" class="user-dropdown hidden">
-                <button type="button" onclick="handleExportExcel(event)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #22c55e;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
-                  Excel
-                </button>
-                <button type="button" onclick="handleExportPDF(event)">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                  PDF
-                </button>
-              </div>
-            </div>
-          </div>
-          <!-- GRUPO 3: PERFIL -->
-          <div class="topbar-group">
-            <div id="user-display-programacao" class="user-display"></div>
-          </div>
+<!-- ============ QUEM SOMOS ============ -->
+<section class="about section-pad" id="quem-somos">
+  <div class="container">
+    <div class="about-grid">
+      <div class="about-media reveal">
+        <img src="https://images.unsplash.com/photo-1494412574643-ff11b0a5c1c3?q=80&w=1200&auto=format&fit=crop" alt="Caminhão em rodovia representando a operação de transporte da LF Transporte">
+        <div class="about-badge">
+          <strong>2015</strong>
+          <span>No mercado desde a fundação, em Jaboatão dos Guararapes (PE)</span>
         </div>
       </div>
-      <div id="programacao-dinamica-container" style="display: flex; flex-direction: column; gap: 24px;">
-        <!-- Conteúdo gerado automaticamente aparecerá aqui -->
-      </div>
-    </div>
-
-    <!-- Visão do Novo Histórico (Página Independente) -->
-    <div id="new-history-view" class="hidden">
-      <div class="topbar">
-        <h2>Histórico</h2>
-        <div class="topbar-actions">
-          <!-- GRUPO 1: FILTROS -->
-          <div class="topbar-group">
-            <input type="text" id="filtro-nome-new-history" class="date-filter" placeholder="Buscar no histórico" title="Filtrar por nome ou transportadora" style="cursor: text;">
-            <input type="date" id="filtro-data-new-history" class="date-filter" title="Filtrar data">
-          </div>
-
-          <!-- GRUPO 2: NAVEGAÇÃO -->
-          <div class="topbar-group">
-            <button class="btn btn-outline" id="open-control-panel-from-new-history-btn">⚙ Painel</button>
-            <button class="btn btn-outline" id="open-programacao-from-new-history-btn">📅 Programação</button>
-            <button class="btn btn-outline" id="back-to-dashboard-from-new-history-btn">🚛 Roteirização</button>
-          </div>
-
-          <!-- GRUPO 3: PERFIL -->
-          <div class="topbar-group">
-            <div id="user-display-new-history" class="user-display"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel-container">
-        <div class="history-page-content">
-          <!-- CABEÇALHO INTERNO DA SEÇÃO -->
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px;">
-            <h3 id="new-history-main-title" style="margin: 0; display: flex; align-items: center; gap: 10px;">
-              <span id="new-history-current-title">Rotas Finalizadas</span>
-              <span id="new-history-count" style="font-size: 11px; color: var(--accent); background: rgba(56, 189, 248, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.2);">
-                Carregando...
-              </span>
-            </h3>
-
-            <!-- TOGGLE DE VISUALIZAÇÃO REPOSICIONADO -->
-            <div class="view-toggle" style="margin: 0;">
-              <button id="new-history-roteirizacao-btn" class="icon-btn" title="Roteirização">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
-              </button>
-              <button id="new-history-programacao-btn" class="icon-btn" title="Programação">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path><path d="M8 18h.01"></path><path d="M12 18h.01"></path><path d="M16 18h.01"></path></svg>
-              </button>
-            </div>
-          </div>
-          
-          <!-- ÁREA DE LISTAGEM (RESERVADA PARA CARDS DAS ROTAS) -->
-          <div id="new-history-roteirizacao-content" class="rotas">
-          </div>
-
-          <!-- ÁREA DE PLACEHOLDER PARA PROGRAMAÇÃO -->
-          <div id="new-history-programacao-content" class="hidden">
-            <div style="text-align: center; color: var(--text-muted); padding: 80px 40px; border: 2px dashed var(--border); border-radius: 16px; background: rgba(30, 41, 59, 0.2);">
-               <div style="margin-bottom: 20px; opacity: 0.3;">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M16 13H8"></path><path d="M16 17H8"></path><path d="M10 9H8"></path></svg>
-               </div>
-               <h4 style="color: var(--text-main); margin-bottom: 8px;">Visualização de Programação em desenvolvimento</h4>
-               <p style="max-width: 450px; margin: 0 auto; line-height: 1.6;">Esta área exibirá o histórico de rotas finalizadas no formato de programação.</p>
-            </div>
-          </div>
+      <div class="about-text reveal">
+        <div class="eyebrow">Quem Somos</div>
+        <h2 style="margin-bottom:22px;">Dedicação em cada quilômetro rodado</h2>
+        <p>Fundada em 2015, em Jaboatão dos Guararapes (PE), a LF Transporte nasceu com o propósito de oferecer soluções de transporte rodoviário ágeis e confiáveis para empresas de todo o Brasil.</p>
+        <p>Com atuação especialmente forte na região Nordeste, construímos uma rede de parceiros estratégicos que nos permite atender diferentes tipos de carga com o mesmo cuidado e comprometimento do primeiro dia.</p>
+        <p>Nosso compromisso é simples: unir rapidez, qualidade e dedicação em cada etapa da operação — do primeiro contato até a entrega final.</p>
+        <div class="about-points">
+          <div class="about-point"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Cobertura nacional</div>
+          <div class="about-point"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Rede de parceiros</div>
+          <div class="about-point"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Foco no Nordeste</div>
+          <div class="about-point"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Atendimento próximo</div>
         </div>
       </div>
     </div>
+  </div>
+</section>
 
-    <!-- Visão de Simulação de Rota -->
-    <div id="simulate-route-view" class="hidden">
-      <div class="topbar">
-        <h2>Simular Rota</h2>
-        <div class="topbar-actions">
-          <div class="topbar-group">
-            <button class="btn btn-outline" id="back-to-dashboard-from-simulate-btn">← Voltar</button>
-          </div>
-          <div class="topbar-group">
-            <div id="user-display-simulate" class="user-display"></div>
-          </div>
+<div class="container"><div class="route-line" style="opacity:0.25;"></div></div>
+
+<!-- ============ SERVIÇOS ============ -->
+<section class="section-pad bg-alt" id="servicos">
+  <div class="container">
+    <div class="section-head center reveal">
+      <div class="eyebrow" style="justify-content:center;">Serviços</div>
+      <h2>Soluções completas para sua operação logística</h2>
+    </div>
+    <div class="grid-cards reveal">
+      <div class="card">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h13V6H3v11z"/><path d="M16 10h3.5l2.5 3v4h-6"/><circle cx="7" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg></div>
+        <h3>Transporte Rodoviário</h3>
+        <p>Movimentação de cargas entre estados com foco em agilidade e segurança em toda a rota.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg></div>
+        <h3>Carga Fechada</h3>
+        <p>Veículo dedicado exclusivamente à sua carga, do embarque até a entrega no destino.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div>
+        <h3>Carga Fracionada</h3>
+        <p>Otimização de espaço e custo para cargas que dividem o veículo com outras remessas.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg></div>
+        <h3>Distribuição</h3>
+        <p>Coordenação de entregas para múltiplos destinos com planejamento de rotas eficiente.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l4-8h10l4 8-4 8H7l-4-8z"/></svg></div>
+        <h3>Logística</h3>
+        <p>Planejamento e acompanhamento de toda a operação, do ponto de origem ao destino final.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SEGMENTOS ============ -->
+<section class="section-pad" id="segmentos">
+  <div class="container">
+    <div class="section-head center reveal">
+      <div class="eyebrow" style="justify-content:center;">Segmentos</div>
+      <h2>Setores que confiam na nossa operação</h2>
+    </div>
+    <div class="segment-grid reveal">
+      <div class="segment-card">
+        <img src="https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=800&auto=format&fit=crop" alt="Energia Solar">
+        <span class="segment-label">Energia Solar</span>
+      </div>
+      <div class="segment-card">
+        <img src="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=800&auto=format&fit=crop" alt="Construção Civil">
+        <span class="segment-label">Construção Civil</span>
+      </div>
+      <div class="segment-card">
+        <img src="https://images.unsplash.com/photo-1565891741441-64926e441838?q=80&w=800&auto=format&fit=crop" alt="Indústrias">
+        <span class="segment-label">Indústrias</span>
+      </div>
+      <div class="segment-card">
+        <img src="https://images.unsplash.com/photo-1553413077-190dd305871c?q=80&w=800&auto=format&fit=crop" alt="Distribuidores">
+        <span class="segment-label">Distribuidores</span>
+      </div>
+      <div class="segment-card">
+        <img src="https://images.unsplash.com/photo-1500595046743-cd271d694d30?q=80&w=800&auto=format&fit=crop" alt="Agronegócio">
+        <span class="segment-label">Agronegócio</span>
+      </div>
+      <div class="segment-card">
+        <img src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?q=80&w=800&auto=format&fit=crop" alt="Comércio">
+        <span class="segment-label">Comércio</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DIFERENCIAIS ============ -->
+<section class="section-pad bg-alt" id="diferenciais">
+  <div class="container">
+    <div class="section-head center reveal">
+      <div class="eyebrow" style="justify-content:center;">Diferenciais</div>
+      <h2>Por que empresas escolhem a LF Transporte</h2>
+    </div>
+    <div class="diff-grid reveal">
+      <div class="diff-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+        <h3>Mais de 10 anos de mercado</h3>
+        <p>Experiência consolidada desde 2015 no transporte rodoviário de cargas.</p>
+      </div>
+      <div class="diff-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5L11 16M16 7.5L13 16M8.5 6h7"/></svg>
+        <h3>Rede de parceiros estratégicos</h3>
+        <p>Colaboração com parceiros qualificados para atender diferentes tipos de carga.</p>
+      </div>
+      <div class="diff-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <h3>Pontualidade</h3>
+        <p>Compromisso com prazos combinados em cada etapa do transporte.</p>
+      </div>
+      <div class="diff-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.7-7 9-4-1.3-7-4.5-7-9V6l7-3z"/></svg>
+        <h3>Segurança</h3>
+        <p>Cuidado com a integridade da carga do embarque até a entrega final.</p>
+      </div>
+      <div class="diff-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+        <h3>Rastreamento</h3>
+        <p>Acompanhamento da operação para manter você informado sobre sua carga.</p>
+      </div>
+      <div class="diff-item">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <h3>Atendimento personalizado</h3>
+        <p>Relacionamento próximo para entender a necessidade de cada cliente.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONTATO ============ -->
+<section class="section-pad contact" id="contato">
+  <div class="container">
+    <div class="contact-grid">
+      <div class="contact-info reveal">
+        <div class="eyebrow">Contato</div>
+        <h2>Solicite seu orçamento agora mesmo</h2>
+        <p>Preencha o formulário com os dados da sua carga. Ao enviar, você será direcionado diretamente para o nosso WhatsApp com as informações prontas.</p>
+
+        <div class="contact-detail">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11a7 7 0 0 1 14 0c0 4.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+          <div><strong>Jaboatão dos Guararapes — PE</strong><span>Atendimento para todo o Brasil</span></div>
         </div>
+        <div class="contact-detail">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .3 2 .7 2.9a2 2 0 0 1-.4 2.1L8 10a16 16 0 0 0 6 6l1.3-1.4a2 2 0 0 1 2.1-.4c.9.4 1.9.6 2.9.7a2 2 0 0 1 1.7 2z"/></svg>
+          <div><strong>(81) 99530-8142</strong><span>WhatsApp para orçamentos</span></div>
+        </div>
+        <div class="contact-detail">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 8l9 6 9-6"/></svg>
+          <div><strong>Fale com nossa equipe</strong><span>Resposta rápida em horário comercial</span></div>
+        </div>
+
+        <div class="route-line" style="margin-top:40px; opacity:0.5;"></div>
       </div>
 
-      <div class="simulate-grid">
-        <!-- Coluna Esquerda: Painel de Configuração -->
-        <div class="panel-container simulate-config-panel">
-          <h3>Configurações da Simulação</h3>
-          <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 13px;">Defina os parâmetros para a simulação de rota.</p>
-
-          <!-- 1. Toggle/botões no topo: CEP / Roteirizado -->
-          <div class="nf-tipo-toggle" style="margin-bottom: 20px;">
-              <button type="button" id="simulate-mode-cep-btn" class="btn-toggle active">CEP</button>
-              <button type="button" id="simulate-mode-routed-btn" class="btn-toggle">Roteirizado</button>
+      <div class="reveal">
+        <form class="form-card" id="quoteForm" novalidate>
+          <div class="form-success" id="formSuccess">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            Redirecionando para o WhatsApp...
           </div>
 
-          <!-- CONTEÚDO MODO CEP -->
-          <div id="simulate-cep-content">
-              <div id="simulate-stops-container">
-                  <div class="simulation-address-block">
-                      <label class="address-label">Origem</label>
-                      <input type="text" id="simulate-origin-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
-                  </div>
-                  <div class="simulation-address-block" data-stopId="1">
-                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                          <label class="address-label" style="margin-bottom: 0;">Parada 1</label>
-                          <button class="icon-btn delete" onclick="removerParadaSimulacao(1)" style="padding: 2px;" title="Remover Parada">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                          </button>
-                      </div>
-                      <input type="text" id="simulate-stop1-cep" class="search" placeholder="00000-000" style="margin: 0; width: 100%;">
-                  </div>
-              </div>
-              <button id="simulate-add-stop-btn" class="btn btn-outline" style="width: 100%; margin-top: 15px;">+ Adicionar Parada</button>
-              <div style="margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px;">
-                  <button class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">Calcular Rota</button>
-                  <button id="simulate-clear-btn" class="btn btn-outline" style="width: 100%; margin-bottom: 10px; border-color: #ef4444; color: #ef4444;">Limpar Rota</button>
-                  <button class="btn btn-outline" style="width: 100%;">Importar Planilha</button>
-              </div>
+          <div class="form-row">
+            <div class="field" data-field="nome">
+              <label for="nome">Nome</label>
+              <input type="text" id="nome" name="nome" autocomplete="name">
+              <span class="error-msg">Informe seu nome.</span>
+            </div>
+            <div class="field" data-field="empresa">
+              <label for="empresa">Empresa</label>
+              <input type="text" id="empresa" name="empresa" autocomplete="organization">
+              <span class="error-msg">Informe o nome da empresa.</span>
+            </div>
           </div>
 
-          <!-- CONTEÚDO MODO ROTEIRIZADO -->
-          <div id="simulate-routed-content" class="hidden">
-              <label class="address-label">Selecionar Rota Ativa</label>
-              <select id="simulate-route-selector" class="search" style="margin-top: 5px; margin-bottom: 20px; width: 100%;">
-                  <option value="" disabled selected>Carregando rotas...</option>
+          <div class="form-row">
+            <div class="field" data-field="whatsapp">
+              <label for="whatsapp">WhatsApp</label>
+              <input type="tel" id="whatsapp" name="whatsapp" placeholder="(81) 90000-0000" autocomplete="tel">
+              <span class="error-msg">Informe um WhatsApp para contato.</span>
+            </div>
+            <div class="field" data-field="tipo">
+              <label for="tipo">Tipo de Carga</label>
+              <select id="tipo" name="tipo">
+                <option value="" disabled selected>Selecione</option>
+                <option>Carga Fechada</option>
+                <option>Carga Fracionada</option>
+                <option>Distribuição</option>
+                <option>Energia Solar</option>
+                <option>Construção Civil</option>
+                <option>Indústria</option>
+                <option>Agronegócio</option>
+                <option>Comércio</option>
+                <option>Outro</option>
               </select>
-              <div id="simulate-route-details-container">
-                  <!-- Preenchido via JS ao selecionar rota -->
-              </div>
+              <span class="error-msg">Selecione o tipo de carga.</span>
+            </div>
           </div>
 
-          <!-- RESULTADOS DA SIMULAÇÃO (Distância e Tempo) -->
-          <div id="simulate-stats-container" class="hidden" style="margin-top: 20px; padding: 15px; background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 8px;">
-              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                  <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Distância Total</span>
-                  <span id="simulate-total-distance" style="font-weight: 700; color: var(--primary); font-size: 14px;">0 km</span>
-              </div>
-              <div style="display: flex; justify-content: space-between;">
-                  <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Tempo Estimado</span>
-                  <span id="simulate-total-duration" style="font-weight: 700; color: var(--primary); font-size: 14px;">0 min</span>
-              </div>
-              
-              <!-- Ação de Abrir no Maps -->
-              <button id="simulate-open-maps-btn" class="btn" style="width: 100%; margin-top: 15px; background: var(--primary); color: white; border: none; font-weight: 700;">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                  Abrir no Google Maps
-              </button>
+          <div class="form-row">
+            <div class="field" data-field="origem">
+              <label for="origem">Cidade de Origem</label>
+              <input type="text" id="origem" name="origem" autocomplete="off">
+              <span class="error-msg">Informe a cidade de origem.</span>
+            </div>
+            <div class="field" data-field="destino">
+              <label for="destino">Cidade de Destino</label>
+              <input type="text" id="destino" name="destino" autocomplete="off">
+              <span class="error-msg">Informe a cidade de destino.</span>
+            </div>
           </div>
 
-          <!-- 5. Opções visuais: Menor distância, Menor tempo, Retornar à origem, Manter última parada como destino fixo -->
-          <div style="margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px;">
-              <label class="checkbox-option">
-                  <input type="checkbox" id="simulate-opt-distance" checked>
-                  Menor distância
-              </label>
-              <label class="checkbox-option">
-                  <input type="checkbox" id="simulate-opt-time">
-                  Menor tempo
-              </label>
-              <label class="checkbox-option">
-                  <input type="checkbox" id="simulate-opt-return">
-                  Retornar à origem
-              </label>
-              <label class="checkbox-option">
-                  <input type="checkbox" id="simulate-opt-last-fixed">
-                  Manter última parada como destino fixo
-              </label>
+          <div class="field" data-field="observacoes">
+            <label for="observacoes">Observações <span class="opt">(opcional)</span></label>
+            <textarea id="observacoes" name="observacoes" placeholder="Detalhes adicionais sobre a carga, prazo ou peculiaridades do transporte."></textarea>
           </div>
-        </div>
 
-        <!-- Coluna Direita: Área do Mapa -->
-        <div class="panel-container simulate-map-area" style="padding: 0; overflow: hidden; border-style: solid;">
-          <div id="map-simulate" style="width: 100%; height: 100%;"></div>
-        </div>
+          <button type="submit" class="btn btn-primary btn-block" id="submitBtn">
+            Solicitar orçamento pelo WhatsApp
+          </button>
+          <p class="form-note">Você será redirecionado ao WhatsApp com os dados preenchidos.</p>
+        </form>
       </div>
     </div>
+  </div>
+</section>
 
-  </main>
-
-</div>
-
-<!-- Modal para Nova NF -->
-<div id="create-nf-modal" class="modal-overlay">
-    <div class="modal-content" style="max-width: 500px;">
-        <h3 id="nf-modal-title">Adicionar Nova NF</h3>
-        <span class="close-button">&times;</span>
-        <form id="create-nf-form">
-            <input type="hidden" id="nf-id-hidden">
-            
-            <label for="nf-numero">Número da NF:</label>
-            <input type="text" id="nf-numero" required>
-
-            <label>Tipo de operação:</label>
-            <div class="nf-tipo-toggle">
-                <button type="button" id="btn-transporte" class="btn-toggle active">Transporte</button>
-                <button type="button" id="btn-retira" class="btn-toggle">Retira</button>
-                <input type="hidden" id="nf-tipo" value="transporte">
-            </div>
-
-            <div class="form-row">
-                <div class="form-group" style="flex: 0 0 120px;">
-                    <label for="nf-cep">CEP:</label>
-                    <input type="text" id="nf-cep" placeholder="00000-000">
-                </div>
-                <div class="form-group">
-                    <label for="nf-cidade">Cidade:</label>
-                    <input type="text" id="nf-cidade" placeholder="Ex: Recife" required>
-                </div>
-                <div class="form-group" style="flex: 0 0 80px;">
-                    <label for="nf-uf">UF:</label>
-                    <select id="nf-uf" required>
-                        <option value="" disabled selected>UF</option>
-                        <option value="AC">AC</option><option value="AL">AL</option>
-                        <option value="AP">AP</option><option value="AM">AM</option>
-                        <option value="BA">BA</option><option value="CE">CE</option>
-                        <option value="DF">DF</option><option value="ES">ES</option>
-                        <option value="GO">GO</option><option value="MA">MA</option>
-                        <option value="MT">MT</option><option value="MS">MS</option>
-                        <option value="MG">MG</option><option value="PA">PA</option>
-                        <option value="PB">PB</option><option value="PR">PR</option>
-                        <option value="PE">PE</option><option value="PI">PI</option>
-                        <option value="RJ">RJ</option><option value="RN">RN</option>
-                        <option value="RS">RS</option><option value="RO">RO</option>
-                        <option value="RR">RR</option><option value="SC">SC</option>
-                        <option value="SP">SP</option><option value="SE">SE</option>
-                        <option value="TO">TO</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="nf-endereco">Endereço:</label>
-                    <input type="text" id="nf-endereco" placeholder="Rua, Avenida, Bairro...">
-                </div>
-                <div class="form-group" style="flex: 0 0 100px;">
-                    <label for="nf-endereco-numero">Número:</label>
-                    <input type="text" id="nf-endereco-numero" placeholder="Nº">
-                </div>
-            </div>
-
-            <label for="nf-valor">Valor de Frete:</label>
-            <input type="number" id="nf-valor" step="0.01" required>
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="nf-quantidade">Quantidade:</label>
-                    <input type="number" id="nf-quantidade" placeholder="0">
-                </div>
-                <div class="form-group">
-                    <label for="nf-marca">Marca:</label>
-                    <input type="text" id="nf-marca" placeholder="Marca">
-                </div>
-                <div class="form-group">
-                    <label for="nf-potencia">Potência:</label>
-                    <input type="text" id="nf-potencia" placeholder="Ex: 650W">
-                </div>
-            </div>
-
-            <label for="nf-kam">KAM (Responsável):</label>
-            <select id="nf-kam">
-                <option value="" disabled selected>Carregando KAMs...</option>
-            </select>
-
-            <label for="nf-obs">Observação:</label>
-            <textarea id="nf-obs" placeholder="Observações adicionais..." style="width: 100%; padding: 10px; border: 1px solid #1e293b; background: #0f172a; color: #e2e8f0; border-radius: 5px; outline: none; resize: vertical; min-height: 60px;"></textarea>
-
-            <div class="form-row" style="margin-top: 20px;">
-                <button type="button" id="btn-save-nf" class="btn btn-outline" style="flex: 1; margin-top: 0;">Salvar</button>
-                <button type="button" id="btn-save-close-nf" class="btn" style="flex: 1; margin-top: 0;">Salvar e Fechar</button>
-            </div>
-        </form>
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="container">
+    <div class="footer-grid">
+      <a href="#inicio" class="logo"><span class="logo-mark">LF</span> LF Transporte</a>
+      <ul class="footer-links">
+        <li><a href="#quem-somos">Quem Somos</a></li>
+        <li><a href="#servicos">Serviços</a></li>
+        <li><a href="#segmentos">Segmentos</a></li>
+        <li><a href="#diferenciais">Diferenciais</a></li>
+        <li><a href="#contato">Contato</a></li>
+      </ul>
     </div>
-</div>
-
-<!-- Modal para Nova Rota -->
-<div id="create-rota-modal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 id="rota-modal-title">Adicionar Nova Rota</h3>
-        <span class="close-button">&times;</span>
-        <form id="create-rota-form">
-            <input type="hidden" id="rota-id-hidden">
-            <label for="rota-nome">Nome da rota (ex: Recife):</label>
-            <input type="text" id="rota-nome" placeholder="Ex: Recife" required>
-            
-            <label for="rota-data">Data da rota:</label>
-            <input type="date" id="rota-data" required>
-            
-            <label for="rota-transportadora">Transportadora:</label>
-            <input type="text" id="rota-transportadora" placeholder="Ex: TransLog Express">
-
-            <button type="submit" class="btn">Salvar Rota</button>
-        </form>
+    <div class="footer-bottom">
+      <span class="copyright">© <span id="year"></span> LF Transporte — Jaboatão dos Guararapes, PE.</span>
+      <span class="copyright">Rapidez. Qualidade. Dedicação.</span>
     </div>
-</div>
+  </div>
+</footer>
 
-<!-- Modal Genérico de Confirmação e Aviso -->
-<div id="generic-modal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 id="generic-modal-title">Aviso</h3>
-        <span class="close-button">&times;</span>
-        <p id="generic-modal-message" style="text-align: center; margin-bottom: 20px; color: var(--text-main); line-height: 1.5;"></p>
-        <div class="form-row">
-            <button id="generic-modal-cancel" class="btn-toggle">Cancelar</button>
-            <button id="generic-modal-ok" class="btn" style="margin-top: 0;">Confirmar</button>
-        </div>
-    </div>
-</div>
+<!-- ============ WHATSAPP FLOAT ============ -->
+<a href="#" id="waFloat" class="wa-float" aria-label="Falar no WhatsApp" target="_blank" rel="noopener">
+  <svg viewBox="0 0 32 32"><path d="M16.02 3C9.4 3 4.02 8.38 4.02 15c0 2.32.63 4.5 1.73 6.37L4 29l7.83-1.7A11.9 11.9 0 0 0 16.02 27C22.64 27 28 21.62 28 15S22.64 3 16.02 3zm0 21.7c-1.98 0-3.83-.55-5.4-1.5l-.39-.23-4.65 1 1.02-4.53-.25-.4a9.6 9.6 0 0 1-1.5-5.04c0-5.36 4.36-9.72 9.72-9.72 5.36 0 9.72 4.36 9.72 9.72 0 5.36-4.36 9.7-9.27 9.7zm5.3-7.24c-.29-.15-1.7-.84-1.96-.93-.26-.1-.46-.15-.65.15-.2.29-.75.93-.92 1.12-.17.2-.34.22-.63.07-.29-.14-1.22-.45-2.32-1.43-.86-.76-1.44-1.7-1.6-1.99-.17-.29-.02-.44.13-.59.13-.13.29-.34.44-.5.15-.17.2-.29.29-.49.1-.2.05-.37-.02-.51-.07-.15-.65-1.57-.9-2.15-.24-.57-.48-.5-.65-.5-.17-.01-.36-.01-.56-.01-.2 0-.51.07-.78.37-.27.29-1.02 1-1.02 2.43s1.05 2.82 1.19 3.01c.15.2 2.06 3.15 5 4.41.7.3 1.24.48 1.67.61.7.22 1.34.19 1.84.12.56-.08 1.7-.7 1.94-1.37.24-.68.24-1.26.17-1.38-.07-.13-.26-.2-.55-.34z"/></svg>
+</a>
 
-<!-- Modal para Gerenciamento de KAM -->
-<div id="create-kam-modal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 id="kam-modal-title">Adicionar Novo KAM</h3>
-        <span class="close-button">&times;</span>
-        <form id="create-kam-form">
-            <input type="hidden" id="kam-id-hidden">
-            <label for="kam-nome">Nome do KAM:</label>
-            <input type="text" id="kam-nome" placeholder="Ex: João Silva" required>
-            <button type="submit" class="btn">Salvar KAM</button>
-        </form>
-    </div>
-</div>
+<script>
+(function(){
+  "use strict";
 
-<!-- Modal para Alterar Senha -->
-<div id="change-password-modal" class="modal-overlay">
-    <div class="modal-content">
-        <h3>Alterar Senha</h3>
-        <span class="close-button">&times;</span>
-        <form id="change-password-form">
-            <label for="current-password">Senha Atual:</label>
-            <input type="password" id="current-password" required>
-            
-            <label for="new-password">Nova Senha:</label>
-            <input type="password" id="new-password" required minlength="6">
-            
-            <label for="confirm-password">Confirmar Nova Senha:</label>
-            <input type="password" id="confirm-password" required minlength="6">
-            
-            <button type="submit" class="btn">Atualizar Senha</button>
-        </form>
-    </div>
-</div>
+  var WHATSAPP_NUMBER = "5581995308142";
 
-<!-- Modal para Novo Usuário -->
-<div id="create-user-modal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 id="user-modal-title">Adicionar Novo Usuário</h3>
-        <span class="close-button">&times;</span>
-        <form id="create-user-form">
-            <input type="hidden" id="user-id-hidden">
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="user-nome">Nome:</label>
-                    <input type="text" id="user-nome" required>
-                </div>
-                <div class="form-group">
-                    <label for="user-sobrenome">Sobrenome:</label>
-                    <input type="text" id="user-sobrenome" required>
-                </div>
-            </div>
-            <label for="user-email">E-mail:</label>
-            <input type="email" id="user-email" required>
-            
-            <label for="user-password">Senha:</label>
-            <input type="password" id="user-password" required>
+  /* ---------- Header scroll state ---------- */
+  var header = document.getElementById('siteHeader');
+  function onScroll(){
+    if(window.scrollY > 40){ header.classList.add('scrolled'); }
+    else{ header.classList.remove('scrolled'); }
+  }
+  window.addEventListener('scroll', onScroll, { passive:true });
+  onScroll();
 
-            <div class="form-row" style="margin-top: 10px;">
-                <div class="form-group">
-                    <label for="user-cargo">Cargo:</label>
-                    <input type="text" id="user-cargo" required>
-                </div>
-                <div class="form-group">
-                    <label for="user-permissao">Permissão:</label>
-                    <select id="user-permissao" required>
-                        <option value="Administrador">Administrador</option>
-                        <option value="Operador" selected>Operador</option>
-                        <option value="Visualizador">Visualizador</option>
-                    </select>
-                </div>
-            </div>
-            <button type="submit" class="btn">Salvar Usuário</button>
-        </form>
-    </div>
-</div>
+  /* ---------- Mobile nav ---------- */
+  var mobileNav = document.getElementById('mobileNav');
+  var openBtn = document.getElementById('openMobileNav');
+  var closeBtn = document.getElementById('closeMobileNav');
 
-<!-- Modal para Agendamento de Rota -->
-<div id="schedule-rota-modal" class="modal-overlay">
-    <div class="modal-content">
-        <h3>Agendar Rota</h3>
-        <span class="close-button">&times;</span>
-        <form id="schedule-rota-form">
-            <label for="schedule-rota-select">Selecionar Rota Ativa:</label>
-            <select id="schedule-rota-select" required>
-                <option value="" disabled selected>Selecione uma rota...</option>
-            </select>
-            <label for="schedule-date">Data da Saída:</label>
-            <input type="date" id="schedule-date" required>
-            <label for="schedule-vehicle">Veículo / Motorista:</label>
-            <input type="text" id="schedule-vehicle" placeholder="Ex: Caminhão 01 - João" required>
-            <button type="submit" class="btn">Confirmar Agendamento</button>
-        </form>
-    </div>
-</div>
+  openBtn.addEventListener('click', function(){
+    mobileNav.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  });
+  closeBtn.addEventListener('click', closeMobileNav);
+  mobileNav.querySelectorAll('a').forEach(function(a){
+    a.addEventListener('click', closeMobileNav);
+  });
+  function closeMobileNav(){
+    mobileNav.classList.remove('open');
+    document.body.style.overflow = '';
+  }
 
-<!-- Modal de Histórico -->
-<div id="history-modal" class="modal-overlay">
-    <div class="modal-content" style="max-width: 600px;">
-        <h3>Histórico de Rotas Finalizadas</h3>
-        <span class="close-button">&times;</span>
-        
-        <!-- Campo de Pesquisa -->
-        <input type="text" id="history-search" class="search" style="margin-top: 0; margin-bottom: 20px;" placeholder="Pesquisar por nome ou data...">
+  /* ---------- Reveal on scroll ---------- */
+  var revealEls = document.querySelectorAll('.reveal');
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if(entry.isIntersecting){
+          entry.target.classList.add('in');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+    revealEls.forEach(function(el){ io.observe(el); });
+  } else {
+    revealEls.forEach(function(el){ el.classList.add('in'); });
+  }
 
-        <div id="history-container" class="history-list">
-            <!-- Itens do histórico aparecerão aqui -->
-        </div>
-    </div>
-</div>
+  /* ---------- Footer year ---------- */
+  document.getElementById('year').textContent = new Date().getFullYear();
 
-<!-- Modal de Histórico da Programação -->
-<div id="programacao-history-modal" class="modal-overlay">
-    <div class="modal-content" style="max-width: 800px; width: 95%;">
-        <h3>Histórico da Programação</h3>
-        <span class="close-button">&times;</span>
+  /* ---------- WhatsApp floating button ---------- */
+  var waFloat = document.getElementById('waFloat');
+  var floatMsg = "Olá, equipe da LF Transporte! Gostaria de solicitar um orçamento.";
+  waFloat.href = "https://wa.me/" + WHATSAPP_NUMBER + "?text=" + encodeURIComponent(floatMsg);
 
-        <!-- Campo de Pesquisa -->
-        <input type="text" id="programacao-history-search" class="search" style="margin-top: 0; margin-bottom: 20px;" placeholder="Pesquisar por nome ou data...">
+  /* ---------- Quote form ---------- */
+  var form = document.getElementById('quoteForm');
+  var successBox = document.getElementById('formSuccess');
+  var submitBtn = document.getElementById('submitBtn');
 
-        <div id="programacao-history-container" style="max-height: 70vh; overflow-y: auto; padding-right: 10px;">
-            <!-- Conteúdo agrupado por data aparecerá aqui -->
-        </div>
-    </div>
-</div>
+  var requiredFields = ['nome', 'empresa', 'whatsapp', 'origem', 'destino', 'tipo'];
 
-<!-- Modal para Detalhes da Rota (Histórico) -->
-<div id="route-details-modal" class="modal-overlay">
-    <div class="modal-content" style="max-width: 900px;">
-        <h3>Detalhes da Rota</h3>
-        <span class="close-button">&times;</span>
-        <div id="route-details-content" style="margin-top: 20px; color: var(--text-main);">
-            <p style="text-align: center; color: var(--text-muted); padding: 20px;">Informações da rota em desenvolvimento</p>
-        </div>
-    </div>
-</div>
+  function getFieldWrap(name){
+    return form.querySelector('.field[data-field="' + name + '"]');
+  }
 
-<!-- Modal para Informações da NF (Pendentes) -->
-<div id="nf-info-modal" class="modal-overlay">
-    <div class="modal-content">
-        <h3>Detalhes da NF</h3>
-        <span class="close-button">&times;</span>
-        <div id="nf-info-content" style="margin-top: 20px; color: var(--text-main);">
-            <p style="text-align: center; color: var(--text-muted); padding: 20px;">Informações da NF em desenvolvimento</p>
-        </div>
-    </div>
-</div>
+  function validate(){
+    var isValid = true;
+    requiredFields.forEach(function(name){
+      var input = form.elements[name];
+      var wrap = getFieldWrap(name);
+      var value = (input.value || '').trim();
+      if(!value){
+        wrap.classList.add('error');
+        isValid = false;
+      } else {
+        wrap.classList.remove('error');
+      }
+    });
+    return isValid;
+  }
 
-<!-- SCRIPTS -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="js/supabase.js"></script>
-<script src="js/app.js"></script>
+  requiredFields.forEach(function(name){
+    var input = form.elements[name];
+    var evt = (input.tagName === 'SELECT') ? 'change' : 'input';
+    input.addEventListener(evt, function(){
+      var wrap = getFieldWrap(name);
+      if((input.value || '').trim()){
+        wrap.classList.remove('error');
+      }
+    });
+  });
+
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+
+    if(!validate()){
+      var firstError = form.querySelector('.field.error input, .field.error select');
+      if(firstError){ firstError.focus({ preventScroll: true }); }
+      return false;
+    }
+
+    var nome = form.elements['nome'].value.trim();
+    var empresa = form.elements['empresa'].value.trim();
+    var whatsapp = form.elements['whatsapp'].value.trim();
+    var origem = form.elements['origem'].value.trim();
+    var destino = form.elements['destino'].value.trim();
+    var tipo = form.elements['tipo'].value.trim();
+    var observacoes = form.elements['observacoes'].value.trim() || 'Nenhuma';
+
+    var mensagem =
+      "Olá, equipe da LF Transporte!\n\n" +
+      "Gostaria de solicitar um orçamento.\n\n" +
+      "👤 Nome:\n" + nome + "\n\n" +
+      "🏢 Empresa:\n" + empresa + "\n\n" +
+      "📱 WhatsApp:\n" + whatsapp + "\n\n" +
+      "📍 Origem:\n" + origem + "\n\n" +
+      "📍 Destino:\n" + destino + "\n\n" +
+      "🚛 Tipo de carga:\n" + tipo + "\n\n" +
+      "📝 Observações:\n" + observacoes + "\n\n" +
+      "Aguardo retorno.";
+
+    var url = "https://wa.me/" + WHATSAPP_NUMBER + "?text=" + encodeURIComponent(mensagem);
+
+    successBox.classList.add('show');
+    submitBtn.disabled = true;
+
+    window.open(url, '_blank', 'noopener');
+
+    setTimeout(function(){
+      successBox.classList.remove('show');
+      submitBtn.disabled = false;
+    }, 3000);
+
+    return false;
+  });
+
+})();
+</script>
 
 </body>
 </html>
