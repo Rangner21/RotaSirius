@@ -377,6 +377,7 @@ const createNfForm = document.getElementById('create-nf-form');
 const createRotaForm = document.getElementById('create-rota-form');
 
 const nfNumeroInput = document.getElementById('nf-numero');
+const btnLerDocs = document.getElementById('btn-ler-docs');
 const nfIdHidden = document.getElementById('nf-id-hidden');
 const nfModalTitle = document.getElementById('nf-modal-title');
 const nfCepInput = document.getElementById('nf-cep');
@@ -432,6 +433,8 @@ function openModal(modalElement) {
 
 // FUNÇÕES DE MODAL REUTILIZÁVEIS (Substitutos de alert/confirm)
 window.mostrarAviso = function(mensagem) {
+  // Mantém o aviso acima de outros modais abertos (ex.: resultado do Leitor DOC).
+  if (genericModal) genericModal.style.zIndex = "10000";
   if (genericModalTitle) genericModalTitle.innerText = "Aviso";
   if (genericModalMessage) genericModalMessage.innerText = mensagem;
   if (genericModalCancel) genericModalCancel.style.display = "none";
@@ -463,6 +466,9 @@ function closeModal(modalElement) {
     return;
   }
   modalElement.classList.remove('active');
+
+  // A fila temporária do Leitor DOC não é limpa ao fechar a Nova NF.
+  // Ela permanece disponível durante a sessão e só é alterada pelo fluxo do Leitor DOC.
 }
 
 // --- NAVEGAÇÃO PAINEL DE CONTROLE ---
@@ -478,6 +484,7 @@ let simulateRouteLayer = null;
 let simulateMarkersData = {};
 let simulateStopCounter = 1;
 
+// --- SIMULAÇÃO DE ROTA (MAPA, CEP, GEOCODIFICAÇÃO) ---
 function initSimulateMap() {
     if (!simulateMap) {
         // Inicializa o mapa com opções de animação otimizadas
@@ -1044,7 +1051,6 @@ const exportProgramacaoBtn = document.getElementById('export-programacao-btn');
 const openRotaModalFromProgBtn = document.getElementById('open-rota-modal-from-prog-btn');
 const openSimulateRouteBtn = document.getElementById('open-simulate-route-btn');
 const addUserBtn = document.getElementById('add-user-btn');
-const openSimulateRouteFromProgramacaoBtn = document.getElementById('open-simulate-route-from-programacao-btn'); // Novo botão
 const createUserModal = document.getElementById('create-user-modal');
 const createUserForm = document.getElementById('create-user-form');
 const userModalTitle = document.getElementById('user-modal-title');
@@ -1052,6 +1058,7 @@ const userIdHidden = document.getElementById('user-id-hidden');
 
 let listaUsuariosLocal = []; // Cache local para busca rápida na edição
 
+// --- ADMIN: USUÁRIOS ---
 function initAdmin() {
     const users = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
     // FIX 1: Verifica se o admin JÁ EXISTE especificamente.
@@ -1399,98 +1406,6 @@ if (openProgHistoryBtn) {
     });
 }
 
-// Função auxiliar para inicializar a interface da simulação (listeners, mapa, etc)
-function inicializarInterfaceSimulacao() {
-    initSimulateMap();
-
-    // Configura os listeners para os campos de entrada de CEP da simulação
-    const originInput = document.getElementById('simulate-origin-cep');
-    const stop1Input = document.getElementById('simulate-stop1-cep');
-    
-    if (originInput && !originInput.dataset.listener) {
-        originInput.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'origin'));
-        originInput.dataset.listener = "true";
-    }
-    
-    if (stop1Input && !stop1Input.dataset.listener) {
-        stop1Input.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'stop1'));
-        stop1Input.dataset.listener = "true";
-    }
-
-    const addStopBtn = document.getElementById('simulate-add-stop-btn');
-    if (addStopBtn && !addStopBtn.dataset.listener) {
-        addStopBtn.addEventListener('click', adicionarNovaParadaSimulacao);
-        addStopBtn.dataset.listener = "true";
-    }
-    
-    const clearBtn = document.getElementById('simulate-clear-btn');
-    if (clearBtn && !clearBtn.dataset.listener) {
-        clearBtn.addEventListener('click', limparRotaSimulacao);
-        clearBtn.dataset.listener = "true";
-    }
-
-    // Configura os botões de modo (CEP / Roteirizado)
-    const cepModeBtn = document.getElementById('simulate-mode-cep-btn');
-    const routedModeBtn = document.getElementById('simulate-mode-routed-btn');
-    const cepContent = document.getElementById('simulate-cep-content');
-    const routedContent = document.getElementById('simulate-routed-content');
-
-    if (cepModeBtn && routedModeBtn && cepContent && routedContent) {
-        cepModeBtn.onclick = () => {
-            cepModeBtn.classList.add('active');
-            routedModeBtn.classList.remove('active');
-            cepContent.classList.remove('hidden');
-            routedContent.classList.add('hidden');
-            
-            // Limpa o mapa ao voltar para CEP para não misturar visualmente
-            simulateMarkersLayer.clearLayers();
-            simulateRouteLayer.clearLayers();
-            window.currentSimulatedPoints = null;
-            ajustarMapaSimulacao(); 
-        };
-        routedModeBtn.onclick = () => {
-            routedModeBtn.classList.add('active');
-            cepModeBtn.classList.remove('active');
-            routedContent.classList.remove('hidden');
-            cepContent.classList.add('hidden');
-            carregarOpcoesRotasSimulacao();
-        };
-    }
-
-    // Vincula o botão "Calcular Rota" para disparar o ajuste manual se necessário
-    const calcBtn = document.querySelector('#simulate-route-view .simulate-config-panel .btn-primary');
-    if (calcBtn && !calcBtn.dataset.listener) {
-        calcBtn.addEventListener('click', ajustarMapaSimulacao);
-        calcBtn.dataset.listener = "true";
-    }
-
-    // Configura o botão "Abrir no Google Maps"
-    const openMapsBtn = document.getElementById('simulate-open-maps-btn');
-    if (openMapsBtn && !openMapsBtn.dataset.listener) {
-        openMapsBtn.addEventListener('click', () => {
-            if (!window.currentSimulatedPoints || window.currentSimulatedPoints.length < 2) {
-                mostrarAviso("Calcule uma rota primeiro para abrir no Maps.");
-                return;
-            }
-            // A sequência em currentSimulatedPoints já respeita a ordem CD -> Paradas (Roteirizado)
-            // ou Origem -> Paradas na sequência informada (CEP)
-            const points = window.currentSimulatedPoints;
-            const origin = `${points[0].lat},${points[0].lng}`;
-            const destination = `${points[points.length - 1].lat},${points[points.length - 1].lng}`;
-            
-            let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
-            if (points.length > 2) {
-                const waypoints = points.slice(1, -1).map(p => `${p.lat},${p.lng}`).join('|');
-                url += `&waypoints=${encodeURIComponent(waypoints)}`;
-            }
-            window.open(url, "_blank");
-        });
-        openMapsBtn.dataset.listener = "true";
-    }
-
-    initSimulateOptionsListeners();
-}
-
 if (openSimulateRouteBtn) {
     openSimulateRouteBtn.addEventListener('click', () => {
         dashboardView.classList.add('hidden');
@@ -1499,33 +1414,94 @@ if (openSimulateRouteBtn) {
         newHistoryView.classList.add('hidden');
         simulateRouteView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
-        
-        inicializarInterfaceSimulacao();
-    });
-}
+        initSimulateMap();
 
-if (openSimulateRouteFromProgramacaoBtn) {
-    openSimulateRouteFromProgramacaoBtn.addEventListener('click', () => {
-        dashboardView.classList.add('hidden');
-        controlPanelView.classList.add('hidden');
-        programacaoView.classList.add('hidden');
-        newHistoryView.classList.add('hidden');
-        simulateRouteView.classList.remove('hidden');
-        document.querySelector('.app').classList.add('panel-active');
+        // Configura os listeners para os campos de entrada de CEP da simulação
+        const originInput = document.getElementById('simulate-origin-cep');
+        const stop1Input = document.getElementById('simulate-stop1-cep');
         
-        inicializarInterfaceSimulacao();
+        if (originInput && !originInput.dataset.listener) {
+            originInput.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'origin'));
+            originInput.dataset.listener = "true";
+        }
+        
+        if (stop1Input && !stop1Input.dataset.listener) {
+            stop1Input.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'stop1'));
+            stop1Input.dataset.listener = "true";
+        }
 
-        // Ativar o modo "Roteirizado" por padrão chamando o handler configurado
+        const addStopBtn = document.getElementById('simulate-add-stop-btn');
+        if (addStopBtn && !addStopBtn.dataset.listener) {
+            addStopBtn.addEventListener('click', adicionarNovaParadaSimulacao);
+            addStopBtn.dataset.listener = "true";
+        }
+        
+        const clearBtn = document.getElementById('simulate-clear-btn');
+        if (clearBtn && !clearBtn.dataset.listener) {
+            clearBtn.addEventListener('click', limparRotaSimulacao);
+            clearBtn.dataset.listener = "true";
+        }
+
+        // Configura os botões de modo (CEP / Roteirizado)
+        const cepModeBtn = document.getElementById('simulate-mode-cep-btn');
         const routedModeBtn = document.getElementById('simulate-mode-routed-btn');
-        if (routedModeBtn) routedModeBtn.onclick();
+        const cepContent = document.getElementById('simulate-cep-content');
+        const routedContent = document.getElementById('simulate-routed-content');
 
-        // Limpar o mapa e as estatísticas, pois não há rota pré-selecionada
-        simulateMarkersData = {};
-        window.currentSimulatedPoints = null;
-        if (simulateMarkersLayer) simulateMarkersLayer.clearLayers();
-        if (simulateRouteLayer) simulateRouteLayer.clearLayers();
-        const statsContainer = document.getElementById('simulate-stats-container');
-        if (statsContainer) statsContainer.classList.add('hidden');
+        if (cepModeBtn && routedModeBtn && cepContent && routedContent) {
+            cepModeBtn.onclick = () => {
+                cepModeBtn.classList.add('active');
+                routedModeBtn.classList.remove('active');
+                cepContent.classList.remove('hidden');
+                routedContent.classList.add('hidden');
+                
+                // Limpa o mapa ao voltar para CEP para não misturar visualmente
+                simulateMarkersLayer.clearLayers();
+                simulateRouteLayer.clearLayers();
+                window.currentSimulatedPoints = null;
+                ajustarMapaSimulacao(); 
+            };
+            routedModeBtn.onclick = () => {
+                routedModeBtn.classList.add('active');
+                cepModeBtn.classList.remove('active');
+                routedContent.classList.remove('hidden');
+                cepContent.classList.add('hidden');
+                carregarOpcoesRotasSimulacao();
+            };
+        }
+
+        // Vincula o botão "Calcular Rota" para disparar o ajuste manual se necessário
+        const calcBtn = document.querySelector('#simulate-route-view .simulate-config-panel .btn-primary');
+        if (calcBtn && !calcBtn.dataset.listener) {
+            calcBtn.addEventListener('click', ajustarMapaSimulacao);
+            calcBtn.dataset.listener = "true";
+        }
+
+        // Configura o botão "Abrir no Google Maps"
+        const openMapsBtn = document.getElementById('simulate-open-maps-btn');
+        if (openMapsBtn && !openMapsBtn.dataset.listener) {
+            openMapsBtn.addEventListener('click', () => {
+                if (!window.currentSimulatedPoints || window.currentSimulatedPoints.length < 2) {
+                    mostrarAviso("Calcule uma rota primeiro para abrir no Maps.");
+                    return;
+                }
+                // A sequência em currentSimulatedPoints já respeita a ordem CD -> Paradas (Roteirizado)
+                // ou Origem -> Paradas na sequência informada (CEP)
+                const points = window.currentSimulatedPoints;
+                const origin = `${points[0].lat},${points[0].lng}`;
+                const destination = `${points[points.length - 1].lat},${points[points.length - 1].lng}`;
+                
+                let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+                if (points.length > 2) {
+                    const waypoints = points.slice(1, -1).map(p => `${p.lat},${p.lng}`).join('|');
+                    url += `&waypoints=${encodeURIComponent(waypoints)}`;
+                }
+                window.open(url, "_blank");
+            });
+            openMapsBtn.dataset.listener = "true";
+        }
+
+        initSimulateOptionsListeners();
     });
 }
 
@@ -1680,6 +1656,171 @@ if (openNfModalBtn) {
     openModal(createNfModal);
   });
 }
+// Modal de resultado do Leitor DOC (elemento real em index.html:
+// #leitor-doc-modal / #leitor-doc-content, mesmo padrão .modal-overlay
+// / .modal-content / .close-button dos demais modais do sistema).
+let leitorDocUltimoResultado = null;
+let leitorDocResultados = []; // [{ arquivo, dados }] ou [{ arquivo, erro }] por PDF processado
+let leitorDocIndiceAtual = null; // índice (em leitorDocResultados) da NF atualmente exibida
+
+function abrirModalLeitorDoc(dados, mostrarVoltar = false, indice = null) {
+  leitorDocUltimoResultado = dados;
+  leitorDocIndiceAtual = indice;
+  const modal = document.getElementById('leitor-doc-modal');
+  const content = document.getElementById('leitor-doc-content');
+  if (!modal || !content) return;
+
+  const campo = (label, valor) => `
+    <div>
+      <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">${label}</label>
+      <div style="font-weight: 500;">${valor || '---'}</div>
+    </div>
+  `;
+
+  let html = '';
+  if (mostrarVoltar) {
+    html += `<button type="button" id="btn-voltar-lista-leitor-doc" class="btn btn-outline" style="margin-bottom: 16px;">← Voltar para a lista</button>`;
+  }
+
+  html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">`;
+  html += campo('Número da NF', dados.numero_nf);
+  html += campo('Tipo de Operação', dados.tipo_operacao);
+  html += campo('CEP', dados.cep);
+  html += campo('Cidade', dados.cidade);
+  html += campo('UF', dados.uf);
+  html += campo('Endereço', dados.endereco);
+  html += campo('Número', dados.numero);
+  html += campo('Quantidade', dados.quantidade);
+  html += campo('Marca', dados.marca);
+  html += campo('Potência', dados.potencia);
+  html += campo('KAM', dados.kam);
+
+  if (dados.observacao) {
+    html += `
+      <div style="grid-column: span 2; margin-top: 10px; padding: 16px; background: rgba(30, 41, 59, 0.4); border-radius: 12px; border: 1px solid var(--border);">
+        <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">Observação</label>
+        <div>${dados.observacao}</div>
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+  content.innerHTML = html;
+
+  const btnVoltar = document.getElementById('btn-voltar-lista-leitor-doc');
+  if (btnVoltar) {
+    btnVoltar.addEventListener('click', () => mostrarListaLeitorDoc());
+  }
+
+  openModal(modal);
+}
+
+// Lista das NFs encontradas quando mais de um PDF é processado de uma vez.
+// Itens com erro ficam visíveis (informando o arquivo), mas não são clicáveis.
+function mostrarListaLeitorDoc() {
+  const modal = document.getElementById('leitor-doc-modal');
+  const content = document.getElementById('leitor-doc-content');
+  if (!modal || !content) return;
+
+  if (!leitorDocResultados.length) {
+    content.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum PDF processado.</p>`;
+    openModal(modal);
+    return;
+  }
+
+  let html = `<div style="display: flex; flex-direction: column; gap: 10px;">`;
+
+  leitorDocResultados.forEach((item, index) => {
+    if (item.erro) {
+      html += `
+        <div style="padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(239, 68, 68, 0.08);">
+          <div style="font-weight: 600; color: #ef4444;">${item.arquivo}</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">${item.erro}</div>
+        </div>
+      `;
+    } else {
+      const numero = item.dados.numero_nf || 'Sem número identificado';
+      html += `
+        <button type="button" class="btn btn-outline leitor-doc-item" data-index="${index}" style="text-align: left; width: 100%; margin-top: 0;">
+          <div style="font-weight: 700;">NF ${numero}</div>
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">${item.arquivo}</div>
+        </button>
+      `;
+    }
+  });
+
+  html += `</div>`;
+  content.innerHTML = html;
+
+  content.querySelectorAll('.leitor-doc-item').forEach((botao) => {
+    botao.addEventListener('click', () => {
+      const idx = parseInt(botao.dataset.index, 10);
+      const item = leitorDocResultados[idx];
+      if (item && !item.erro) {
+        abrirModalLeitorDoc(item.dados, true, idx);
+      }
+    });
+  });
+
+  openModal(modal);
+}
+
+if (btnLerDocs) {
+  btnLerDocs.addEventListener('click', () => {
+    // Fila temporária: se ainda houver NFs processadas pendentes (modal Nova NF
+    // aberto), reabrir a lista existente em vez de abrir o seletor de arquivos.
+    if (leitorDocResultados.length) {
+      mostrarListaLeitorDoc();
+      return;
+    }
+
+    // Seleciona um ou mais PDFs e envia cada um individualmente para a API.
+    const inputLerDoc = document.createElement('input');
+    inputLerDoc.type = 'file';
+    inputLerDoc.accept = 'application/pdf';
+    inputLerDoc.multiple = true;
+
+    inputLerDoc.addEventListener('change', async () => {
+      const arquivos = Array.from(inputLerDoc.files || []);
+      if (!arquivos.length) return;
+
+      leitorDocResultados = [];
+
+      for (const arquivoPdf of arquivos) {
+        const formData = new FormData();
+        formData.append('file', arquivoPdf);
+
+        try {
+          const response = await fetch('https://leitor-docs.vercel.app/upload', {
+            method: 'POST',
+            body: formData
+          });
+          const resultado = await response.json();
+          console.log('Leitor DOC - resultado:', arquivoPdf.name, resultado);
+
+          if (!response.ok || resultado.erro) {
+            leitorDocResultados.push({
+              arquivo: arquivoPdf.name,
+              erro: resultado.erro || 'Não foi possível ler o PDF.'
+            });
+          } else {
+            leitorDocResultados.push({ arquivo: arquivoPdf.name, dados: resultado });
+          }
+        } catch (error) {
+          console.error('Leitor DOC - erro ao enviar o PDF:', arquivoPdf.name, error);
+          leitorDocResultados.push({
+            arquivo: arquivoPdf.name,
+            erro: 'Erro ao enviar o PDF para o Leitor DOC.'
+          });
+        }
+      }
+
+      mostrarListaLeitorDoc();
+    });
+
+    inputLerDoc.click();
+  });
+}
 if (openRotaModalBtn) {
   openRotaModalBtn.addEventListener('click', () => {
     if (rotaModalTitle) rotaModalTitle.innerText = "Adicionar Nova Rota";
@@ -1737,6 +1878,7 @@ if (btnTransporte && btnRetira && nfTipoInput) {
   });
 }
 
+// --- NOTAS FISCAIS (NF) E ROTAS: CRIAR, EDITAR, LISTAR ---
 // SALVAR NF (UNIFICADO)
 async function handleSalvarNF(fecharAoSalvar = true) {
   console.log('handleSalvarNF: Função chamada. Fechar:', fecharAoSalvar);
@@ -2294,8 +2436,18 @@ async function carregarRotas() {
   const rotasFiltradas = rotas.filter(rota => {
     const nomeMatch = rota.nome.toLowerCase().includes(termoNome);
     const transportadoraMatch = (rota.transportadora || "").toLowerCase().includes(termoNome);
+
+    // Pesquisa por NF ou destino: se alguma NF da rota corresponder ao termo,
+    // a rota inteira é considerada um resultado (mostra todas as suas NFs).
+    const nfDestinoMatch = termoNome ? nfs.some(nf => {
+      if (nf.rota_id !== rota.id) return false;
+      const numeroMatch = String(nf.numero || "").toLowerCase().includes(termoNome);
+      const destinoMatch = (nf.cidade || nf.destino || "").toLowerCase().includes(termoNome);
+      return numeroMatch || destinoMatch;
+    }) : false;
+
     const dataMatch = termoData ? rota.data === termoData : true;
-    return (nomeMatch || transportadoraMatch) && dataMatch;
+    return (nomeMatch || transportadoraMatch || nfDestinoMatch) && dataMatch;
   });
 
   if (rotasFiltradas.length === 0) {
@@ -2614,7 +2766,7 @@ window.renderizarHistorico = async function(termoBusca = "") {
         historicoFiltrado.forEach(rota => {
             const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
             const totalFrete = nfsDaRota.reduce((acc, n) => acc + Number(n.valor_frete), 0);
-            const dataFinalizacao = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
+            const dataFinalizacao = formatarDataHora(rota.finalizada_em);
 
             const card = document.createElement('div');
             card.className = 'history-card';
@@ -2690,7 +2842,7 @@ window.copiarResumoHistorico = async function(rotaId) {
         if (errR || errN || !rota) return;
 
         const totalFrete = nfs.reduce((acc, n) => acc + Number(n.valor_frete), 0);
-        const dataFin = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
+        const dataFin = formatarDataHora(rota.finalizada_em);
 
         let resumo = `ROTA: ${rota.nome} - ${dataFin}\n`;
         resumo += `QTD NFs: ${nfs.length}\n`;
@@ -2782,6 +2934,14 @@ function formatarDataComDiaSemana(dataISO) {
     const diaSemana = dataObj.toLocaleDateString('pt-BR', { weekday: 'long' });
     const dataFormatada = `${dia.toString().padStart(2, '0')}/${mes.toString().padStart(2, '0')}/${ano}`;
     return `${dataFormatada} (${diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)})`;
+}
+
+// Helper reutilizável: formata uma data/hora ISO no padrão pt-BR usado em vários
+// pontos do sistema (histórico, detalhes de rota, resumo de rota). Mesmo
+// comportamento que já existia de forma duplicada: retorna o fallback quando
+// não há data.
+function formatarDataHora(dataISO, fallback = '---') {
+    return dataISO ? new Date(dataISO).toLocaleString('pt-BR') : fallback;
 }
 
 function renderizarProgramacaoAutomatica(agrupado) {
@@ -3400,7 +3560,7 @@ window.renderizarHistoricoProgramacao = async function(termoBusca = "") {
             agrupado[dataKey].forEach(rota => {
                 const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
                 const totalFrete = nfsDaRota.reduce((acc, n) => acc + Number(n.valor_frete), 0);
-                const dataFin = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
+                const dataFin = formatarDataHora(rota.finalizada_em);
 
                 html += `
                     <div class="panel-container" style="margin-bottom: 15px; padding: 20px; background: rgba(30, 41, 59, 0.2); border-color: rgba(255,255,255,0.03);">
@@ -3520,7 +3680,7 @@ window.abrirModalDetalhesRota = async function(rotaId) {
         const totalFrete = nfs.reduce((acc, nf) => acc + Number(nf.valor_frete || 0), 0);
         
         const dataRota = rota.data ? rota.data.split('-').reverse().join('/') : '---';
-        const dataFin = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
+        const dataFin = formatarDataHora(rota.finalizada_em);
 
         // Construção do conteúdo dinâmico do modal
         content.innerHTML = `
@@ -3709,7 +3869,7 @@ async function carregarNovoHistorico() {
 
             const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
             const total = nfsDaRota.reduce((acc, n) => acc + Number(n.valor_frete), 0);
-            const dataFin = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR') : '---';
+            const dataFin = formatarDataHora(rota.finalizada_em);
             const dataRotaFormatada = rota.data ? rota.data.split('-').reverse().join('/') : '---';
 
             const card = document.createElement("div");
@@ -4189,6 +4349,95 @@ if (nfInfoModal) {
     // Fechar ao clicar fora (no overlay)
     nfInfoModal.addEventListener('click', (e) => {
         if (e.target === nfInfoModal) closeModal(nfInfoModal);
+    });
+}
+
+const leitorDocModal = document.getElementById('leitor-doc-modal');
+if (leitorDocModal) {
+    const closeBtn = leitorDocModal.querySelector('.close-button');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => closeModal(leitorDocModal));
+    }
+    // Fechar ao clicar fora (no overlay)
+    leitorDocModal.addEventListener('click', (e) => {
+        if (e.target === leitorDocModal) closeModal(leitorDocModal);
+    });
+}
+
+const btnCopiarResumoLeitorDoc = document.getElementById('btn-copiar-resumo-leitor-doc');
+if (btnCopiarResumoLeitorDoc) {
+    btnCopiarResumoLeitorDoc.addEventListener('click', async () => {
+        if (!leitorDocUltimoResultado) return;
+        const dados = leitorDocUltimoResultado;
+
+        const linha = (label, valor) => `${label}: ${valor || ''}`;
+
+        const resumo = [
+            linha('NÚMERO DA NF', dados.numero_nf),
+            linha('TIPO DE OPERAÇÃO', dados.tipo_operacao),
+            linha('CEP', dados.cep),
+            linha('CIDADE', dados.cidade),
+            linha('UF', dados.uf),
+            linha('ENDEREÇO', dados.endereco),
+            linha('NÚMERO', dados.numero),
+            linha('QUANTIDADE', dados.quantidade),
+            linha('MARCA', dados.marca),
+            linha('POTÊNCIA', dados.potencia),
+            linha('KAM', dados.kam),
+            linha('OBSERVAÇÃO', dados.observacao)
+        ].join('\n');
+
+        try {
+            await navigator.clipboard.writeText(resumo);
+            mostrarAviso('Resumo copiado para a área de transferência.');
+        } catch (error) {
+            console.error('Leitor DOC - erro ao copiar resumo:', error);
+            mostrarAviso('Não foi possível copiar o resumo.');
+        }
+    });
+}
+
+const btnTranscriberLeitorDoc = document.getElementById('btn-transcriber-leitor-doc');
+if (btnTranscriberLeitorDoc) {
+    btnTranscriberLeitorDoc.addEventListener('click', () => {
+        if (!leitorDocUltimoResultado) return;
+        const dados = leitorDocUltimoResultado;
+
+        // 2. Fechar o modal do Leitor DOC / 3. Voltar para a Nova NF já aberta
+        closeModal(leitorDocModal);
+        openModal(createNfModal);
+
+        // 4. Preencher os campos existentes com os dados reais da API
+        if (nfNumeroInput) nfNumeroInput.value = dados.numero_nf || '';
+
+        if (dados.tipo_operacao === 'Retira') {
+            // Aciona o clique real do toggle: a regra já existente do sistema
+            // limpa/desabilita os campos de endereço e zera o frete (R$ 0,00).
+            if (btnRetira) btnRetira.click();
+        } else {
+            // "Transporte" (equivalente a FRETE na API) ou tipo não identificado:
+            // mantém o padrão atual do modal e preenche o endereço.
+            if (btnTransporte) btnTransporte.click();
+            if (nfCepInput) nfCepInput.value = dados.cep || '';
+            if (nfCidadeInput) nfCidadeInput.value = dados.cidade || '';
+            if (nfUfInput) nfUfInput.value = dados.uf || '';
+            if (nfEnderecoInput) nfEnderecoInput.value = dados.endereco || '';
+            if (nfEnderecoNumeroInput) nfEnderecoNumeroInput.value = dados.numero || '';
+        }
+
+        if (nfQuantidadeInput) nfQuantidadeInput.value = dados.quantidade || '';
+        if (nfMarcaInput) nfMarcaInput.value = dados.marca || '';
+        if (nfPotenciaInput) nfPotenciaInput.value = dados.potencia || '';
+        if (nfKamInput) nfKamInput.value = dados.kam || '';
+        if (nfObsInput) nfObsInput.value = dados.observacao || '';
+
+        // Remove SOMENTE a NF transcrita da fila temporária; as demais permanecem
+        // disponíveis para clicar em LER DOC novamente enquanto a Nova NF estiver aberta.
+        if (leitorDocIndiceAtual !== null) {
+            leitorDocResultados.splice(leitorDocIndiceAtual, 1);
+            leitorDocIndiceAtual = null;
+        }
+        leitorDocUltimoResultado = null;
     });
 }
 

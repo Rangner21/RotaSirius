@@ -86,7 +86,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
               </button>
             </div>
-            <input type="text" id="filtro-nome-rota" class="date-filter" placeholder="Filtrar por nome ou transportadora..." title="Filtrar por nome ou transportadora" style="cursor: text;">
+            <input type="text" id="filtro-nome-rota" class="date-filter" placeholder="Pesquisar rota, NF ou destino..." title="Pesquisar por nome da rota, transportadora, número da NF ou destino" style="cursor: text;">
             <input type="date" id="filtro-data-rota" class="date-filter" title="Filtrar data">
             <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
           </div>
@@ -306,7 +306,6 @@
           <div class="topbar-group">
             <button class="btn btn-outline" id="open-control-panel-from-prog-btn">⚙ Painel</button>
             <button class="btn btn-outline" id="back-to-dashboard-from-programacao-btn">🚛 Roteirização</button>
-            <button class="btn btn-outline" id="open-simulate-route-from-programacao-btn">🗺 Simular Rota</button>
             <div class="export-wrapper" style="position: relative; display: inline-block;">
               <button class="btn btn-primary" id="export-programacao-btn">📥 Exportar</button>
               <div id="export-dropdown" class="user-dropdown hidden">
@@ -517,8 +516,16 @@
         <form id="create-nf-form">
             <input type="hidden" id="nf-id-hidden">
             
-            <label for="nf-numero">Número da NF:</label>
-            <input type="text" id="nf-numero" required>
+            <div class="form-row">
+                <div class="form-group" style="flex: 0 0 160px;">
+                    <label for="nf-numero">Número da NF:</label>
+                    <input type="text" id="nf-numero" required>
+                </div>
+                <div class="form-group" style="flex: 0 0 140px;">
+                    <label style="visibility: hidden;">&nbsp;</label>
+                    <button type="button" id="btn-ler-docs" class="btn btn-outline" style="margin-top: 0; width: 100%;">LER DOCS</button>
+                </div>
+            </div>
 
             <label>Tipo de operação:</label>
             <div class="nf-tipo-toggle">
@@ -783,6 +790,19 @@
         </div>
     </div>
 </div>
+
+<div id="leitor-doc-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3>Leitor DOC - Resultado</h3>
+        <span class="close-button">&times;</span>
+        <div id="leitor-doc-content" style="margin-top: 20px; color: var(--text-main);"></div>
+        <div class="form-row" style="margin-top: 20px;">
+            <button type="button" id="btn-copiar-resumo-leitor-doc" class="btn btn-outline" style="flex: 1; margin-top: 0;">COPIAR RESUMO</button>
+            <button type="button" id="btn-transcriber-leitor-doc" class="btn" style="flex: 1; margin-top: 0;">TRANSCRIBER</button>
+        </div>
+    </div>
+</div>
+
 
 <!-- SCRIPTS -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
