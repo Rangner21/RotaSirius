@@ -1660,8 +1660,59 @@ if (openNfModalBtn) {
 // #leitor-doc-modal / #leitor-doc-content, mesmo padrão .modal-overlay
 // / .modal-content / .close-button dos demais modais do sistema).
 let leitorDocUltimoResultado = null;
-let leitorDocResultados = []; // [{ arquivo, dados }] ou [{ arquivo, erro }] por PDF processado
-let leitorDocIndiceAtual = null; // índice (em leitorDocResultados) da NF atualmente exibida
+let leitorDocResultados = [];
+let leitorDocIndiceAtual = null;
+let leitorDocFilaCarregada = false;
+
+async function carregarFilaLeitorDoc() {
+  if (typeof supabaseClient === 'undefined') {
+    console.error('Leitor DOC: supabaseClient não está disponível.');
+    return;
+  }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('leitor_doc_fila')
+      .select('*')
+      .eq('status', 'pendente')
+      .order('criado_em', { ascending: true });
+
+    if (error) {
+      console.error('Leitor DOC: erro ao carregar fila:', error);
+      mostrarAviso('Erro ao carregar a fila do Leitor DOC.');
+      return;
+    }
+
+    leitorDocResultados = (data || []).map(item => ({
+      id: item.id,
+      arquivo: `NF ${item.numero_nf || 'Sem número'}`,
+      dados: {
+        numero_nf: item.numero_nf || '',
+        tipo_operacao: item.tipo_operacao || '',
+        cep: item.cep || '',
+        cidade: item.cidade || '',
+        uf: item.uf || '',
+        endereco: item.endereco || '',
+        numero: item.numero || '',
+        quantidade: item.quantidade ?? '',
+        marca: item.marca || '',
+        potencia: item.potencia || '',
+        kam: item.kam || '',
+        observacao: item.observacao || ''
+      }
+    }));
+
+    leitorDocFilaCarregada = true;
+
+    console.log(
+      'Leitor DOC: fila carregada:',
+      leitorDocResultados
+    );
+
+  } catch (error) {
+    console.error('Leitor DOC: erro inesperado ao carregar fila:', error);
+  }
+}
 
 function abrirModalLeitorDoc(dados, mostrarVoltar = false, indice = null) {
   leitorDocUltimoResultado = dados;
