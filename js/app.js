@@ -1817,9 +1817,12 @@ function mostrarListaLeitorDoc() {
 }
 
 if (btnLerDocs) {
-  btnLerDocs.addEventListener('click', () => {
-    // Fila temporária: se ainda houver NFs processadas pendentes (modal Nova NF
-    // aberto), reabrir a lista existente em vez de abrir o seletor de arquivos.
+  btnLerDocs.addEventListener('click', async () => {
+    // Fila compartilhada: consulta a tabela leitor_doc_fila no Supabase antes de
+    // decidir entre reabrir a lista existente ou abrir o seletor de arquivos,
+    // para que a fila fique visível em qualquer navegador (não só no que processou o PDF).
+    await carregarFilaLeitorDoc();
+
     if (leitorDocResultados.length) {
       mostrarListaLeitorDoc();
       return;
@@ -1854,8 +1857,43 @@ if (btnLerDocs) {
               arquivo: arquivoPdf.name,
               erro: resultado.erro || 'Não foi possível ler o PDF.'
             });
-          } else {
-            leitorDocResultados.push({ arquivo: arquivoPdf.name, dados: resultado });
+                   } else {
+            // Salva a NF na fila compartilhada do Leitor DOC
+            const { data: filaInserida, error: filaError } = await supabaseClient
+              .from('leitor_doc_fila')
+              .insert([{
+                numero_nf: resultado.numero_nf || '',
+                tipo_operacao: resultado.tipo_operacao || '',
+                cep: resultado.cep || '',
+                cidade: resultado.cidade || '',
+                uf: resultado.uf || '',
+                endereco: resultado.endereco || '',
+                numero: resultado.numero || '',
+                quantidade: resultado.quantidade ?? null,
+                marca: resultado.marca || '',
+                potencia: resultado.potencia || '',
+                kam: resultado.kam || '',
+                observacao: resultado.observacao || '',
+                status: 'pendente'
+              }])
+              .select()
+              .single();
+
+            if (filaError) {
+              console.error('Leitor DOC: erro ao salvar na fila:', filaError);
+              leitorDocResultados.push({
+                arquivo: arquivoPdf.name,
+                erro: 'PDF lido, mas não foi possível salvar a NF na fila compartilhada.'
+              });
+            } else {
+              console.log('Leitor DOC: NF salva na fila:', filaInserida);
+
+              leitorDocResultados.push({
+                id: filaInserida.id,
+                arquivo: arquivoPdf.name,
+                dados: resultado
+              });
+            }
           }
         } catch (error) {
           console.error('Leitor DOC - erro ao enviar o PDF:', arquivoPdf.name, error);
@@ -2932,7 +2970,7 @@ window.deletarRota = async function(rotaId) {
 // --- LÓGICA DE PROGRAMAÇÃO / AGENDAMENTO ---
 
 async function buscarDadosParaProgramacao() {
-    const { data: rotas, error: errR } = await supabaseClient.from("rotas").select("*");
+    const { data: rotas, error: errR } = await supabaseClient.from("rotas").select("*").eq("status", "ativa");
     const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*").not("rota_id", "is", null);
     
     if (errR || errN) throw new Error("Erro ao carregar dados do Supabase");
@@ -4450,7 +4488,7 @@ if (btnCopiarResumoLeitorDoc) {
 
 const btnTranscriberLeitorDoc = document.getElementById('btn-transcriber-leitor-doc');
 if (btnTranscriberLeitorDoc) {
-    btnTranscriberLeitorDoc.addEventListener('click', () => {
+    btnTranscriberLeitorDoc.addEventListener('click', async () => {
         if (!leitorDocUltimoResultado) return;
         const dados = leitorDocUltimoResultado;
 
@@ -4484,11 +4522,25 @@ if (btnTranscriberLeitorDoc) {
 
         // Remove SOMENTE a NF transcrita da fila temporária; as demais permanecem
         // disponíveis para clicar em LER DOC novamente enquanto a Nova NF estiver aberta.
+        const itemTranscrito = leitorDocIndiceAtual !== null ? leitorDocResultados[leitorDocIndiceAtual] : null;
         if (leitorDocIndiceAtual !== null) {
             leitorDocResultados.splice(leitorDocIndiceAtual, 1);
             leitorDocIndiceAtual = null;
         }
         leitorDocUltimoResultado = null;
+
+        // Marca a linha como concluída no Supabase para que ela deixe de aparecer
+        // como pendente para todos os navegadores (não só remove localmente).
+        if (itemTranscrito && itemTranscrito.id) {
+            const { error: statusError } = await supabaseClient
+                .from('leitor_doc_fila')
+                .update({ status: 'transcrita' })
+                .eq('id', itemTranscrito.id);
+
+            if (statusError) {
+                console.error('Leitor DOC: erro ao atualizar status da fila após transcrição:', statusError);
+            }
+        }
     });
 }
 
