@@ -3430,15 +3430,11 @@ window.handleExportExcel = async function (e, specificDate = null) {
 window.handleExportPDF = async function(e, specificDate = null) {
     if (e) e.stopPropagation();
 
-    // 1. Fechar todos os menus de exportação
     document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
 
     try {
-        // 2. Buscar e filtrar dados
         const { rotas, nfs } = await buscarDadosParaProgramacao();
         const termoTexto = filtroNomeProg ? filtroNomeProg.value : "";
-        
-        // Se houver uma data específica, ela ignora o filtro global
         const termoData = specificDate || (filtroDataProg ? filtroDataProg.value : "");
 
         const rotasFiltradas = rotas.filter(rota => {
@@ -3449,145 +3445,255 @@ window.handleExportPDF = async function(e, specificDate = null) {
 
         const agrupado = agruparDadosProgramacao(rotasFiltradas, nfs, termoTexto);
 
-        if (Object.keys(agrupado).length === 0) {
+        // Remove datas sem nenhuma rota com NF. Isso evita blocos de data vazios no PDF.
+        const datas = Object.keys(agrupado)
+            .filter(dataKey => Object.keys(agrupado[dataKey] || {}).some(rotaId => {
+                const infoRota = agrupado[dataKey][rotaId];
+                return infoRota && Array.isArray(infoRota.nfs) && infoRota.nfs.length > 0;
+            }))
+            .sort((a, b) => {
+                if (a === 'sem-data') return 1;
+                if (b === 'sem-data') return -1;
+                return a.localeCompare(b);
+            });
+
+        if (datas.length === 0) {
             mostrarAviso("Nenhum dado disponível para exportação.");
             return;
         }
 
-        const msg = specificDate ? "Gerando PDF do dia..." : "Gerando PDF da programação... O download iniciará em instantes.";
+        const msg = specificDate
+            ? "Gerando PDF do dia..."
+            : "Gerando PDF da programação... O download iniciará em instantes.";
         mostrarAviso(msg);
 
         const { jsPDF } = window.jspdf;
-        const doc = new jsPDF('l', 'mm', 'a4'); // Paisagem para melhor aproveitamento das colunas
+        // Retrato: mantém o relatório em A4 vertical, como no padrão solicitado.
+        const doc = new jsPDF('p', 'mm', 'a4');
         const agora = new Date();
         const pageWidth = doc.internal.pageSize.getWidth();
-        
-        // Configurações de Identidade Visual
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const margem = 14;
         const verdeSirius = [34, 197, 94];
-        const slate800 = [30, 41, 59];
-        const slate500 = [100, 116, 139];
-        const borderSlate = [226, 232, 240];
-        let currentY = 25;
+        const textoPrincipal = [30, 41, 59];
+        const textoSecundario = [100, 116, 139];
+        const fundoBloco = [241, 245, 249];
+        const borda = [226, 232, 240];
+        const sectionRadius = 1.8;
+        const sectionPadding = 2;
+        let currentY = 24;
 
-        // TAREFA 1 — CABEÇALHO PREMIUM
-        doc.setFontSize(22);
-        doc.setTextColor(slate800[0], slate800[1], slate800[2]);
-        doc.setFont("helvetica", "bold");
-        doc.text("RELATÓRIO DE PROGRAMAÇÃO ATIVA", 14, currentY);
-        
-        doc.setFontSize(14);
+        // Contorno externo de cada grupo de data. O contorno envolve todas as rotas
+        // pertencentes ao mesmo dia, sem misturar um dia com o seguinte.
+        const desenharContornoData = (pagina, topY, bottomY) => {
+            const top = Math.max(10, topY);
+            const bottom = Math.min(pageHeight - 13, bottomY);
+            const height = bottom - top;
+            if (height <= 2) return;
+
+            doc.setPage(pagina);
+            doc.setDrawColor(borda[0], borda[1], borda[2]);
+            doc.setLineWidth(0.35);
+            doc.roundedRect(
+                margem - sectionPadding,
+                top,
+                (pageWidth - (margem * 2)) + (sectionPadding * 2),
+                height,
+                sectionRadius,
+                sectionRadius,
+                'S'
+            );
+        };
+
+        // Cabeçalho
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(textoPrincipal[0], textoPrincipal[1], textoPrincipal[2]);
+        doc.text('RELATÓRIO DE PROGRAMAÇÃO ATIVA', margem, currentY);
+
+        doc.setFontSize(11);
         doc.setTextColor(verdeSirius[0], verdeSirius[1], verdeSirius[2]);
-        doc.text("SISTEMA ROTA SIRIUS", 14, currentY + 8);
+        doc.text('SISTEMA ROTA SIRIUS', margem, currentY + 7);
 
-        doc.setFontSize(9);
-        doc.setTextColor(slate500[0], slate500[1], slate500[2]);
-        doc.setFont("helvetica", "normal");
-        doc.text(`Gerado em: ${agora.toLocaleString('pt-BR')}`, 14, currentY + 15);
-        
-        // Linha divisória sutil
-        doc.setDrawColor(borderSlate[0], borderSlate[1], borderSlate[2]);
-        doc.line(14, currentY + 18, pageWidth - 14, currentY + 18);
-        
-        currentY += 30;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(textoSecundario[0], textoSecundario[1], textoSecundario[2]);
+        doc.text(`Gerado em: ${agora.toLocaleString('pt-BR')}`, margem, currentY + 14);
 
-        const datas = Object.keys(agrupado).sort((a, b) => {
-            if (a === "sem-data") return 1;
-            if (b === "sem-data") return -1;
-            return a.localeCompare(b);
-        });
+        doc.setDrawColor(borda[0], borda[1], borda[2]);
+        doc.setLineWidth(0.3);
+        doc.line(margem, currentY + 18, pageWidth - margem, currentY + 18);
+        currentY += 28;
 
-        datas.forEach((dataKey, index) => {
-            // TAREFA 2 — BLOCOS POR DATA ELEGANTES
+        datas.forEach((dataKey) => {
             const dataTitulo = formatarDataComDiaSemana(dataKey).toUpperCase();
-            
-            doc.setFontSize(11);
-            doc.setTextColor(verdeSirius[0], verdeSirius[1], verdeSirius[2]);
-            doc.setFont("helvetica", "bold");
-            doc.text(dataTitulo, 14, currentY);
-            currentY += 6;
-
-            // Preparar dados da tabela
-            const tableBody = [];
-            const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) => 
+            const rotasIds = Object.keys(agrupado[dataKey]).filter(rotaId => {
+                const infoRota = agrupado[dataKey][rotaId];
+                return infoRota && Array.isArray(infoRota.nfs) && infoRota.nfs.length > 0;
+            }).sort((a, b) =>
                 agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome)
             );
 
-            rotasIds.forEach(rotaId => {
-                const infoRota = agrupado[dataKey][rotaId];
-                infoRota.nfs.forEach(nf => {
-                    tableBody.push([
-                        nf.numero,
-                        `${nf.cidade || nf.destino}/${nf.uf}`,
-                        (nf.status || "").toUpperCase(),
-                        nf.qtd || 0,
-                        (nf.marca || "---").toUpperCase(), // TAREFA 6: Padronização
-                        nf.potencia || "---",
-                        (nf.kam || "---").toUpperCase(),   // TAREFA 6: Padronização
-                        infoRota.nome,
-                        (infoRota.transportadora || "---").toUpperCase()
-                    ]);
-                });
-            });
+            if (rotasIds.length === 0) return;
 
-            // TAREFA 3 e 4 — REFINAMENTO DA TABELA
-            doc.autoTable({
-                startY: currentY,
-                head: [["NF", "DESTINO", "STATUS", "QTD", "MARCA", "POTÊNCIA", "KAM", "ROTA", "TRANSPORTADORA"]],
-                body: tableBody,
-                theme: 'grid',
-                headStyles: { 
-                    fillColor: verdeSirius, 
-                    textColor: [255, 255, 255],
-                    fontSize: 8, 
-                    fontStyle: 'bold',
-                    halign: 'center'
-                },
-                styles: { 
-                    fontSize: 8, 
-                    cellPadding: 3,
-                    lineColor: borderSlate,
-                    lineWidth: 0.1,
-                    valign: 'middle'
-                },
-                columnStyles: {
-                    0: { halign: 'center', cellWidth: 12 }, // NF (Mais compacta)
-                    1: { halign: 'left' },                 // DESTINO (Restante - reduzido pela expansão das outras)
-                    2: { halign: 'center', cellWidth: 28 }, // STATUS (Aumentado para evitar quebra de "PREPARADO")
-                    3: { halign: 'center', cellWidth: 15 }, // QTD (Aumentado para evitar quebra de "QTD" e "220")
-                    4: { halign: 'center', cellWidth: 27 }, // MARCA (Leve aumento para equilíbrio)
-                    5: { halign: 'center', cellWidth: 27 }, // POTÊNCIA (Leve aumento para equilíbrio)
-                    6: { halign: 'left', cellWidth: 42 },   // KAM (Aumentado para nomes longos)
-                    7: { halign: 'left', cellWidth: 45 },   // ROTA
-                    8: { halign: 'left', cellWidth: 35 }    // TRANSPORTADORA
-                },
-                alternateRowStyles: {
-                    fillColor: [248, 250, 252] // Slate 50 sutil
-                },
-                margin: { left: 14, right: 14 },
-                // TAREFA 7: Evitar quebras de página desajeitadas
-                pageBreak: 'auto',
-                rowPageBreak: 'avoid'
-            });
-
-            // TAREFA 8: ESPAÇAMENTO E RESPIRO (Gap entre tabelas)
-            currentY = doc.lastAutoTable.finalY + 18;
-            
-            // Verifica se precisa de nova página antes do próximo título de data
-            if (currentY > 180 && index < datas.length - 1) {
+            // Reserva espaço suficiente para a faixa de data + primeira rota, evitando sobreposição.
+            if (currentY > pageHeight - 60) {
                 doc.addPage();
-                currentY = 25;
+                currentY = 20;
             }
+
+            const paginaDataInicial = doc.internal.getCurrentPageInfo().pageNumber;
+            const topoData = currentY - 5;
+            const segmentosData = new Map();
+            segmentosData.set(paginaDataInicial, { top: topoData, bottom: null });
+
+            // Bloco visual da data
+            doc.setFillColor(fundoBloco[0], fundoBloco[1], fundoBloco[2]);
+            doc.setDrawColor(borda[0], borda[1], borda[2]);
+            doc.roundedRect(margem, currentY - 5, pageWidth - (margem * 2), 13, 2.2, 2.2, 'FD');
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10.5);
+            doc.setTextColor(textoPrincipal[0], textoPrincipal[1], textoPrincipal[2]);
+            doc.text(dataTitulo, margem + 5, currentY + 3);
+            // Espaço entre a faixa da data e o primeiro bloco de rota.
+            currentY += 19;
+
+            rotasIds.forEach((rotaId, rotaIndex) => {
+                const infoRota = agrupado[dataKey][rotaId];
+                const nfsRota = infoRota.nfs || [];
+                const totalModulos = nfsRota.reduce((total, nf) => total + (Number(nf.qtd) || 0), 0);
+
+                if (currentY > pageHeight - 62) {
+                    doc.addPage();
+                    currentY = 20;
+                }
+
+                // Cabeçalho da rota
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(10);
+                doc.setTextColor(textoPrincipal[0], textoPrincipal[1], textoPrincipal[2]);
+                doc.text(`ROTA: ${infoRota.nome || '—'}`, margem, currentY);
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(8.5);
+                doc.setTextColor(textoSecundario[0], textoSecundario[1], textoSecundario[2]);
+                doc.text(`Transportadora: ${infoRota.transportadora || '—'}`, margem, currentY + 5);
+                doc.text(`NFs: ${nfsRota.length}  •  Módulos: ${totalModulos}`, pageWidth - margem, currentY + 5, { align: 'right' });
+                currentY += 10;
+
+                const tableBody = nfsRota.map(nf => {
+                    const ehRetira = String(nf.tipo_operacao || nf.tipo || '').toLowerCase() === 'retira'
+                        || nf.uf === 'RT'
+                        || String(nf.status || '').toLowerCase().includes('retira');
+                    const destino = ehRetira
+                        ? 'RETIRA'
+                        : (nf.cidade || nf.destino
+                            ? `${nf.cidade || nf.destino}${nf.uf ? `/${nf.uf}` : ''}`
+                            : '—');
+
+                    return [
+                        nf.numero || '—',
+                        destino,
+                        (nf.status || '—').toUpperCase(),
+                        nf.qtd || 0,
+                        (nf.marca || '—').toUpperCase(),
+                        nf.potencia || '—',
+                        (nf.kam || '—').toUpperCase(),
+                        (infoRota.transportadora || '—').toUpperCase()
+                    ];
+                });
+
+                doc.autoTable({
+                    startY: currentY,
+                    head: [['NF', 'DESTINO', 'STATUS', 'QTD', 'MARCA', 'POTÊNCIA', 'KAM', 'TRANSPORTADORA']],
+                    body: tableBody,
+                    theme: 'grid',
+                    showHead: 'everyPage',
+                    margin: { left: margem, right: margem },
+                    styles: {
+                        fontSize: 7.1,
+                        cellPadding: 2.0,
+                        lineColor: [210, 216, 224],
+                        lineWidth: 0.12,
+                        textColor: textoPrincipal,
+                        valign: 'middle'
+                    },
+                    headStyles: {
+                        fillColor: verdeSirius,
+                        textColor: [255, 255, 255],
+                        fontSize: 7.0,
+                        fontStyle: 'bold',
+                        halign: 'center'
+                    },
+                    alternateRowStyles: {
+                        fillColor: [248, 250, 252]
+                    },
+                    columnStyles: {
+                        0: { halign: 'center', cellWidth: 14 },
+                        1: { halign: 'left', cellWidth: 34 },
+                        2: { halign: 'center', cellWidth: 22 },
+                        3: { halign: 'center', cellWidth: 10 },
+                        4: { halign: 'center', cellWidth: 22 },
+                        5: { halign: 'center', cellWidth: 18 },
+                        6: { halign: 'left', cellWidth: 30 },
+                        7: { halign: 'left', cellWidth: 32 }
+                    },
+                    pageBreak: 'auto',
+                    rowPageBreak: 'avoid'
+                });
+
+                const paginaDepoisDaTabela = doc.internal.getCurrentPageInfo().pageNumber;
+                if (!segmentosData.has(paginaDepoisDaTabela)) {
+                    segmentosData.set(paginaDepoisDaTabela, { top: 12, bottom: null });
+                }
+                currentY = doc.lastAutoTable.finalY + 9;
+                segmentosData.get(paginaDepoisDaTabela).bottom = currentY + 4;
+
+                if (rotaIndex < rotasIds.length - 1) {
+                    doc.setDrawColor(borda[0], borda[1], borda[2]);
+                    doc.setLineWidth(0.25);
+                    doc.line(margem, currentY - 4, pageWidth - margem, currentY - 4);
+                    currentY += 4;
+                }
+            });
+
+            // Fecha o contorno externo do dia. Se o dia ocupar mais de uma página,
+            // cada trecho recebe seu próprio contorno para não atravessar páginas.
+            const paginaFinalData = doc.internal.getCurrentPageInfo().pageNumber;
+            if (!segmentosData.has(paginaFinalData)) {
+                segmentosData.set(paginaFinalData, { top: 12, bottom: null });
+            }
+            segmentosData.get(paginaFinalData).bottom = currentY + 4;
+
+            segmentosData.forEach((segmento, pagina) => {
+                desenharContornoData(pagina, segmento.top, segmento.bottom);
+            });
+            doc.setPage(paginaFinalData);
+
+            // Espaço maior entre grupos de datas para deixar cada dia claramente separado.
+            currentY += 11;
         });
 
-        // 4. Download automático
-        const filename = specificDate ? `programacao-${specificDate}.pdf` : `programacao-completa-${agora.toISOString().slice(0, 10)}.pdf`;
+        const totalPaginas = doc.getNumberOfPages();
+        for (let pagina = 1; pagina <= totalPaginas; pagina++) {
+            doc.setPage(pagina);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7.5);
+            doc.setTextColor(textoSecundario[0], textoSecundario[1], textoSecundario[2]);
+            doc.text(`Rota Sirius • Página ${pagina} de ${totalPaginas}`, pageWidth - margem, pageHeight - 8, { align: 'right' });
+        }
+
+        const filename = specificDate
+            ? `programacao-${specificDate}.pdf`
+            : `programacao-completa-${agora.toISOString().slice(0, 10)}.pdf`;
         doc.save(filename);
 
     } catch (err) {
-        console.error("Erro na exportação PDF:", err);
-        mostrarAviso("Ocorreu um erro ao gerar o PDF. Verifique o console.");
+        console.error('Erro na exportação PDF:', err);
+        mostrarAviso('Ocorreu um erro ao gerar o PDF. Verifique o console.');
     }
 };
+
 
 // --- HISTÓRICO ESPECÍFICO DA PROGRAMAÇÃO ---
 
