@@ -129,6 +129,7 @@
               </button>
             </div>
           </div>
+          <button class="btn btn-outline gerencial-access-btn" id="open-gerencial-btn">⚙ Gerencial</button>
           <button class="btn btn-outline" id="back-to-dashboard-btn">← Voltar</button>
           <div id="user-display-panel" class="user-display"></div>
         </div>
@@ -287,6 +288,88 @@
               <!-- KAMs carregados via JS -->
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Visão Gerencial -->
+    <div id="gerencial-view" class="hidden">
+      <div class="topbar">
+        <h2>Gerencial</h2>
+        <div class="topbar-actions">
+          <button class="btn btn-outline" id="back-to-control-panel-from-gerencial-btn">← Painel de Controle</button>
+          <div id="user-display-gerencial" class="user-display"></div>
+        </div>
+      </div>
+
+      <div class="gerencial-page">
+        <div class="gerencial-intro">
+          <span class="gerencial-eyebrow">GESTÃO DO SISTEMA</span>
+          <h3>Área Gerencial</h3>
+          <p>Centralize configurações administrativas e controles gerenciais em um único lugar.</p>
+        </div>
+
+        <div class="gerencial-grid">
+          <button type="button" class="gerencial-card" data-gerencial-placeholder="Permissões" onclick="abrirTelaPermissoes(event)">
+            <span class="gerencial-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-1.42 1.42-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-2v-.08a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06-1.42-1.42.06-.06A1.65 1.65 0 0 0 9.6 15a1.65 1.65 0 0 0-1.51-1H8v-2h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06 1.42-1.42.06.06A1.65 1.65 0 0 0 12.5 8.4a1.65 1.65 0 0 0 1-1.51V7h2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06 1.42 1.42-.06.06A1.65 1.65 0 0 0 19.4 11a1.65 1.65 0 0 0 1.51 1H21v2h-.09a1.65 1.65 0 0 0-1.51 1Z"></path></svg>
+            </span>
+            <span class="gerencial-card-content"><strong>Permissões</strong><small>Definir acessos e ações permitidas por usuário.</small></span>
+            <span class="gerencial-card-arrow">→</span>
+          </button>
+
+          <button type="button" class="gerencial-card" data-gerencial-placeholder="Gerenciar Usuários">
+            <span class="gerencial-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </span>
+            <span class="gerencial-card-content"><strong>Gerenciar Usuários</strong><small>Administrar usuários e informações de acesso.</small></span>
+            <span class="gerencial-card-arrow">→</span>
+          </button>
+
+          <button type="button" class="gerencial-card" data-gerencial-placeholder="Limites de Retirada">
+            <span class="gerencial-card-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h2"></path><path d="M14 14h2"></path><path d="M8 18h2"></path></svg>
+            </span>
+            <span class="gerencial-card-content"><strong>Limites de Retirada</strong><small>Configurar limites diários e exceções por data.</small></span>
+            <span class="gerencial-card-arrow">→</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Visão de Permissões -->
+    <div id="permissoes-view" class="hidden">
+      <div class="topbar">
+        <h2>Permissões</h2>
+        <div class="topbar-actions">
+          <button class="btn btn-outline" id="back-to-gerencial-from-permissoes-btn">← Gerencial</button>
+          <div id="user-display-permissoes" class="user-display"></div>
+        </div>
+      </div>
+
+      <div class="permissoes-page">
+        <div class="permissoes-intro">
+          <div>
+            <span class="gerencial-eyebrow">CONTROLE DE ACESSO</span>
+            <h3>Permissões por usuário</h3>
+            <p>Expanda um usuário para configurar, tela por tela, o que ele pode visualizar e gerenciar. Transporte e Retirada ficam separados nas telas operacionais.</p>
+          </div>
+          <div class="permissoes-legend">
+            <span><i class="permission-dot permission-dot-view"></i> Visualizar</span>
+            <span><i class="permission-dot permission-dot-manage"></i> Gerenciar</span>
+          </div>
+        </div>
+
+        <div class="permission-users-card">
+          <div class="permission-users-head">
+            <div><strong>Usuários</strong><span id="count-permission-users">0 usuários</span></div>
+            <span class="permission-help">Clique em um usuário para expandir</span>
+          </div>
+          <div class="permission-table-head">
+            <span>Usuário</span><span>Cargo</span><span>Acesso atual</span><span></span>
+          </div>
+          <div id="permissions-users-list"></div>
         </div>
       </div>
     </div>

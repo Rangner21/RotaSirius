@@ -46,10 +46,11 @@ function exibirUsuarioLogado() {
     const programacaoElem = document.getElementById('user-display-programacao');
     const newHistoryElem = document.getElementById('user-display-new-history');
     const simulateElem = document.getElementById('user-display-simulate');
+    const gerencialElem = document.getElementById('user-display-gerencial');
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
 
     if (!usuarioLogado) {
-        [dashElem, panelElem, programacaoElem, newHistoryElem].forEach(el => { if (el) el.innerHTML = ""; });
+        [dashElem, panelElem, programacaoElem, newHistoryElem, gerencialElem].forEach(el => { if (el) el.innerHTML = ""; });
         return;
     }
 
@@ -93,7 +94,7 @@ function exibirUsuarioLogado() {
         </div>
     `;
 
-    [dashElem, panelElem, programacaoElem, newHistoryElem, simulateElem].forEach(el => {
+    [dashElem, panelElem, programacaoElem, newHistoryElem, simulateElem, gerencialElem].forEach(el => {
         if (el) {
             el.innerHTML = html;
             el.onclick = toggleUserMenu;
@@ -474,6 +475,7 @@ function closeModal(modalElement) {
 // --- NAVEGAÇÃO PAINEL DE CONTROLE ---
 const dashboardView = document.getElementById('dashboard-view');
 const controlPanelView = document.getElementById('control-panel-view');
+const gerencialView = document.getElementById('gerencial-view');
 const programacaoView = document.getElementById('programacao-view'); // Nova referência
 const newHistoryView = document.getElementById('new-history-view');
 const simulateRouteView = document.getElementById('simulate-route-view');
@@ -1040,6 +1042,10 @@ async function ajustarMapaSimulacao() {
 
 
 const openControlPanelBtn = document.getElementById('open-control-panel-btn');
+const openGerencialBtn = document.getElementById('open-gerencial-btn');
+const backToControlPanelFromGerencialBtn = document.getElementById('back-to-control-panel-from-gerencial-btn');
+const permissoesView = document.getElementById('permissoes-view');
+const backToGerencialFromPermissoesBtn = document.getElementById('back-to-gerencial-from-permissoes-btn');
 const openProgramacaoBtn = document.getElementById('open-programacao-btn'); // Novo botão
 const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
 const openProgHistoryBtn = document.getElementById('open-programacao-history-btn');
@@ -1057,6 +1063,178 @@ const userModalTitle = document.getElementById('user-modal-title');
 const userIdHidden = document.getElementById('user-id-hidden');
 
 let listaUsuariosLocal = []; // Cache local para busca rápida na edição
+
+// --- GERENCIAL: PERMISSÕES (ETAPA 3A - VISUAL) ---
+const permissoesConfigBase = {
+    'Roteirização': { visualizacao: true, gerenciamento: true, transporte: true, retirada: true },
+    'Programação': { visualizacao: true, gerenciamento: true, transporte: true, retirada: true },
+    'Histórico': { visualizacao: true, gerenciamento: false },
+    'Simular Rota': { visualizacao: true, gerenciamento: true },
+    'Painel de Controle': { visualizacao: true, gerenciamento: true },
+    'Gerencial': { visualizacao: false, gerenciamento: false }
+};
+
+function obterPermissoesVisuaisUsuario(user) {
+    const acesso = user?.permissao || 'Operador';
+    const defaults = JSON.parse(JSON.stringify(permissoesConfigBase));
+
+    // Perfis nativos da Etapa 3A:
+    // Visualizador = vê tudo, não gerencia nada.
+    if (acesso === 'Visualizador') {
+        Object.values(defaults).forEach(p => {
+            p.visualizacao = true;
+            p.gerenciamento = false;
+            if ('transporte' in p) p.transporte = false;
+            if ('retirada' in p) p.retirada = false;
+        });
+        defaults['Gerencial'].visualizacao = false;
+        return defaults;
+    }
+
+    // Operador = gerencia tudo, exceto Gerencial; Histórico é somente visualização.
+    if (acesso === 'Operador') {
+        Object.values(defaults).forEach(p => {
+            p.visualizacao = true;
+            p.gerenciamento = true;
+            if ('transporte' in p) p.transporte = true;
+            if ('retirada' in p) p.retirada = true;
+        });
+        defaults['Histórico'].gerenciamento = false;
+        defaults['Gerencial'].visualizacao = false;
+        defaults['Gerencial'].gerenciamento = false;
+        return defaults;
+    }
+
+    // Administrador = gerencia tudo, exceto a tela Gerencial.
+    if (acesso === 'Administrador') {
+        Object.values(defaults).forEach(p => {
+            p.visualizacao = true;
+            p.gerenciamento = true;
+            if ('transporte' in p) p.transporte = true;
+            if ('retirada' in p) p.retirada = true;
+        });
+        defaults['Gerencial'].visualizacao = false;
+        defaults['Gerencial'].gerenciamento = false;
+        return defaults;
+    }
+
+    // ADM TI = acesso total, incluindo Gerencial.
+    if (acesso === 'ADM TI') {
+        Object.values(defaults).forEach(p => {
+            p.visualizacao = true;
+            p.gerenciamento = true;
+            if ('transporte' in p) p.transporte = true;
+            if ('retirada' in p) p.retirada = true;
+        });
+        return defaults;
+    }
+
+    return defaults;
+}
+
+function renderizarPermissoes() {
+    const container = document.getElementById('permissions-users-list');
+    const count = document.getElementById('count-permission-users');
+    if (!container) return;
+
+    const users = listaUsuariosLocal.length ? listaUsuariosLocal : JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
+    if (count) count.textContent = `${users.length} ${users.length === 1 ? 'usuário' : 'usuários'}`;
+
+    container.innerHTML = '';
+    if (!users.length) {
+        container.innerHTML = '<div class="permission-empty">Nenhum usuário encontrado.</div>';
+        return;
+    }
+
+    users.forEach((user, index) => {
+        const row = document.createElement('div');
+        row.className = 'permission-user-item';
+        row.dataset.userId = user.id || `user-${index}`;
+        const initials = `${(user.nome || '').charAt(0)}${(user.sobrenome || '').charAt(0)}`.trim().toUpperCase() || '?';
+        row.innerHTML = `
+          <button type="button" class="permission-user-toggle" aria-expanded="false">
+            <span class="permission-user-main">
+              <span class="permission-avatar">${initials}</span>
+              <span class="permission-user-text"><strong>${user.nome || ''} ${user.sobrenome || ''}</strong><small>${user.email || '---'}</small></span>
+            </span>
+            <span class="permission-user-role">${user.cargo || user.permissao || '---'}</span>
+            <span class="permission-access-control">
+              <select class="permission-access-select" aria-label="Alterar acesso atual">
+                <option value="ADM TI" ${user.permissao === 'ADM TI' ? 'selected' : ''}>ADM TI</option>
+                <option value="Administrador" ${user.permissao === 'Administrador' ? 'selected' : ''}>Administrador</option>
+                <option value="Operador" ${user.permissao === 'Operador' ? 'selected' : ''}>Operador</option>
+                <option value="Visualizador" ${user.permissao === 'Visualizador' ? 'selected' : ''}>Visualizador</option>
+              </select>
+            </span>
+            <span class="permission-chevron">⌄</span>
+          </button>
+          <div class="permission-user-details hidden"></div>
+        `;
+        const toggle = row.querySelector('.permission-user-toggle');
+        const accessSelect = row.querySelector('.permission-access-select');
+        const details = row.querySelector('.permission-user-details');
+
+        if (accessSelect) {
+            accessSelect.addEventListener('click', (event) => event.stopPropagation());
+            accessSelect.addEventListener('change', (event) => {
+                event.stopPropagation();
+                user.permissao = event.target.value;
+                if (!details.classList.contains('hidden')) {
+                    details.innerHTML = criarPainelPermissoesUsuario(user);
+                    details.dataset.rendered = 'true';
+                }
+            });
+        }
+
+        toggle.addEventListener('click', (event) => {
+            if (event.target.closest('.permission-access-control')) return;
+            const open = !details.classList.contains('hidden');
+            details.classList.toggle('hidden', open);
+            toggle.setAttribute('aria-expanded', String(!open));
+            row.classList.toggle('is-expanded', !open);
+            if (!open && !details.dataset.rendered) {
+                details.innerHTML = criarPainelPermissoesUsuario(user);
+                details.dataset.rendered = 'true';
+            }
+        });
+        container.appendChild(row);
+    });
+}
+
+function criarPainelPermissoesUsuario(user) {
+    const config = obterPermissoesVisuaisUsuario(user);
+    const telas = Object.keys(config);
+    return `
+      <div class="permission-detail-inner">
+        <div class="permission-detail-title">
+          <div><strong>Permissões de ${user.nome || 'usuário'}</strong><small>Configure o nível de acesso por tela.</small></div>
+          <span class="permission-stage-badge">Configuração visual</span>
+        </div>
+        <div class="permission-matrix">
+          <div class="permission-matrix-head"><span>Tela / módulo</span><span>Visualizar</span><span>Gerenciar</span></div>
+          ${telas.map(tela => {
+              const p = config[tela];
+              const hasOps = 'transporte' in p || 'retirada' in p;
+              return `
+                <div class="permission-screen">
+                  <div class="permission-screen-name"><strong>${tela}</strong>${hasOps ? '<small>Permissões operacionais</small>' : ''}</div>
+                  <label class="permission-switch-line"><input type="checkbox" ${p.visualizacao ? 'checked' : ''}><span class="permission-switch"></span><span>Visualizar</span></label>
+                  <label class="permission-switch-line"><input type="checkbox" ${p.gerenciamento ? 'checked' : ''}><span class="permission-switch"></span><span>Gerenciar</span></label>
+                  ${hasOps ? `
+                    <div class="permission-operations">
+                      <span class="permission-operations-label">Ações permitidas</span>
+                      <label class="permission-switch-line compact"><input type="checkbox" ${p.transporte ? 'checked' : ''}><span class="permission-switch"></span><span>Transporte</span></label>
+                      <label class="permission-switch-line compact"><input type="checkbox" ${p.retirada ? 'checked' : ''}><span class="permission-switch"></span><span>Retirada</span></label>
+                    </div>` : ''}
+                </div>`;
+          }).join('')}
+        </div>
+        <div class="permission-detail-footer">
+          <span>As alterações desta etapa ainda não são persistidas nem aplicadas às regras do sistema.</span>
+          <button type="button" class="btn btn-outline permission-save-visual">Salvar configuração</button>
+        </div>
+      </div>`;
+}
 
 // --- ADMIN: USUÁRIOS ---
 function initAdmin() {
@@ -1323,6 +1501,7 @@ if (openControlPanelBtn) {
             programacaoView.classList.add('hidden'); // Esconde programação também
             newHistoryView.classList.add('hidden');
             simulateRouteView.classList.add('hidden');
+            if (gerencialView) gerencialView.classList.add('hidden');
             controlPanelView.classList.remove('hidden');
             document.querySelector('.app').classList.add('panel-active');
             carregarDashboard();
@@ -1340,8 +1519,10 @@ if (openControlPanelFromProgBtn) {
             return;
         }
         programacaoView.classList.add('hidden');
+        if (gerencialView) gerencialView.classList.add('hidden');
         if (newHistoryView) newHistoryView.classList.add('hidden');
         simulateRouteView.classList.add('hidden');
+        if (gerencialView) gerencialView.classList.add('hidden');
         controlPanelView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
@@ -1359,6 +1540,7 @@ if (openControlPanelFromHistoryBtn) {
         }
         newHistoryView.classList.add('hidden');
         simulateRouteView.classList.add('hidden');
+        if (gerencialView) gerencialView.classList.add('hidden');
         controlPanelView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
@@ -1370,6 +1552,7 @@ if (openControlPanelFromHistoryBtn) {
 if (openProgramacaoFromHistoryBtn) {
     openProgramacaoFromHistoryBtn.addEventListener('click', () => {
         newHistoryView.classList.add('hidden');
+        if (gerencialView) gerencialView.classList.add('hidden');
         programacaoView.classList.remove('hidden');
         document.querySelector('.app').classList.remove('panel-active');
         carregarProgramacao();
@@ -1385,6 +1568,7 @@ if (openProgramacaoBtn) {
             controlPanelView.classList.add('hidden'); // Esconde painel de controle
             newHistoryView.classList.add('hidden');
             simulateRouteView.classList.add('hidden');
+            if (gerencialView) gerencialView.classList.add('hidden');
             programacaoView.classList.remove('hidden');
             document.querySelector('.app').classList.remove('panel-active');
             carregarProgramacao();
@@ -1509,12 +1693,93 @@ const backToDashboardFromNewHistoryBtn = document.getElementById('back-to-dashbo
 const backToDashboardFromProgramacaoBtn = document.getElementById('back-to-dashboard-from-programacao-btn');
 const backToDashboardFromSimulateBtn = document.getElementById('back-to-dashboard-from-simulate-btn');
 
+if (openGerencialBtn) {
+    openGerencialBtn.addEventListener('click', () => {
+        const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
+            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar a Área Gerencial.");
+            return;
+        }
+        if (!gerencialView || !controlPanelView) return;
+        controlPanelView.classList.add('hidden');
+        if (dashboardView) dashboardView.classList.add('hidden');
+        if (programacaoView) programacaoView.classList.add('hidden');
+        if (gerencialView) gerencialView.classList.add('hidden');
+        if (newHistoryView) newHistoryView.classList.add('hidden');
+        if (simulateRouteView) simulateRouteView.classList.add('hidden');
+        gerencialView.classList.remove('hidden');
+        document.querySelector('.app').classList.add('panel-active');
+    });
+}
+
+if (backToControlPanelFromGerencialBtn) {
+    backToControlPanelFromGerencialBtn.addEventListener('click', () => {
+        if (!gerencialView || !controlPanelView) return;
+        gerencialView.classList.add('hidden');
+        controlPanelView.classList.remove('hidden');
+        document.querySelector('.app').classList.add('panel-active');
+        carregarDashboard();
+        carregarUsuarios();
+        carregarKams();
+    });
+}
+
+window.abrirTelaPermissoes = function(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    const views = [dashboardView, controlPanelView, gerencialView, programacaoView, newHistoryView, simulateRouteView, permissoesView];
+    views.forEach(view => {
+        if (view) view.classList.add('hidden');
+    });
+
+    if (!permissoesView) {
+        console.error('Rota Sirius: #permissoes-view não encontrado no HTML.');
+        mostrarAviso('Não foi possível abrir a tela de Permissões.');
+        return;
+    }
+
+    permissoesView.classList.remove('hidden');
+    document.querySelector('.app')?.classList.add('panel-active');
+
+    renderizarPermissoes();
+    atualizarPerfilPermissoes();
+};
+
+document.querySelectorAll('[data-gerencial-placeholder]').forEach(card => {
+    card.addEventListener('click', (event) => {
+        const destino = card.dataset.gerencialPlaceholder;
+        if (destino === 'Permissões') {
+            abrirTelaPermissoes(event);
+            return;
+        }
+        mostrarAviso(`${destino} será implementado na próxima etapa.`);
+    });
+});
+
+if (backToGerencialFromPermissoesBtn) {
+    backToGerencialFromPermissoesBtn.addEventListener('click', () => {
+        if (permissoesView) permissoesView.classList.add('hidden');
+        if (gerencialView) gerencialView.classList.remove('hidden');
+    });
+}
+
+function atualizarPerfilPermissoes() {
+    const origem = document.getElementById('user-display-panel') || document.getElementById('user-display-gerencial');
+    const destino = document.getElementById('user-display-permissoes');
+    if (origem && destino) destino.innerHTML = origem.innerHTML;
+}
+
+
 if (backToDashboardBtn) {
     backToDashboardBtn.addEventListener('click', () => {
         // Este botão é do Painel de Controle
         // Garante que o dashboard seja exibido e o painel de controle oculto
         if (dashboardView && controlPanelView) {
             controlPanelView.classList.add('hidden');
+            if (gerencialView) gerencialView.classList.add('hidden');
             dashboardView.classList.remove('hidden');
             document.querySelector('.app').classList.remove('panel-active');
             carregarTudo(); // Garante que os dados estejam atualizados ao voltar
