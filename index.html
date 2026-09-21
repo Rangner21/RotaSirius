@@ -2,6 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Rota Sirius</title>
   <link rel="icon" type="image/png" href="img/favicon.png">
   <link rel="shortcut icon" href="img/favicon.png">
@@ -87,7 +88,7 @@
               </button>
             </div>
             <input type="text" id="filtro-nome-rota" class="date-filter" placeholder="Pesquisar rota, NF ou destino..." title="Pesquisar por nome da rota, transportadora, número da NF ou destino" style="cursor: text;">
-            <input type="date" id="filtro-data-rota" class="date-filter" title="Filtrar data">
+            <div class="date-range-filter" title="Filtrar por período"><label>Início <input type="date" id="filtro-data-rota-inicio" class="date-filter"></label><label>Fim <input type="date" id="filtro-data-rota-fim" class="date-filter"></label></div>
             <button class="btn btn-outline" id="open-history-btn">⏱ Histórico</button>
           </div>
 
@@ -133,6 +134,20 @@
           <button class="btn btn-outline" id="back-to-dashboard-btn">← Voltar</button>
           <div id="user-display-panel" class="user-display"></div>
         </div>
+      </div>
+
+      <!-- FILTRO GLOBAL DE PERÍODO -->
+      <div class="panel-container" style="margin-bottom: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+        <strong style="font-size: 13px; color: var(--text);">Período</strong>
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted);">
+          Início
+          <input type="date" id="filtro-data-painel-inicio" class="date-filter">
+        </label>
+        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted);">
+          Fim
+          <input type="date" id="filtro-data-painel-fim" class="date-filter">
+        </label>
+        <span style="font-size: 11px; color: var(--text-muted);">O período é aplicado aos indicadores e gráficos do Painel.</span>
       </div>
       
       <!-- FAIXA DE INDICADORES RÁPIDOS -->
@@ -247,49 +262,6 @@
         </div>
       </div>
       
-      <div class="panel-grid">
-        <!-- Coluna da Esquerda: Usuários -->
-        <div class="panel-container">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; display: flex; align-items: center;">Gerenciamento de Usuários <span id="count-users" style="font-size: 11px; color: var(--primary); background: rgba(34, 197, 94, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; margin-left: 12px; border: 1px solid rgba(34, 197, 94, 0.2);"></span></h3>
-            <button class="btn" id="add-user-btn" style="margin: 0;">+ Adicionar Usuário</button>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Cargo</th>
-                <th>E-mail</th>
-                <th>Permissão</th>
-                <th>Status</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody id="users-table-body">
-            <!-- Usuários carregados via JS -->
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Coluna da Direita: KAM -->
-        <div class="panel-container">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; display: flex; align-items: center;">KAM <span id="count-kams" style="font-size: 11px; color: var(--primary); background: rgba(34, 197, 94, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; margin-left: 12px; border: 1px solid rgba(34, 197, 94, 0.2);"></span></h3>
-            <button class="btn" id="add-kam-btn" style="margin: 0;">+ Adicionar KAM</button>
-          </div>
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Nome do KAM</th>
-                <th style="width: 100px; text-align: center;">Ações</th>
-              </tr>
-            </thead>
-            <tbody id="kams-table-body">
-              <!-- KAMs carregados via JS -->
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
 
     <!-- Visão Gerencial -->
@@ -297,7 +269,7 @@
       <div class="topbar">
         <h2>Gerencial</h2>
         <div class="topbar-actions">
-          <button class="btn btn-outline" id="back-to-control-panel-from-gerencial-btn">← Painel de Controle</button>
+          <button class="btn btn-outline" id="back-to-control-panel-from-gerencial-btn" type="button" style="display:inline-flex !important;">← Voltar ao Painel</button>
           <div id="user-display-gerencial" class="user-display"></div>
         </div>
       </div>
@@ -310,7 +282,7 @@
         </div>
 
         <div class="gerencial-grid">
-          <button type="button" class="gerencial-card" data-gerencial-placeholder="Permissões" onclick="abrirTelaPermissoes(event)">
+          <button type="button" class="gerencial-card" data-gerencial-placeholder="Permissões">
             <span class="gerencial-card-icon">
               <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-1.42 1.42-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21h-2v-.08a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06-1.42-1.42.06-.06A1.65 1.65 0 0 0 9.6 15a1.65 1.65 0 0 0-1.51-1H8v-2h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06 1.42-1.42.06.06A1.65 1.65 0 0 0 12.5 8.4a1.65 1.65 0 0 0 1-1.51V7h2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06 1.42 1.42-.06.06A1.65 1.65 0 0 0 19.4 11a1.65 1.65 0 0 0 1.51 1H21v2h-.09a1.65 1.65 0 0 0-1.51 1Z"></path></svg>
             </span>
@@ -322,11 +294,11 @@
             <span class="gerencial-card-icon">
               <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
             </span>
-            <span class="gerencial-card-content"><strong>Gerenciar Usuários</strong><small>Administrar usuários e informações de acesso.</small></span>
+            <span class="gerencial-card-content"><strong>Gerenciar Usuários</strong><small>Administrar usuários, informações de acesso e responsáveis comerciais (KAM).</small></span>
             <span class="gerencial-card-arrow">→</span>
           </button>
 
-          <button type="button" class="gerencial-card" data-gerencial-placeholder="Limites de Retirada">
+          <button type="button" class="gerencial-card" id="open-limites-retirada-btn" data-gerencial-placeholder="Limites de Retirada">
             <span class="gerencial-card-icon">
               <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><path d="M8 14h2"></path><path d="M14 14h2"></path><path d="M8 18h2"></path></svg>
             </span>
@@ -337,40 +309,28 @@
       </div>
     </div>
 
+    <!-- Visão de Gerenciar Usuários -->
+    
 
     <!-- Visão de Permissões -->
-    <div id="permissoes-view" class="hidden">
-      <div class="topbar">
-        <h2>Permissões</h2>
-        <div class="topbar-actions">
-          <button class="btn btn-outline" id="back-to-gerencial-from-permissoes-btn">← Gerencial</button>
-          <div id="user-display-permissoes" class="user-display"></div>
-        </div>
-      </div>
+    
 
-      <div class="permissoes-page">
-        <div class="permissoes-intro">
-          <div>
-            <span class="gerencial-eyebrow">CONTROLE DE ACESSO</span>
-            <h3>Permissões por usuário</h3>
-            <p>Expanda um usuário para configurar, tela por tela, o que ele pode visualizar e gerenciar. Transporte e Retirada ficam separados nas telas operacionais.</p>
-          </div>
-          <div class="permissoes-legend">
-            <span><i class="permission-dot permission-dot-view"></i> Visualizar</span>
-            <span><i class="permission-dot permission-dot-manage"></i> Gerenciar</span>
-          </div>
-        </div>
+    <!-- Visão de Limites de Retirada -->
+    
 
-        <div class="permission-users-card">
-          <div class="permission-users-head">
-            <div><strong>Usuários</strong><span id="count-permission-users">0 usuários</span></div>
-            <span class="permission-help">Clique em um usuário para expandir</span>
-          </div>
-          <div class="permission-table-head">
-            <span>Usuário</span><span>Cargo</span><span>Acesso atual</span><span></span>
-          </div>
-          <div id="permissions-users-list"></div>
-        </div>
+    <!-- Modal para exceção de limite de retirada -->
+    <div id="limite-excecao-modal" class="modal-overlay">
+      <div class="modal-content">
+        <h3 id="limite-excecao-modal-title">Adicionar Exceção</h3>
+        <span class="close-button">&times;</span>
+        <form id="limite-excecao-form">
+          <input type="hidden" id="limite-excecao-id">
+          <label for="limite-excecao-data">Data:</label>
+          <input type="date" id="limite-excecao-data" required>
+          <label for="limite-excecao-valor">Limite de Retiradas:</label>
+          <input type="number" id="limite-excecao-valor" min="1" max="999" required>
+          <button type="submit" class="btn">Salvar exceção</button>
+        </form>
       </div>
     </div>
 
@@ -382,7 +342,7 @@
           <!-- GRUPO 1: FILTROS / HISTÓRICO -->
           <div class="topbar-group">
               <input type="text" id="filtro-nome-programacao" class="date-filter" placeholder="NF, KAM, Rota ou Destino..." title="Pesquisa global na programação" style="cursor: text;">
-              <input type="date" id="filtro-data-programacao" class="date-filter" title="Filtrar data">
+              <div class="date-range-filter" title="Filtrar por período"><label>Início <input type="date" id="filtro-data-programacao-inicio" class="date-filter"></label><label>Fim <input type="date" id="filtro-data-programacao-fim" class="date-filter"></label></div>
             <button class="btn btn-outline" id="open-programacao-history-btn">⏱ Histórico</button>
           </div>
           <!-- GRUPO 2: NAVEGAÇÃO -->
@@ -422,7 +382,7 @@
           <!-- GRUPO 1: FILTROS -->
           <div class="topbar-group">
             <input type="text" id="filtro-nome-new-history" class="date-filter" placeholder="Buscar no histórico" title="Filtrar por nome ou transportadora" style="cursor: text;">
-            <input type="date" id="filtro-data-new-history" class="date-filter" title="Filtrar data">
+            <div class="date-range-filter" title="Filtrar por período"><label>Início <input type="date" id="filtro-data-new-history-inicio" class="date-filter"></label><label>Fim <input type="date" id="filtro-data-new-history-fim" class="date-filter"></label></div>
           </div>
 
           <!-- GRUPO 2: NAVEGAÇÃO -->
@@ -587,7 +547,172 @@
       </div>
     </div>
 
-  </main>
+  <div id="gerenciar-usuarios-view" class="hidden">
+      <div class="topbar">
+        <h2>Gerenciar Usuários</h2>
+        <div class="topbar-actions">
+          <button class="btn btn-outline" id="back-to-gerencial-from-usuarios-btn" type="button" style="display:inline-flex !important;">← Voltar ao Gerencial</button>
+          <div id="user-display-gerenciar-usuarios" class="user-display"></div>
+        </div>
+      </div>
+
+      <div class="gerencial-page">
+        <div class="gerencial-intro">
+          <span class="gerencial-eyebrow">GESTÃO DE USUÁRIOS</span>
+          <h3>Gerenciar Usuários</h3>
+          <p>Administre os usuários do sistema e os responsáveis comerciais utilizados no cadastro das NFs.</p>
+        </div>
+
+        <div class="panel-grid" style="grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.85fr); align-items: start; gap: 24px;">
+          <div class="panel-container">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+              <h3 style="margin: 0; display: flex; align-items: center;">Gerenciar Usuários <span id="count-users" style="font-size: 11px; color: var(--primary); background: rgba(34, 197, 94, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; margin-left: 12px; border: 1px solid rgba(34, 197, 94, 0.2);"></span></h3>
+              <button class="btn" id="add-user-btn" style="margin: 0;">+ Adicionar Usuário</button>
+            </div>
+            <div style="overflow-x: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Permissão</th><th>Status</th><th>Ações</th></tr>
+                </thead>
+                <tbody id="users-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-container" id="gerencial-kam-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div>
+                <h3 style="margin: 0; display: flex; align-items: center;">KAM <span id="count-kams" style="font-size: 11px; color: var(--primary); background: rgba(34, 197, 94, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; margin-left: 12px; border: 1px solid rgba(34, 197, 94, 0.2);"></span></h3>
+                <small style="display:block; margin-top:5px; color:var(--text-muted);">Responsáveis comerciais utilizados nas NFs.</small>
+              </div>
+              <button class="btn" id="add-kam-btn" style="margin: 0; white-space: nowrap;">+ Adicionar KAM</button>
+            </div>
+            <div style="overflow-x: auto;">
+              <table class="data-table">
+                <thead><tr><th>Nome do KAM</th><th style="width: 100px; text-align: center;">Ações</th></tr></thead>
+                <tbody id="kams-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+<div id="permissoes-view" class="hidden">
+      <div class="topbar">
+        <h2>Permissões</h2>
+        <div class="topbar-actions">
+          <button class="btn btn-outline" id="back-to-gerencial-from-permissoes-btn" type="button" style="display:inline-flex !important;">← Voltar ao Gerencial</button>
+          <div id="user-display-permissoes" class="user-display"></div>
+        </div>
+      </div>
+
+      <div class="permissoes-page">
+        <div class="permissoes-intro">
+          <div>
+            <span class="gerencial-eyebrow">CONTROLE DE ACESSO</span>
+            <h3>Permissões por usuário</h3>
+            <p>Expanda um usuário para configurar, tela por tela, o que ele pode visualizar e gerenciar. Transporte e Retirada ficam separados nas telas operacionais.</p>
+          </div>
+          <div class="permissoes-legend">
+            <span><i class="permission-dot permission-dot-view"></i> Visualizar</span>
+            <span><i class="permission-dot permission-dot-manage"></i> Gerenciar</span>
+          </div>
+        </div>
+
+        <div class="permission-users-card">
+          <div class="permission-users-head">
+            <div><strong>Usuários</strong><span id="count-permission-users">0 usuários</span></div>
+            <span class="permission-help">Clique em um usuário para expandir</span>
+          </div>
+          <div class="permission-table-head">
+            <span>Usuário</span><span>Cargo</span><span>Acesso atual</span><span></span>
+          </div>
+          <div id="permissions-users-list"></div>
+        </div>
+      </div>
+    </div>
+
+<div id="limites-retirada-view" class="hidden">
+      <div class="topbar">
+        <h2>Limites de Retirada</h2>
+        <div class="topbar-actions">
+          <button class="btn btn-outline" id="back-to-gerencial-from-limites-btn" type="button" style="display:inline-flex !important;">← Voltar ao Gerencial</button>
+          <div id="user-display-limites-retirada" class="user-display"></div>
+        </div>
+      </div>
+
+      <div class="limites-retirada-page">
+        <div class="gerencial-intro">
+          <span class="gerencial-eyebrow">CONTROLE OPERACIONAL</span>
+          <h3>Limites de Retirada</h3>
+          <p>Defina o limite diário de NFs de Retirada que podem ser programadas e crie exceções quando a demanda de um dia exigir.</p>
+        </div>
+
+        <div class="limites-top-grid">
+          <section class="limite-card">
+            <div class="limite-card-title">
+              <div class="gerencial-card-icon limite-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path><path d="M12 8v8"></path></svg>
+              </div>
+              <div><strong>Limite Padrão Diário</strong><small>Usado automaticamente nos dias sem exceção.</small></div>
+            </div>
+            <div class="limite-padrao-control">
+              <button type="button" class="limite-step-btn" id="limite-padrao-minus" aria-label="Diminuir limite">−</button>
+              <input type="number" id="limite-padrao-input" min="1" max="999" value="4" aria-label="Limite padrão diário">
+              <button type="button" class="limite-step-btn" id="limite-padrao-plus" aria-label="Aumentar limite">+</button>
+            </div>
+            <div class="limite-control-footer">
+              <span>retiradas por dia</span>
+              <button type="button" class="btn btn-outline limite-save-btn" id="salvar-limite-padrao-btn">Salvar limite</button>
+            </div>
+          </section>
+
+          <section class="limite-card resumo-limite-card">
+            <div class="limite-card-title">
+              <div class="gerencial-card-icon limite-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+              </div>
+              <div><strong>Resumo de Hoje</strong><small id="limite-resumo-data">Carregando...</small></div>
+            </div>
+            <div class="limite-resumo-numeros">
+              <div><span>Limite do dia</span><strong id="limite-resumo-limite">—</strong></div>
+              <div><span>Já programadas</span><strong id="limite-resumo-usadas">—</strong></div>
+            </div>
+            <div class="limite-progress"><span id="limite-progress-bar"></span></div>
+            <div class="limite-resumo-footer"><span id="limite-resumo-fracao">— / —</span><span id="limite-resumo-restante">Carregando...</span></div>
+          </section>
+        </div>
+
+        <section class="limite-card limite-excecoes-card">
+          <div class="limite-section-head">
+            <div>
+              <strong>Exceções por Data</strong>
+              <small>Altere o limite de um dia específico sem modificar o limite padrão.</small>
+            </div>
+            <button type="button" class="btn" id="adicionar-excecao-limite-btn">+ Adicionar exceção</button>
+          </div>
+          <div class="limite-table-wrap">
+            <table class="limite-table">
+              <thead><tr><th>Data</th><th>Limite de Retiradas</th><th>Ações</th></tr></thead>
+              <tbody id="limites-excecoes-body"></tbody>
+            </table>
+          </div>
+          <div id="limites-excecoes-empty" class="limite-empty hidden">Nenhuma exceção cadastrada. Nos dias sem exceção, será usado o limite padrão.</div>
+        </section>
+
+        <section class="limite-card limite-como-funciona">
+          <div class="limite-section-head"><div><strong>Como funciona</strong><small>O limite controla a programação, não o cadastro das NFs.</small></div></div>
+          <div class="limite-info-grid">
+            <div><b>1</b><strong>Criação livre</strong><span>Você pode cadastrar quantas NFs de Retirada quiser. Criar a NF não consome o limite.</span></div>
+            <div><b>2</b><strong>Programação por data</strong><span>O limite é contado pelas NFs de Retirada colocadas em rotas ativas de cada data.</span></div>
+            <div><b>3</b><strong>Exceção temporária</strong><span>Uma exceção vale somente para a data cadastrada. Depois, o sistema volta ao limite padrão.</span></div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+</main>
 
 </div>
 
@@ -886,6 +1011,65 @@
     </div>
 </div>
 
+
+
+<!-- MENU GLOBAL DE NAVEGAÇÃO -->
+<div id="global-menu-overlay" class="global-menu-overlay hidden"></div>
+<aside id="global-menu" class="global-menu" aria-hidden="true">
+  <div class="global-menu-head">
+    <div>
+      <span class="global-menu-eyebrow">NAVEGAÇÃO</span>
+      <h3>Menu</h3>
+    </div>
+    <button type="button" id="global-menu-close" class="global-menu-close" aria-label="Fechar menu">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+  </div>
+  <nav class="global-menu-nav" aria-label="Navegação principal">
+    <button type="button" class="global-menu-item" data-menu-action="dashboard" data-menu-permission="Roteirização">
+      <span class="global-menu-item-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9"></path><path d="M5 10v10h14V10"></path><path d="M9 20v-6h6v6"></path></svg>
+      </span>
+      <span><strong>Roteirização</strong><small>Rotas e notas fiscais</small></span>
+    </button>
+    <button type="button" class="global-menu-item" data-menu-action="programacao" data-menu-permission="Programação">
+      <span class="global-menu-item-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+      </span>
+      <span><strong>Programação</strong><small>Programação por data</small></span>
+    </button>
+    <button type="button" class="global-menu-item" data-menu-action="historico" data-menu-permission="Histórico">
+      <span class="global-menu-item-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"></path><polyline points="3 4 3 10 9 10"></polyline><polyline points="12 7 12 12 15 14"></polyline></svg>
+      </span>
+      <span><strong>Histórico</strong><small>Rotas e programações finalizadas</small></span>
+    </button>
+    <button type="button" class="global-menu-item" data-menu-action="simular" data-menu-permission="Simular Rota">
+      <span class="global-menu-item-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.1 3.7 11 3l2.3 1.4 2.9-.3 2 1.8-.5 2.2 2 2.1-.9 2.5.4 2.3-2.2 2-2.1-.2-1.6 1.8-2.4-.6-1.9.9-1.7-1.7-2.3-.4-.4-2.5-1.5-1.8.8-2.2-.6-2.1 1.8-1.8z"></path><circle cx="9" cy="9" r="1"></circle><circle cx="14.5" cy="7.5" r="1"></circle><circle cx="15.5" cy="13.5" r="1"></circle><circle cx="10.5" cy="15.5" r="1"></circle><path d="M9.8 9.6 13.7 7.9M14.8 8.4l.5 4.1M14.8 14.1l-3.5 1"></path></svg>
+      </span>
+      <span><strong>Simular Rota</strong><small>Simulação e cálculo de rota</small></span>
+    </button>
+    <div class="global-menu-divider"></div>
+    <button type="button" class="global-menu-item" data-menu-action="painel" data-menu-permission="Painel de Controle">
+      <span class="global-menu-item-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="7" y1="8" x2="17" y2="8"></line><line x1="7" y1="12" x2="17" y2="12"></line><line x1="7" y1="16" x2="13" y2="16"></line></svg>
+      </span>
+      <span><strong>Painel de Controle</strong><small>Indicadores, KAMs e configurações</small></span>
+    </button>
+    <button type="button" class="global-menu-item" data-menu-action="gerencial" data-menu-permission="Gerencial">
+      <span class="global-menu-item-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06-1.42 1.42-.06-.06A1.65 1.65 0 0 0 16.55 18a1.65 1.65 0 0 0-1.51 1.55V20h-2v-.09A1.65 1.65 0 0 0 11.53 18a1.65 1.65 0 0 0-1.82.33l-.06.06-1.42-1.42.06-.06A1.65 1.65 0 0 0 8.55 15a1.65 1.65 0 0 0-1.51-1H7v-2h.04a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06 1.42-1.42.06.06A1.65 1.65 0 0 0 11.45 8a1.65 1.65 0 0 0 1.51-1.55V6h2v.09A1.65 1.65 0 0 0 16.47 8a1.65 1.65 0 0 0 1.82-.33l.06-.06 1.42 1.42-.06.06A1.65 1.65 0 0 0 19.45 11c.12.57.63 1 1.2 1H21v2h-.09A1.65 1.65 0 0 0 19.4 15Z"></path></svg>
+      </span>
+      <span><strong>Gerencial</strong><small>Permissões e controles administrativos</small></span>
+    </button>
+
+  </nav>
+  <div class="global-menu-footer">
+    <span>RotaSirius</span>
+    <small>Navegação do sistema</small>
+  </div>
+</aside>
 
 <!-- SCRIPTS -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

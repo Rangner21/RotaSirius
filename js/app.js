@@ -6,6 +6,28 @@ const loginEmail = document.getElementById('login-email');
 const loginPass = document.getElementById('login-password');
 const loginError = document.getElementById('login-error');
 
+async function carregarPermissoesUsuarioLogado() {
+    const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
+    if (!usuarioLogado?.id || !usuarioLogado.email || !usuarioLogado.senha) return usuarioLogado;
+    try {
+        const { data, error } = await supabaseClient.rpc("obter_minhas_permissoes", {
+            p_email: usuarioLogado.email,
+            p_senha: usuarioLogado.senha
+        });
+        if (error) throw error;
+        const registro = Array.isArray(data) ? data[0] : data;
+        if (registro) {
+            usuarioLogado.__permissoesPersonalizadas = registro.permissoes || {};
+            const perfilSalvo = usuarioLogado.__permissoesPersonalizadas.__perfilBase;
+            if (perfilSalvo) usuarioLogado.permissao = perfilSalvo;
+            localStorage.setItem("usuarioLogado", JSON.stringify(usuarioLogado));
+        }
+    } catch (err) {
+        console.warn("Permissões personalizadas não carregadas:", err);
+    }
+    return usuarioLogado;
+}
+
 function checkAuth() {
     initAdmin(); // Garante que o administrador padrão exista no sistema
     const isLogged = localStorage.getItem('rota_sirius_logged') === 'true';
@@ -30,6 +52,9 @@ function checkAuth() {
                     console.error("checkAuth: Erro ao buscar usuário logado do Supabase:", error);
                 }
             }
+            await carregarPermissoesUsuarioLogado();
+            aplicarPermissoesNaInterface();
+            inicializarMenuGlobal();
             carregarTudo();
             exibirUsuarioLogado();
         })();
@@ -38,6 +63,108 @@ function checkAuth() {
         loginScreen.classList.remove('hidden');
         mainApp.classList.add('hidden');
     }
+}
+
+
+// =========================================================
+// MENU GLOBAL DE NAVEGAÇÃO
+// =========================================================
+function inicializarMenuGlobal() {
+    const menu = document.getElementById('global-menu');
+    const overlay = document.getElementById('global-menu-overlay');
+    const closeBtn = document.getElementById('global-menu-close');
+    if (!menu || !overlay) return;
+
+    // Um único botão de menu em todas as páginas/telas.
+    document.querySelectorAll('.topbar-actions').forEach(actions => {
+        if (actions.querySelector('.global-menu-trigger')) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'global-menu-trigger';
+        button.title = 'Abrir menu';
+        button.setAttribute('aria-label', 'Abrir menu');
+        button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>';
+        button.addEventListener('click', abrirMenuGlobal);
+        const profileGroup = actions.querySelector('.user-display')?.closest('.topbar-group');
+        if (profileGroup) actions.insertBefore(button, profileGroup);
+        else actions.appendChild(button);
+    });
+
+    if (!menu.dataset.initialized) {
+        closeBtn?.addEventListener('click', fecharMenuGlobal);
+        overlay.addEventListener('click', fecharMenuGlobal);
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') fecharMenuGlobal();
+        });
+
+        document.querySelectorAll('.global-menu-item').forEach(item => {
+            item.addEventListener('click', () => navegarPeloMenuGlobal(item.dataset.menuAction));
+        });
+        menu.dataset.initialized = 'true';
+    }
+
+    atualizarMenuGlobalPermissoes();
+}
+
+function abrirMenuGlobal() {
+    const menu = document.getElementById('global-menu');
+    const overlay = document.getElementById('global-menu-overlay');
+    if (!menu || !overlay) return;
+    atualizarMenuGlobalPermissoes();
+    menu.classList.add('is-open');
+    menu.setAttribute('aria-hidden', 'false');
+    overlay.classList.remove('hidden');
+    document.body.classList.add('global-menu-open');
+}
+
+function fecharMenuGlobal() {
+    const menu = document.getElementById('global-menu');
+    const overlay = document.getElementById('global-menu-overlay');
+    if (!menu || !overlay) return;
+    menu.classList.remove('is-open');
+    menu.setAttribute('aria-hidden', 'true');
+    overlay.classList.add('hidden');
+    document.body.classList.remove('global-menu-open');
+}
+
+function atualizarMenuGlobalPermissoes() {
+    document.querySelectorAll('.global-menu-item[data-menu-permission]').forEach(item => {
+        const tela = item.dataset.menuPermission;
+        let permitido = true;
+        try {
+            permitido = !!usuarioPodeVisualizar(tela);
+        } catch (_) {
+            permitido = true;
+        }
+        item.classList.toggle('hidden', !permitido);
+    });
+}
+
+function navegarPeloMenuGlobal(acao) {
+    fecharMenuGlobal();
+
+    const clicar = id => {
+        const el = document.getElementById(id);
+        if (el && !el.disabled) {
+            el.click();
+            return true;
+        }
+        return false;
+    };
+
+    if (acao === 'dashboard') {
+        [dashboardView, controlPanelView, gerencialView, gerenciarUsuariosView, programacaoView, newHistoryView, simulateRouteView, permissoesView, limitesRetiradaView]
+            .forEach(view => view?.classList.add('hidden'));
+        dashboardView?.classList.remove('hidden');
+        document.querySelector('.app')?.classList.remove('panel-active');
+        carregarRotas();
+        return;
+    }
+    if (acao === 'programacao') return clicar('open-programacao-btn');
+    if (acao === 'historico') return clicar('open-history-btn');
+    if (acao === 'painel') return clicar('open-control-panel-btn');
+    if (acao === 'gerencial') return clicar('open-gerencial-btn');
+    if (acao === 'simular') return clicar('open-simulate-route-btn');
 }
 
 function exibirUsuarioLogado() {
@@ -54,23 +181,24 @@ function exibirUsuarioLogado() {
         return;
     }
 
-    const isViewer = usuarioLogado.permissao === "Visualizador";
+    const permissoes = obterPermissoesVisuaisUsuario(usuarioLogado);
+    const isViewer = !Object.values(permissoes).some(p => p && p.gerenciamento);
     document.body.classList.toggle('is-viewer', isViewer);
 
     // Controle de visibilidade do Painel de Controle por permissão
-    const isAdmin = usuarioLogado.permissao === "Administrador";
+    const podeGerenciarPainel = usuarioPodeVisualizar('Painel de Controle');
     const btnControlDash = document.getElementById('open-control-panel-btn');
     const btnControlProg = document.getElementById('open-control-panel-from-prog-btn');
     const btnControlHistory = document.getElementById('open-control-panel-from-new-history-btn');
 
     if (btnControlDash) {
-        isAdmin ? btnControlDash.classList.remove('hidden') : btnControlDash.classList.add('hidden');
+        podeGerenciarPainel ? btnControlDash.classList.remove('hidden') : btnControlDash.classList.add('hidden');
     }
     if (btnControlProg) {
-        isAdmin ? btnControlProg.classList.remove('hidden') : btnControlProg.classList.add('hidden');
+        podeGerenciarPainel ? btnControlProg.classList.remove('hidden') : btnControlProg.classList.add('hidden');
     }
     if (btnControlHistory) {
-        isAdmin ? btnControlHistory.classList.remove('hidden') : btnControlHistory.classList.add('hidden');
+        podeGerenciarPainel ? btnControlHistory.classList.remove('hidden') : btnControlHistory.classList.add('hidden');
     }
 
     const primeiroNome = usuarioLogado.nome.split(" ")[0];
@@ -237,11 +365,6 @@ window.handleCopiarLinkMaps = async function(rotaId) {
         mostrarAviso("Erro ao copiar o link da rota.");
     }
 };
-
-function isUserViewer() {
-    const user = JSON.parse(localStorage.getItem("usuarioLogado"));
-    return user && user.permissao === "Visualizador";
-}
 
 window.handleOpenChangePasswordModal = function(event) {
     if (event) event.stopPropagation();
@@ -416,6 +539,17 @@ const genericModalOk = document.getElementById('generic-modal-ok');
 const genericModalCancel = document.getElementById('generic-modal-cancel');
 const genericModalTitle = document.getElementById('generic-modal-title');
 const genericModalMessage = document.getElementById('generic-modal-message');
+const limiteExcecaoModal = document.getElementById('limite-excecao-modal');
+const limiteExcecaoForm = document.getElementById('limite-excecao-form');
+const limiteExcecaoId = document.getElementById('limite-excecao-id');
+const limiteExcecaoData = document.getElementById('limite-excecao-data');
+const limiteExcecaoValor = document.getElementById('limite-excecao-valor');
+const limiteExcecaoModalTitle = document.getElementById('limite-excecao-modal-title');
+const limitePadraoInput = document.getElementById('limite-padrao-input');
+const salvarLimitePadraoBtn = document.getElementById('salvar-limite-padrao-btn');
+const limitePadraoMinus = document.getElementById('limite-padrao-minus');
+const limitePadraoPlus = document.getElementById('limite-padrao-plus');
+const adicionarExcecaoLimiteBtn = document.getElementById('adicionar-excecao-limite-btn');
 
 const searchInput = document.querySelector('.search');
 let filtroAtual = "todos";
@@ -476,15 +610,50 @@ function closeModal(modalElement) {
 const dashboardView = document.getElementById('dashboard-view');
 const controlPanelView = document.getElementById('control-panel-view');
 const gerencialView = document.getElementById('gerencial-view');
+const gerenciarUsuariosView = document.getElementById('gerenciar-usuarios-view');
 const programacaoView = document.getElementById('programacao-view'); // Nova referência
 const newHistoryView = document.getElementById('new-history-view');
 const simulateRouteView = document.getElementById('simulate-route-view');
 
-let simulateMap = null;
-let simulateMarkersLayer = null;
-let simulateRouteLayer = null;
-let simulateMarkersData = {};
-let simulateStopCounter = 1;
+
+// Navegação exclusiva das telas gerenciais.
+// As telas gerenciais ficam mutuamente exclusivas e as demais telas
+// continuam usando apenas a navegação normal por .hidden.
+function obterGerencialSubViews() {
+    return [gerencialView, gerenciarUsuariosView, permissoesView, limitesRetiradaView];
+}
+
+function mostrarSomenteView(viewAlvo) {
+    const todasViews = [
+        dashboardView,
+        controlPanelView,
+        gerencialView,
+        gerenciarUsuariosView,
+        programacaoView,
+        newHistoryView,
+        simulateRouteView,
+        permissoesView,
+        limitesRetiradaView
+    ];
+
+    // Primeiro oculta todas as telas normalmente.
+    todasViews.forEach(view => {
+        if (view) view.classList.add('hidden');
+    });
+
+    // Nas telas gerenciais também forçamos display:none para impedir
+    // qualquer regra de layout/CSS de fazê-las aparecer empilhadas.
+    obterGerencialSubViews().forEach(view => {
+        if (!view) return;
+        view.classList.add('hidden');
+        view.style.display = 'none';
+    });
+
+    if (viewAlvo) {
+        viewAlvo.classList.remove('hidden');
+        viewAlvo.style.removeProperty('display');
+    }
+}
 
 // --- SIMULAÇÃO DE ROTA (MAPA, CEP, GEOCODIFICAÇÃO) ---
 function initSimulateMap() {
@@ -1045,7 +1214,9 @@ const openControlPanelBtn = document.getElementById('open-control-panel-btn');
 const openGerencialBtn = document.getElementById('open-gerencial-btn');
 const backToControlPanelFromGerencialBtn = document.getElementById('back-to-control-panel-from-gerencial-btn');
 const permissoesView = document.getElementById('permissoes-view');
+const limitesRetiradaView = document.getElementById('limites-retirada-view');
 const backToGerencialFromPermissoesBtn = document.getElementById('back-to-gerencial-from-permissoes-btn');
+const backToGerencialFromLimitesBtn = document.getElementById('back-to-gerencial-from-limites-btn');
 const openProgramacaoBtn = document.getElementById('open-programacao-btn'); // Novo botão
 const backToDashboardBtn = document.getElementById('back-to-dashboard-btn');
 const openProgHistoryBtn = document.getElementById('open-programacao-history-btn');
@@ -1066,70 +1237,170 @@ let listaUsuariosLocal = []; // Cache local para busca rápida na edição
 
 // --- GERENCIAL: PERMISSÕES (ETAPA 3A - VISUAL) ---
 const permissoesConfigBase = {
-    'Roteirização': { visualizacao: true, gerenciamento: true, transporte: true, retirada: true },
-    'Programação': { visualizacao: true, gerenciamento: true, transporte: true, retirada: true },
-    'Histórico': { visualizacao: true, gerenciamento: false },
+    'Roteirização': {
+        visualizacao: true, gerenciamento: true, transporte: true, retirada: true,
+        adicionar_nf: true, editar_nf: true, excluir_nf: true,
+        criar_rota: true, editar_rota: true, excluir_rota: true,
+        adicionar_nf_rota: true, remover_nf_rota: true, finalizar_rota: true,
+        copiar_resumo: true, observacao_nf: true
+    },
+    'Programação': {
+        visualizacao: true, gerenciamento: true,
+        alterar_status: true, retornar_rota: true, exportar: true
+    },
+    'Histórico': {
+        visualizacao: true, gerenciamento: false,
+        visualizar_detalhes: true, retornar_rota: false, excluir_historico: false,
+        observacao: false
+    },
     'Simular Rota': { visualizacao: true, gerenciamento: true },
-    'Painel de Controle': { visualizacao: true, gerenciamento: true },
-    'Gerencial': { visualizacao: false, gerenciamento: false }
+    'Painel de Controle': {
+        visualizacao: true, gerenciamento: true
+    },
+    'Gerencial': {
+        visualizacao: false, gerenciamento: false,
+        gerenciar_usuarios: false, gerenciar_kam: false,
+        gerenciar_permissoes: false, gerenciar_limites: false
+    }
 };
 
 function obterPermissoesVisuaisUsuario(user) {
-    const acesso = user?.permissao || 'Operador';
+    const acesso = user?.__permissoesPersonalizadas?.__perfilBase || user?.permissao || 'Operador';
     const defaults = JSON.parse(JSON.stringify(permissoesConfigBase));
 
-    // Perfis nativos da Etapa 3A:
-    // Visualizador = vê tudo, não gerencia nada.
     if (acesso === 'Visualizador') {
         Object.values(defaults).forEach(p => {
             p.visualizacao = true;
             p.gerenciamento = false;
-            if ('transporte' in p) p.transporte = false;
-            if ('retirada' in p) p.retirada = false;
+            Object.keys(p).forEach(k => { if (k !== 'visualizacao' && k !== 'gerenciamento') p[k] = false; });
         });
         defaults['Gerencial'].visualizacao = false;
-        return defaults;
-    }
-
-    // Operador = gerencia tudo, exceto Gerencial; Histórico é somente visualização.
-    if (acesso === 'Operador') {
+    } else if (acesso === 'Operador') {
         Object.values(defaults).forEach(p => {
             p.visualizacao = true;
             p.gerenciamento = true;
-            if ('transporte' in p) p.transporte = true;
-            if ('retirada' in p) p.retirada = true;
+            Object.keys(p).forEach(k => { if (k !== 'visualizacao' && k !== 'gerenciamento') p[k] = true; });
         });
         defaults['Histórico'].gerenciamento = false;
+        defaults['Histórico'].retornar_rota = false;
+        defaults['Histórico'].excluir_historico = false;
+        defaults['Histórico'].observacao = false;
         defaults['Gerencial'].visualizacao = false;
         defaults['Gerencial'].gerenciamento = false;
-        return defaults;
-    }
-
-    // Administrador = gerencia tudo, exceto a tela Gerencial.
-    if (acesso === 'Administrador') {
+        defaults['Gerencial'].gerenciar_permissoes = false;
+        defaults['Gerencial'].gerenciar_limites = false;
+    } else if (acesso === 'Administrador') {
         Object.values(defaults).forEach(p => {
             p.visualizacao = true;
             p.gerenciamento = true;
-            if ('transporte' in p) p.transporte = true;
-            if ('retirada' in p) p.retirada = true;
+            Object.keys(p).forEach(k => { if (k !== 'visualizacao' && k !== 'gerenciamento') p[k] = true; });
         });
-        defaults['Gerencial'].visualizacao = false;
-        defaults['Gerencial'].gerenciamento = false;
-        return defaults;
-    }
-
-    // ADM TI = acesso total, incluindo Gerencial.
-    if (acesso === 'ADM TI') {
+        defaults['Histórico'].gerenciamento = false;
+        defaults['Histórico'].retornar_rota = false;
+        defaults['Histórico'].excluir_historico = false;
+        defaults['Histórico'].observacao = false;
+        // Administrador também mantém acesso ao Gerencial, preservando o acesso
+        // que já existia no sistema. O ADM TI continua sendo o perfil de acesso total.
+        defaults['Gerencial'].visualizacao = true;
+        defaults['Gerencial'].gerenciamento = true;
+        defaults['Gerencial'].gerenciar_permissoes = true;
+        defaults['Gerencial'].gerenciar_limites = true;
+    } else if (acesso === 'ADM TI') {
         Object.values(defaults).forEach(p => {
             p.visualizacao = true;
             p.gerenciamento = true;
-            if ('transporte' in p) p.transporte = true;
-            if ('retirada' in p) p.retirada = true;
+            Object.keys(p).forEach(k => { if (k !== 'visualizacao' && k !== 'gerenciamento') p[k] = true; });
         });
-        return defaults;
+    }
+
+    // IMPORTANTE: as personalizações são exceções sobre o perfil-base.
+    // Elas devem ser aplicadas DEPOIS do preset, nunca antes dos returns.
+    const personalizadas = user?.__permissoesPersonalizadas;
+    if (personalizadas && typeof personalizadas === 'object') {
+        Object.keys(personalizadas).forEach(tela => {
+            if (!defaults[tela] || !personalizadas[tela] || typeof personalizadas[tela] !== 'object') return;
+            Object.keys(personalizadas[tela]).forEach(chave => {
+                if (chave in defaults[tela] && typeof personalizadas[tela][chave] === 'boolean') {
+                    defaults[tela][chave] = personalizadas[tela][chave];
+                }
+            });
+        });
     }
 
     return defaults;
+}
+
+function obterPermissaoUsuario(tela) {
+    const user = JSON.parse(localStorage.getItem('usuarioLogado') || 'null');
+    if (!user) return null;
+    return obterPermissoesVisuaisUsuario(user)[tela] || null;
+}
+
+function usuarioPodeVisualizar(tela) {
+    return !!obterPermissaoUsuario(tela)?.visualizacao;
+}
+
+function usuarioPodeGerenciar(tela) {
+    return !!obterPermissaoUsuario(tela)?.gerenciamento;
+}
+
+function usuarioPodeAcao(tela, acao) {
+    const p = obterPermissaoUsuario(tela);
+    if (!p) return false;
+    if (typeof p[acao] === 'boolean') return p[acao];
+    return !!p.gerenciamento;
+}
+
+function usuarioPodeTransportar() {
+    return !!obterPermissaoUsuario('Roteirização')?.transporte;
+}
+
+function usuarioPodeRetirar() {
+    return !!obterPermissaoUsuario('Roteirização')?.retirada;
+}
+
+async function salvarPermissoesUsuario(button, usuarioId) {
+    if (!button || !usuarioId) return;
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_permissoes')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar permissões.');
+        return;
+    }
+    const detalhes = button.closest('.permission-detail-inner');
+    if (!detalhes) return;
+    const telas = {};
+    const usuarioConfigurado = listaUsuariosLocal.find(u => String(u.id) === String(usuarioId));
+    if (usuarioConfigurado?.permissao) telas.__perfilBase = usuarioConfigurado.permissao;
+    detalhes.querySelectorAll('.permission-screen').forEach(screen => {
+        const tela = screen.dataset.screen;
+        if (!tela) return;
+        const config = {};
+        screen.querySelectorAll('input[data-permission]').forEach(input => {
+            const chave = input.dataset.permission;
+            if (chave) config[chave] = input.checked;
+        });
+        telas[tela] = config;
+    });
+    const administrador = JSON.parse(localStorage.getItem("usuarioLogado"));
+    if (!administrador?.email || !administrador?.senha) { mostrarAviso('Sessão administrativa inválida. Faça login novamente.'); return; }
+    button.disabled = true;
+    const textoOriginal = button.textContent;
+    button.textContent = 'Salvando...';
+    try {
+        const { data, error } = await supabaseClient.rpc('salvar_permissoes_usuarios', {
+            p_email: administrador.email, p_senha: administrador.senha, p_usuario_id: usuarioId, p_permissoes: telas
+        });
+        if (error) throw error;
+        const salvo = Array.isArray(data) ? data[0] : data;
+        if (usuarioConfigurado) usuarioConfigurado.__permissoesPersonalizadas = salvo?.permissoes || telas;
+        const badge = detalhes.querySelector('.permission-stage-badge');
+        if (badge) badge.textContent = 'Configuração salva';
+        mostrarAviso('Permissões salvas com sucesso.');
+    } catch (err) {
+        console.error('Gerencial: erro ao salvar permissões:', err);
+        mostrarAviso('Erro ao salvar as permissões.');
+    } finally {
+        button.disabled = false; button.textContent = textoOriginal;
+    }
 }
 
 function renderizarPermissoes() {
@@ -1195,10 +1466,83 @@ function renderizarPermissoes() {
             if (!open && !details.dataset.rendered) {
                 details.innerHTML = criarPainelPermissoesUsuario(user);
                 details.dataset.rendered = 'true';
+                configurarFlagsDePermissao(details);
             }
         });
         container.appendChild(row);
     });
+}
+
+function configurarFlagsDePermissao(detalhes) {
+    if (!detalhes) return;
+    detalhes.querySelectorAll('.permission-screen').forEach(screen => {
+        const gerenciar = screen.querySelector('input[data-permission="gerenciamento"]');
+        if (!gerenciar) return;
+        gerenciar.addEventListener('change', () => {
+            // "Gerenciar" é uma permissão independente.
+            // As flags de ações continuam valendo individualmente e não são apagadas.
+        });
+    });
+}
+
+function aplicarPermissoesNaInterface() {
+    const user = JSON.parse(localStorage.getItem('usuarioLogado') || 'null');
+    if (!user) return;
+
+    const permissoes = obterPermissoesVisuaisUsuario(user);
+    const isViewer = !Object.values(permissoes).some(p => p && p.gerenciamento);
+    document.body.classList.toggle('is-viewer', isViewer);
+
+    const ids = {
+        'Programação': ['open-programacao-btn'],
+        'Histórico': ['open-history-btn', 'open-programacao-history-btn'],
+        'Painel de Controle': ['open-control-panel-btn', 'open-control-panel-from-prog-btn', 'open-control-panel-from-new-history-btn'],
+        'Gerencial': ['open-gerencial-btn'],
+        'Simular Rota': ['open-simulate-route-btn']
+    };
+    Object.entries(ids).forEach(([tela, lista]) => {
+        lista.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.toggle('hidden', !usuarioPodeVisualizar(tela));
+        });
+    });
+    const cardLimites = document.getElementById('open-limites-retirada-btn');
+    if (cardLimites) cardLimites.classList.toggle('hidden', !usuarioPodeAcao('Gerencial', 'gerenciar_limites'));
+    const cardUsuarios = document.querySelector('[data-gerencial-placeholder="Gerenciar Usuários"]');
+    const kamSection = document.getElementById('gerencial-kam-section');
+    if (cardUsuarios) cardUsuarios.classList.toggle('hidden', !usuarioPodeAcao('Gerencial', 'gerenciar_usuarios'));
+    if (kamSection) kamSection.classList.toggle('hidden', !usuarioPodeAcao('Gerencial', 'gerenciar_kam'));
+
+    // Exceções para Visualizador: ações específicas podem ser liberadas individualmente.
+    const styleId = 'permissoes-granulares-runtime';
+    let style = document.getElementById(styleId);
+    if (!style) {
+        style = document.createElement('style');
+        style.id = styleId;
+        document.head.appendChild(style);
+    }
+    const regras = [];
+    const permitir = (acao, selector) => {
+        if (usuarioPodeAcao('Roteirização', acao)) regras.push(`body.is-viewer ${selector}{display:flex!important;}`);
+    };
+
+    // A entrada de NF só é útil se pelo menos uma das operações estiver liberada.
+    if (
+        usuarioPodeAcao('Roteirização', 'adicionar_nf') &&
+        (usuarioPodeTransportar() || usuarioPodeRetirar())
+    ) {
+        regras.push('body.is-viewer #open-nf-modal-btn{display:flex!important;}');
+    }
+    permitir('criar_rota', '#open-rota-modal-btn');
+    permitir('editar_nf', '.nf-actions-top .edit');
+    permitir('excluir_nf', '.nf-actions-top .delete');
+    permitir('editar_rota', '.rota-actions .edit');
+    permitir('excluir_rota', '.rota-actions .delete');
+    permitir('finalizar_rota', '.rota-footer .btn:not(.btn-outline):not(.btn-map-route)');
+    if (usuarioPodeAcao('Histórico', 'retornar_rota')) regras.push('body.is-viewer .history-card .btn[onclick*="retornar"]{display:block!important;}');
+    if (usuarioPodeAcao('Histórico', 'excluir_historico')) regras.push('body.is-viewer .history-card .btn[onclick*="excluirHistorico"]{display:block!important;}');
+    style.textContent = regras.join('\n');
+    inicializarMenuGlobal();
 }
 
 function criarPainelPermissoesUsuario(user) {
@@ -1216,25 +1560,42 @@ function criarPainelPermissoesUsuario(user) {
               const p = config[tela];
               const hasOps = 'transporte' in p || 'retirada' in p;
               return `
-                <div class="permission-screen">
+                <div class="permission-screen" data-screen="${tela}">
                   <div class="permission-screen-name"><strong>${tela}</strong>${hasOps ? '<small>Permissões operacionais</small>' : ''}</div>
-                  <label class="permission-switch-line"><input type="checkbox" ${p.visualizacao ? 'checked' : ''}><span class="permission-switch"></span><span>Visualizar</span></label>
-                  <label class="permission-switch-line"><input type="checkbox" ${p.gerenciamento ? 'checked' : ''}><span class="permission-switch"></span><span>Gerenciar</span></label>
+                  <label class="permission-switch-line"><input type="checkbox" data-permission="visualizacao" ${p.visualizacao ? 'checked' : ''}><span class="permission-switch"></span><span>Visualizar</span></label>
+                  <label class="permission-switch-line"><input type="checkbox" data-permission="gerenciamento" ${p.gerenciamento ? 'checked' : ''}><span class="permission-switch"></span><span>Gerenciar</span></label>
                   ${hasOps ? `
                     <div class="permission-operations">
-                      <span class="permission-operations-label">Ações permitidas</span>
-                      <label class="permission-switch-line compact"><input type="checkbox" ${p.transporte ? 'checked' : ''}><span class="permission-switch"></span><span>Transporte</span></label>
-                      <label class="permission-switch-line compact"><input type="checkbox" ${p.retirada ? 'checked' : ''}><span class="permission-switch"></span><span>Retirada</span></label>
+                      <span class="permission-operations-label">Operações</span>
+                      <label class="permission-switch-line compact"><input type="checkbox" data-permission="transporte" ${p.transporte ? 'checked' : ''}><span class="permission-switch"></span><span>Transporte</span></label>
+                      <label class="permission-switch-line compact"><input type="checkbox" data-permission="retirada" ${p.retirada ? 'checked' : ''}><span class="permission-switch"></span><span>Retirada</span></label>
+                    </div>` : ''}
+                  ${Object.entries(p).filter(([k]) => !['visualizacao','gerenciamento','transporte','retirada'].includes(k)).length ? `
+                    <div class="permission-operations">
+                      <span class="permission-operations-label">Ações específicas</span>
+                      ${Object.entries(p).filter(([k]) => !['visualizacao','gerenciamento','transporte','retirada'].includes(k)).map(([k,v]) => {
+                          const labels = { adicionar_nf:'Adicionar NF', editar_nf:'Editar NF', excluir_nf:'Excluir NF', criar_rota:'Criar rota', editar_rota:'Editar rota', excluir_rota:'Excluir rota', adicionar_nf_rota:'Adicionar NF à rota', remover_nf_rota:'Remover NF da rota', finalizar_rota:'Finalizar rota', copiar_resumo:'Copiar resumo', observacao_nf:'Observação da NF', alterar_status:'Alterar status', retornar_rota:'Retornar rota', exportar:'Exportar', visualizar_detalhes:'Detalhes da rota', excluir_historico:'Excluir histórico', observacao:'Observação', gerenciar_usuarios:'Gerenciar usuários', gerenciar_kam:'Gerenciar KAM', gerenciar_permissoes:'Gerenciar permissões', gerenciar_limites:'Gerenciar limites' };
+                          return `<label class=\"permission-switch-line compact\"><input type=\"checkbox\" data-permission=\"${k}\" ${v ? 'checked' : ''}><span class=\"permission-switch\"></span><span>${labels[k] || k}</span></label>`;
+                      }).join('')}
                     </div>` : ''}
                 </div>`;
           }).join('')}
         </div>
         <div class="permission-detail-footer">
-          <span>As alterações desta etapa ainda não são persistidas nem aplicadas às regras do sistema.</span>
+          <span>O perfil-base apenas preenche as permissões iniciais. As flags abaixo são as permissões efetivas e podem ser alteradas individualmente.</span>
           <button type="button" class="btn btn-outline permission-save-visual">Salvar configuração</button>
         </div>
       </div>`;
 }
+
+document.addEventListener('click', (event) => {
+    const button = event.target.closest('.permission-save-visual');
+    if (!button) return;
+    const detalhes = button.closest('.permission-detail-inner');
+    const row = button.closest('.permission-user-item');
+    const usuarioId = row?.dataset.userId;
+    if (detalhes && usuarioId) salvarPermissoesUsuario(button, usuarioId);
+});
 
 // --- ADMIN: USUÁRIOS ---
 function initAdmin() {
@@ -1288,6 +1649,10 @@ function renderizarUsuarios(users) {
 }
 
 window.editarUsuario = function(id) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_usuarios')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar usuários.');
+        return;
+    }
     const user = listaUsuariosLocal.find(u => u.id == id);
     if (!user) return;
 
@@ -1305,6 +1670,10 @@ window.editarUsuario = function(id) {
 };
 
 window.excluirUsuario = function(id) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_usuarios')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar usuários.');
+        return;
+    }
     confirmarAcao("Tem certeza que deseja remover este usuário do banco de dados?", async () => {
         try {
             const { error } = await supabaseClient.from("usuarios").delete().eq("id", id);
@@ -1401,6 +1770,10 @@ function popularSelectKam(kams, valorSelecionado = "") {
 }
 
 window.editarKam = function(id, nome) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_kam')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar KAM.');
+        return;
+    }
     if (kamModalTitle) kamModalTitle.innerText = "Editar KAM";
     if (kamIdHidden) kamIdHidden.value = id;
     if (kamNomeInput) kamNomeInput.value = nome;
@@ -1408,6 +1781,10 @@ window.editarKam = function(id, nome) {
 };
 
 window.excluirKam = function(id) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_kam')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar KAM.');
+        return;
+    }
     confirmarAcao("Tem certeza que deseja excluir este KAM?", async () => {
         try {
             await supabaseClient.from("kams").delete().eq("id", id);
@@ -1420,6 +1797,10 @@ window.excluirKam = function(id) {
 
 if (addKamBtn) {
     addKamBtn.addEventListener('click', () => {
+        if (!usuarioPodeAcao('Gerencial', 'gerenciar_kam')) {
+            mostrarAviso('⛔ Você não possui permissão para gerenciar KAM.');
+            return;
+        }
         if (kamModalTitle) kamModalTitle.innerText = "Adicionar Novo KAM";
         if (kamIdHidden) kamIdHidden.value = "";
         if (createKamForm) createKamForm.reset();
@@ -1430,6 +1811,10 @@ if (addKamBtn) {
 if (createKamForm) {
     createKamForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!usuarioPodeAcao('Gerencial', 'gerenciar_kam')) {
+            mostrarAviso('⛔ Você não possui permissão para gerenciar KAM.');
+            return;
+        }
         const id = kamIdHidden ? kamIdHidden.value : "";
         const nome = kamNomeInput ? kamNomeInput.value.trim() : "";
 
@@ -1475,6 +1860,10 @@ if (createKamForm) {
 
 if (addUserBtn) {
     addUserBtn.addEventListener('click', () => {
+        if (!usuarioPodeAcao('Gerencial', 'gerenciar_usuarios')) {
+            mostrarAviso('⛔ Você não possui permissão para gerenciar usuários.');
+            return;
+        }
         if (userModalTitle) userModalTitle.innerText = "Adicionar Novo Usuário";
         if (userIdHidden) userIdHidden.value = "";
         if (createUserForm) createUserForm.reset();
@@ -1492,8 +1881,8 @@ if (openControlPanelBtn) {
         // FIX 4: Verificação de permissão de administrador
         // BUG ORIGINAL: qualquer usuário logado (Operador, Visualizador) podia acessar o painel
         const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
-            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
+        if (!usuarioLogado || !usuarioPodeVisualizar('Painel de Controle')) {
+            mostrarAviso("⛔ Acesso restrito. Você não possui permissão para gerenciar o Painel de Controle.");
             return;
         }
         if (dashboardView && controlPanelView && programacaoView && newHistoryView) {
@@ -1505,8 +1894,6 @@ if (openControlPanelBtn) {
             controlPanelView.classList.remove('hidden');
             document.querySelector('.app').classList.add('panel-active');
             carregarDashboard();
-            carregarUsuarios();
-            carregarKams();
         }
     });
 }
@@ -1514,28 +1901,27 @@ if (openControlPanelBtn) {
 if (openControlPanelFromProgBtn) {
     openControlPanelFromProgBtn.addEventListener('click', () => {
         const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
-            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
+        if (!usuarioLogado || !usuarioPodeVisualizar('Painel de Controle')) {
+            mostrarAviso("⛔ Acesso restrito. Você não possui permissão para gerenciar o Painel de Controle.");
             return;
         }
         programacaoView.classList.add('hidden');
         if (gerencialView) gerencialView.classList.add('hidden');
+        if (gerenciarUsuariosView) gerenciarUsuariosView.classList.add('hidden');
         if (newHistoryView) newHistoryView.classList.add('hidden');
         simulateRouteView.classList.add('hidden');
         if (gerencialView) gerencialView.classList.add('hidden');
         controlPanelView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
-        carregarUsuarios();
-        carregarKams();
     });
 }
 
 if (openControlPanelFromHistoryBtn) {
     openControlPanelFromHistoryBtn.addEventListener('click', () => {
         const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
-            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar o Painel de Controle.");
+        if (!usuarioLogado || !usuarioPodeVisualizar('Painel de Controle')) {
+            mostrarAviso("⛔ Acesso restrito. Você não possui permissão para gerenciar o Painel de Controle.");
             return;
         }
         newHistoryView.classList.add('hidden');
@@ -1544,8 +1930,6 @@ if (openControlPanelFromHistoryBtn) {
         controlPanelView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
-        carregarUsuarios();
-        carregarKams();
     });
 }
 
@@ -1696,44 +2080,70 @@ const backToDashboardFromSimulateBtn = document.getElementById('back-to-dashboar
 if (openGerencialBtn) {
     openGerencialBtn.addEventListener('click', () => {
         const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-        if (!usuarioLogado || usuarioLogado.permissao !== "Administrador") {
-            mostrarAviso("⛔ Acesso restrito. Apenas Administradores podem acessar a Área Gerencial.");
+        if (!usuarioLogado || !usuarioPodeVisualizar('Gerencial')) {
+            mostrarAviso("⛔ Acesso restrito. Você não possui permissão para acessar a Área Gerencial.");
             return;
         }
         if (!gerencialView || !controlPanelView) return;
-        controlPanelView.classList.add('hidden');
-        if (dashboardView) dashboardView.classList.add('hidden');
-        if (programacaoView) programacaoView.classList.add('hidden');
-        if (gerencialView) gerencialView.classList.add('hidden');
-        if (newHistoryView) newHistoryView.classList.add('hidden');
-        if (simulateRouteView) simulateRouteView.classList.add('hidden');
-        gerencialView.classList.remove('hidden');
+        mostrarSomenteView(gerencialView);
         document.querySelector('.app').classList.add('panel-active');
+        aplicarPermissoesNaInterface();
     });
 }
 
 if (backToControlPanelFromGerencialBtn) {
     backToControlPanelFromGerencialBtn.addEventListener('click', () => {
-        if (!gerencialView || !controlPanelView) return;
-        gerencialView.classList.add('hidden');
-        controlPanelView.classList.remove('hidden');
+        if (!controlPanelView) return;
+        mostrarSomenteView(controlPanelView);
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
-        carregarUsuarios();
-        carregarKams();
+    });
+}
+
+const backToGerencialFromUsuariosBtn = document.getElementById('back-to-gerencial-from-usuarios-btn');
+
+function abrirTelaGerenciarUsuarios(event) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_usuarios')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar usuários.');
+        return;
+    }
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    if (!gerenciarUsuariosView) {
+        console.error('Rota Sirius: #gerenciar-usuarios-view não encontrado no HTML.');
+        mostrarAviso('Não foi possível abrir a tela de Gerenciar Usuários.');
+        return;
+    }
+
+    mostrarSomenteView(gerenciarUsuariosView);
+    document.querySelector('.app')?.classList.add('panel-active');
+
+    const origem = document.getElementById('user-display-gerencial');
+    const destino = document.getElementById('user-display-gerenciar-usuarios');
+    if (origem && destino) destino.innerHTML = origem.innerHTML;
+
+    carregarUsuarios();
+    carregarKams();
+    aplicarPermissoesNaInterface();
+}
+
+if (backToGerencialFromUsuariosBtn) {
+    backToGerencialFromUsuariosBtn.addEventListener('click', () => {
+        mostrarSomenteView(gerencialView);
+        aplicarPermissoesNaInterface();
     });
 }
 
 window.abrirTelaPermissoes = function(event) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_permissoes')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar permissões.');
+        return;
+    }
     if (event) {
         event.preventDefault();
         event.stopPropagation();
     }
-
-    const views = [dashboardView, controlPanelView, gerencialView, programacaoView, newHistoryView, simulateRouteView, permissoesView];
-    views.forEach(view => {
-        if (view) view.classList.add('hidden');
-    });
 
     if (!permissoesView) {
         console.error('Rota Sirius: #permissoes-view não encontrado no HTML.');
@@ -1741,7 +2151,7 @@ window.abrirTelaPermissoes = function(event) {
         return;
     }
 
-    permissoesView.classList.remove('hidden');
+    mostrarSomenteView(permissoesView);
     document.querySelector('.app')?.classList.add('panel-active');
 
     renderizarPermissoes();
@@ -1755,14 +2165,83 @@ document.querySelectorAll('[data-gerencial-placeholder]').forEach(card => {
             abrirTelaPermissoes(event);
             return;
         }
+        if (destino === 'Limites de Retirada') {
+            abrirTelaLimitesRetirada(event);
+            return;
+        }
+        if (destino === 'Gerenciar Usuários') {
+            abrirTelaGerenciarUsuarios(event);
+            return;
+        }
         mostrarAviso(`${destino} será implementado na próxima etapa.`);
     });
 });
 
 if (backToGerencialFromPermissoesBtn) {
     backToGerencialFromPermissoesBtn.addEventListener('click', () => {
-        if (permissoesView) permissoesView.classList.add('hidden');
-        if (gerencialView) gerencialView.classList.remove('hidden');
+        mostrarSomenteView(gerencialView);
+        aplicarPermissoesNaInterface();
+    });
+}
+
+if (backToGerencialFromLimitesBtn) {
+    backToGerencialFromLimitesBtn.addEventListener('click', () => {
+        mostrarSomenteView(gerencialView);
+        aplicarPermissoesNaInterface();
+    });
+}
+
+if (limitePadraoMinus) {
+    limitePadraoMinus.addEventListener('click', () => {
+        const atual = Number(limitePadraoInput?.value || 1);
+        if (limitePadraoInput) limitePadraoInput.value = Math.max(1, atual - 1);
+    });
+}
+if (limitePadraoPlus) {
+    limitePadraoPlus.addEventListener('click', () => {
+        const atual = Number(limitePadraoInput?.value || 1);
+        if (limitePadraoInput) limitePadraoInput.value = Math.min(999, atual + 1);
+    });
+}
+if (salvarLimitePadraoBtn) salvarLimitePadraoBtn.addEventListener('click', salvarLimitePadraoRetirada);
+if (adicionarExcecaoLimiteBtn) adicionarExcecaoLimiteBtn.addEventListener('click', () => abrirModalExcecaoLimite());
+if (limiteExcecaoModal) {
+    const closeBtn = limiteExcecaoModal.querySelector('.close-button');
+    if (closeBtn) closeBtn.addEventListener('click', () => closeModal(limiteExcecaoModal));
+}
+if (limiteExcecaoForm) {
+    limiteExcecaoForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!usuarioPodeAcao('Gerencial', 'gerenciar_limites')) return;
+        const id = limiteExcecaoId?.value || '';
+        const data = limiteExcecaoData?.value || '';
+        const limite = Math.max(1, Math.min(999, Number(limiteExcecaoValor?.value || 0)));
+        if (!data || !limite) {
+            mostrarAviso('Informe uma data e um limite válido.');
+            return;
+        }
+        try {
+            const payload = { data, limite };
+            const result = id
+                ? await supabaseClient.from('limites_retirada_excecoes').update(payload).eq('id', id)
+                : await supabaseClient.from('limites_retirada_excecoes').insert([payload]);
+            if (result.error) {
+                if (result.error.code === '23505') {
+                    mostrarAviso('Já existe uma exceção cadastrada para essa data.');
+                } else {
+                    console.error('Erro ao salvar exceção:', result.error);
+                    mostrarAviso('Não foi possível salvar a exceção.');
+                }
+                return;
+            }
+            closeModal(limiteExcecaoModal);
+            limiteExcecaoForm.reset();
+            if (limiteExcecaoId) limiteExcecaoId.value = '';
+            await carregarLimitesRetirada();
+        } catch (error) {
+            console.error('Erro inesperado ao salvar exceção:', error);
+            mostrarAviso('Não foi possível salvar a exceção.');
+        }
     });
 }
 
@@ -1772,6 +2251,237 @@ function atualizarPerfilPermissoes() {
     if (origem && destino) destino.innerHTML = origem.innerHTML;
 }
 
+
+function obterDataLocalISO(data = new Date()) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, '0');
+    const dia = String(data.getDate()).padStart(2, '0');
+    return `${ano}-${mes}-${dia}`;
+}
+
+function formatarDataBR(dataISO) {
+    if (!dataISO) return '—';
+    const [ano, mes, dia] = String(dataISO).split('-');
+    return dia && mes && ano ? `${dia}/${mes}/${ano}` : dataISO;
+}
+
+async function obterLimitePadraoRetirada() {
+    const { data, error } = await supabaseClient
+        .from('configuracao_limite_retirada')
+        .select('limite_padrao')
+        .eq('id', 1)
+        .maybeSingle();
+    if (error) throw error;
+    return Number(data?.limite_padrao || 4);
+}
+
+async function obterLimiteRetiradaParaData(dataISO) {
+    const [padrao, excecao] = await Promise.all([
+        obterLimitePadraoRetirada(),
+        supabaseClient.from('limites_retirada_excecoes').select('id,data,limite').eq('data', dataISO).maybeSingle()
+    ]);
+    if (excecao.error) throw excecao.error;
+    return { limite: Number(excecao.data?.limite ?? padrao), excecao: excecao.data || null, padrao };
+}
+
+async function contarRetiradasProgramadas(dataISO, rotaIdIgnorar = null) {
+    const { data: rotas, error: errRotas } = await supabaseClient
+        .from('rotas')
+        .select('id')
+        .eq('status', 'ativa')
+        .eq('data', dataISO);
+    if (errRotas) throw errRotas;
+
+    const rotaIds = (rotas || []).map(r => r.id).filter(id => String(id) !== String(rotaIdIgnorar || ''));
+    if (!rotaIds.length) return 0;
+
+    const { data: nfs, error: errNfs } = await supabaseClient
+        .from('nfs')
+        .select('id')
+        .eq('uf', 'RT')
+        .in('rota_id', rotaIds);
+    if (errNfs) throw errNfs;
+    return (nfs || []).length;
+}
+
+async function verificarLimiteRetiradaNaRota(dataRota, quantidadeNova = 1, rotaIdIgnorar = null) {
+    if (!dataRota || quantidadeNova <= 0) return { permitido: true };
+    const { limite, excecao } = await obterLimiteRetiradaParaData(dataRota);
+    const usadas = await contarRetiradasProgramadas(dataRota, rotaIdIgnorar);
+    const permitido = usadas + quantidadeNova <= limite;
+    return { permitido, limite, usadas, restante: Math.max(0, limite - usadas), excecao };
+}
+
+async function carregarResumoLimiteRetirada() {
+    const dataHoje = obterDataLocalISO();
+    const dataElem = document.getElementById('limite-resumo-data');
+    const limiteElem = document.getElementById('limite-resumo-limite');
+    const usadasElem = document.getElementById('limite-resumo-usadas');
+    const barra = document.getElementById('limite-progress-bar');
+    const fracao = document.getElementById('limite-resumo-fracao');
+    const restanteElem = document.getElementById('limite-resumo-restante');
+    if (!limiteElem) return;
+
+    try {
+        const { limite } = await obterLimiteRetiradaParaData(dataHoje);
+        const usadas = await contarRetiradasProgramadas(dataHoje);
+        const restante = Math.max(0, limite - usadas);
+        const percentual = limite > 0 ? Math.min(100, (usadas / limite) * 100) : 0;
+        if (dataElem) dataElem.innerText = `${formatarDataBR(dataHoje)} (Hoje)`;
+        limiteElem.innerText = limite;
+        usadasElem.innerText = usadas;
+        if (barra) barra.style.width = `${percentual}%`;
+        if (fracao) fracao.innerText = `${usadas} / ${limite}`;
+        if (restanteElem) restanteElem.innerText = restante > 0 ? `Ainda pode programar ${restante} NF${restante === 1 ? '' : 's'}.` : 'Limite atingido para hoje.';
+    } catch (error) {
+        console.error('Erro ao carregar resumo do limite de retirada:', error);
+        if (dataElem) dataElem.innerText = 'Não foi possível carregar';
+        if (restanteElem) restanteElem.innerText = 'Verifique a configuração no Supabase.';
+    }
+}
+
+async function carregarLimitesRetirada() {
+    if (!limitesRetiradaView) return;
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_limites')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar os limites de retirada.');
+        return;
+    }
+    try {
+        const limitePadrao = await obterLimitePadraoRetirada();
+        if (limitePadraoInput) limitePadraoInput.value = limitePadrao;
+
+        const { data, error } = await supabaseClient
+            .from('limites_retirada_excecoes')
+            .select('id,data,limite')
+            .order('data', { ascending: true });
+        if (error) throw error;
+
+        const body = document.getElementById('limites-excecoes-body');
+        const empty = document.getElementById('limites-excecoes-empty');
+        if (body) body.innerHTML = '';
+        if (!data || data.length === 0) {
+            empty?.classList.remove('hidden');
+        } else {
+            empty?.classList.add('hidden');
+            data.forEach(excecao => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${formatarDataBR(excecao.data)}</td>
+                    <td>${excecao.limite}</td>
+                    <td><div class="limite-action-group">
+                        <button type="button" class="btn btn-outline limite-action-btn" onclick="editarExcecaoLimite('${excecao.id}','${excecao.data}',${excecao.limite})">Editar</button>
+                        <button type="button" class="btn btn-outline limite-action-btn delete" onclick="excluirExcecaoLimite('${excecao.id}')">Excluir</button>
+                    </div></td>`;
+                body?.appendChild(tr);
+            });
+        }
+        await carregarResumoLimiteRetirada();
+    } catch (error) {
+        console.error('Erro ao carregar limites de retirada:', error);
+        mostrarAviso('Não foi possível carregar os limites de retirada. Execute o SQL de configuração no Supabase.');
+    }
+}
+
+async function salvarLimitePadraoRetirada() {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_limites')) return;
+    const novoLimite = Math.max(1, Math.min(999, Number(limitePadraoInput?.value || 0)));
+    if (!novoLimite) {
+        mostrarAviso('Informe um limite válido.');
+        return;
+    }
+    const atual = await obterLimitePadraoRetirada();
+    const salvar = async () => {
+        const { error } = await supabaseClient
+            .from('configuracao_limite_retirada')
+            .upsert({ id: 1, limite_padrao: novoLimite }, { onConflict: 'id' });
+        if (error) {
+            console.error('Erro ao salvar limite padrão:', error);
+            mostrarAviso('Não foi possível salvar o limite padrão.');
+            if (limitePadraoInput) limitePadraoInput.value = atual;
+            return;
+        }
+        if (limitePadraoInput) limitePadraoInput.value = novoLimite;
+        mostrarAviso(`Limite padrão atualizado para ${novoLimite} retiradas por dia.`);
+        await carregarResumoLimiteRetirada();
+    };
+
+    if (novoLimite > atual) {
+        confirmarAcao(`Tem certeza que deseja aumentar o limite padrão diário de ${atual} para ${novoLimite} retiradas? Essa alteração será usada automaticamente nos dias sem exceção.`, salvar);
+    } else if (novoLimite < atual) {
+        await salvar();
+    } else {
+        if (limitePadraoInput) limitePadraoInput.value = atual;
+    }
+}
+
+function abrirModalExcecaoLimite(id = '', data = '', limite = '') {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_limites')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar os limites de retirada.');
+        return;
+    }
+    if (limiteExcecaoModalTitle) limiteExcecaoModalTitle.innerText = id ? 'Editar Exceção' : 'Adicionar Exceção';
+    if (limiteExcecaoId) limiteExcecaoId.value = id;
+    if (limiteExcecaoData) limiteExcecaoData.value = data || obterDataLocalISO();
+    if (limiteExcecaoValor) limiteExcecaoValor.value = limite || 4;
+    openModal(limiteExcecaoModal);
+}
+
+window.editarExcecaoLimite = function(id, data, limite) {
+    abrirModalExcecaoLimite(id, data, limite);
+};
+
+window.excluirExcecaoLimite = function(id) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_limites')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar os limites de retirada.');
+        return;
+    }
+    confirmarAcao('Tem certeza que deseja excluir esta exceção? O dia voltará a usar o limite padrão.', async () => {
+        const { error } = await supabaseClient.from('limites_retirada_excecoes').delete().eq('id', id);
+        if (error) {
+            console.error('Erro ao excluir exceção:', error);
+            mostrarAviso('Não foi possível excluir a exceção.');
+            return;
+        }
+        await carregarLimitesRetirada();
+    });
+};
+
+window.abrirTelaLimitesRetirada = function(event) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_limites')) {
+        mostrarAviso('⛔ Você não possui permissão para gerenciar os limites de retirada.');
+        return;
+    }
+    event?.preventDefault();
+    event?.stopPropagation();
+    mostrarSomenteView(limitesRetiradaView);
+    document.querySelector('.app')?.classList.add('panel-active');
+    const origem = document.getElementById('user-display-gerencial') || document.getElementById('user-display-panel');
+    const destino = document.getElementById('user-display-limites-retirada');
+    if (origem && destino) destino.innerHTML = origem.innerHTML;
+    carregarLimitesRetirada();
+};
+
+async function validarLimiteAoAdicionarNFRetirada(nfId, rotaId) {
+    const { data: nf, error: nfError } = await supabaseClient.from('nfs').select('id,uf,rota_id').eq('id', nfId).single();
+    if (nfError) throw nfError;
+    if (nf?.uf !== 'RT') return { permitido: true };
+
+    const { data: rota, error: rotaError } = await supabaseClient.from('rotas').select('id,data,status').eq('id', rotaId).single();
+    if (rotaError) throw rotaError;
+    if (!rota?.data || rota.status !== 'ativa') return { permitido: true };
+    if (String(nf.rota_id || '') === String(rotaId)) return { permitido: true };
+
+    // Mover uma NF entre duas rotas da mesma data não aumenta o consumo diário.
+    let quantidadeNova = 1;
+    if (nf.rota_id) {
+        const { data: rotaOrigem, error: origemError } = await supabaseClient.from('rotas').select('id,data,status').eq('id', nf.rota_id).maybeSingle();
+        if (origemError) throw origemError;
+        if (rotaOrigem?.status === 'ativa' && rotaOrigem?.data === rota.data) quantidadeNova = 0;
+    }
+
+    if (quantidadeNova === 0) return { permitido: true };
+    return await verificarLimiteRetiradaNaRota(rota.data, quantidadeNova);
+}
 
 if (backToDashboardBtn) {
     backToDashboardBtn.addEventListener('click', () => {
@@ -1831,6 +2541,10 @@ if (openRotaModalFromProgBtn) {
 if (createUserForm) {
     createUserForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (!usuarioPodeAcao('Gerencial', 'gerenciar_usuarios')) {
+            mostrarAviso('⛔ Você não possui permissão para gerenciar usuários.');
+            return;
+        }
         const id = userIdHidden ? userIdHidden.value : "";
         const email = document.getElementById('user-email').value.trim();
 
@@ -1917,7 +2631,28 @@ if (openNfModalBtn) {
     if (nfPotenciaInput) nfPotenciaInput.value = "";
     if (nfKamInput) nfKamInput.value = "";
     carregarKams(); // Atualiza dropdown ao abrir
-    if (btnTransporte) btnTransporte.click();
+
+    const podeTransporte = usuarioPodeTransportar();
+    const podeRetirada = usuarioPodeRetirar();
+
+    if (btnTransporte) {
+      btnTransporte.classList.toggle('hidden', !podeTransporte);
+      btnTransporte.disabled = !podeTransporte;
+    }
+    if (btnRetira) {
+      btnRetira.classList.toggle('hidden', !podeRetirada);
+      btnRetira.disabled = !podeRetirada;
+    }
+
+    if (podeTransporte && btnTransporte) {
+      btnTransporte.click();
+    } else if (podeRetirada && btnRetira) {
+      btnRetira.click();
+    } else {
+      mostrarAviso('⛔ Você não possui permissão para Transporte ou Retirada.');
+      return;
+    }
+
     openModal(createNfModal);
   });
 }
@@ -2203,6 +2938,10 @@ if (openHistoryBtn) {
 // Lógica de alternância do tipo de NF (Transporte/Retira)
 if (btnTransporte && btnRetira && nfTipoInput) {
   btnTransporte.addEventListener('click', () => {
+    if (!usuarioPodeTransportar()) {
+      mostrarAviso('⛔ Você não possui permissão para NF de Transporte.');
+      return;
+    }
     nfTipoInput.value = 'transporte';
     btnTransporte.classList.add('active');
     btnRetira.classList.remove('active');
@@ -2217,6 +2956,10 @@ if (btnTransporte && btnRetira && nfTipoInput) {
   });
 
   btnRetira.addEventListener('click', () => {
+    if (!usuarioPodeRetirar()) {
+      mostrarAviso('⛔ Você não possui permissão para NF de Retirada.');
+      return;
+    }
     nfTipoInput.value = 'retira';
     btnRetira.classList.add('active');
     btnTransporte.classList.remove('active');
@@ -2235,8 +2978,8 @@ if (btnTransporte && btnRetira && nfTipoInput) {
 // --- NOTAS FISCAIS (NF) E ROTAS: CRIAR, EDITAR, LISTAR ---
 // SALVAR NF (UNIFICADO)
 async function handleSalvarNF(fecharAoSalvar = true) {
+    if (!usuarioPodeAcao('Roteirização', 'adicionar_nf')) { mostrarAviso('⛔ Você não possui permissão para adicionar NF.'); return; }
   console.log('handleSalvarNF: Função chamada. Fechar:', fecharAoSalvar);
-  if (isUserViewer()) return;
 
   if (typeof supabaseClient === 'undefined') {
     console.error('handleSalvarNF: Cliente supabaseClient não está definido.');
@@ -2254,6 +2997,17 @@ async function handleSalvarNF(fecharAoSalvar = true) {
   const numero_endereco = nfEnderecoNumeroInput ? nfEnderecoNumeroInput.value.trim() : '';
   const uf = nfUfInput ? nfUfInput.value.trim().toUpperCase() : '';
   const tipo = nfTipoInput ? nfTipoInput.value : 'transporte';
+
+  // Transporte e Retirada são permissões independentes.
+  if (tipo === 'transporte' && !usuarioPodeTransportar()) {
+    mostrarAviso('⛔ Você não possui permissão para adicionar NF de Transporte.');
+    return;
+  }
+  if (tipo === 'retira' && !usuarioPodeRetirar()) {
+    mostrarAviso('⛔ Você não possui permissão para adicionar NF de Retirada.');
+    return;
+  }
+
   const valor = (nfValorInput && nfValorInput.value) ? parseFloat(nfValorInput.value) : 0;
   const observacao = nfObsInput ? nfObsInput.value.trim() : '';
   const qtd = nfQuantidadeInput ? nfQuantidadeInput.value : '';
@@ -2356,9 +3110,9 @@ async function handleSalvarNF(fecharAoSalvar = true) {
 
 // CRIAR ROTA
 async function handleCriarRota(event) {
+    if (!usuarioPodeAcao('Roteirização', 'criar_rota')) { mostrarAviso('⛔ Você não possui permissão para criar rota.'); return; }
   event.preventDefault(); // Previne o recarregamento da página
 
-  if (isUserViewer()) return;
   console.log('handleCriarRota: Função chamada.');
 
   if (typeof supabaseClient === 'undefined') {
@@ -2382,7 +3136,21 @@ async function handleCriarRota(event) {
   try {
     let result;
     if (rotaId) {
-      // Modo Edição
+      // Modo Edição: uma rota com NFs de Retirada também precisa respeitar o limite da nova data.
+      const { data: rotaAtual, error: rotaAtualError } = await supabaseClient.from('rotas').select('id,status,data').eq('id', rotaId).single();
+      if (rotaAtualError) throw rotaAtualError;
+      if (rotaAtual?.status === 'ativa') {
+          const { data: nfsDaRota, error: nfsRotaError } = await supabaseClient.from('nfs').select('id,uf').eq('rota_id', rotaId);
+          if (nfsRotaError) throw nfsRotaError;
+          const quantidadeRetirada = (nfsDaRota || []).filter(nf => nf.uf === 'RT').length;
+          if (quantidadeRetirada > 0) {
+              const limiteDestino = await verificarLimiteRetiradaNaRota(dataRota, quantidadeRetirada, rotaId);
+              if (!limiteDestino.permitido) {
+                  mostrarAviso(`⛔ A data ${formatarDataBR(dataRota)} não comporta as ${quantidadeRetirada} NFs de Retirada desta rota. Limite: ${limiteDestino.limite}.`);
+                  return;
+              }
+          }
+      }
       result = await supabaseClient.from("rotas").update({ nome, data: dataRota, transportadora }).eq("id", rotaId).select();
     } else {
       // Modo Criação
@@ -2503,7 +3271,7 @@ window.abrirModalInfoNF = async function(nfId, readOnly = false) {
     const content = document.getElementById('nf-info-content');
     if (!modal || !content) return;
 
-    const actualReadOnly = readOnly || isUserViewer();
+    const actualReadOnly = !!readOnly;
 
     // Feedback visual de carregamento (mantido)
     content.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 40px;">Buscando informações da NF...</p>`;
@@ -2606,9 +3374,9 @@ window.abrirModalInfoNF = async function(nfId, readOnly = false) {
 
 // Nova função para salvar a observação da NF
 window.salvarObservacaoNF = async function(nfId) {
+    if (!usuarioPodeAcao('Roteirização', 'observacao_nf')) { mostrarAviso('⛔ Você não possui permissão para salvar observações.'); return; }
     const textarea = document.getElementById('nf-info-observacao');
-    if (isUserViewer()) return;
-    if (!textarea) return;
+      if (!textarea) return;
 
     const novaObs = textarea.value.trim();
 
@@ -2647,7 +3415,7 @@ window.salvarObservacaoNF = async function(nfId) {
 
 // EDITAR NF
 window.editarNF = async function(nfId) {
-  if (isUserViewer()) return;
+    if (!usuarioPodeAcao('Roteirização', 'editar_nf')) { mostrarAviso('⛔ Você não possui permissão para editar NF.'); return; }
   try {
     const { data, error } = await supabaseClient.from("nfs").select("*").eq("id", nfId).single();
     if (error) throw error;
@@ -2686,7 +3454,7 @@ window.editarNF = async function(nfId) {
 
 // EXCLUIR NF
 window.excluirNF = async function(nfId) {
-  if (isUserViewer()) return;
+    if (!usuarioPodeAcao('Roteirização', 'excluir_nf')) { mostrarAviso('⛔ Você não possui permissão para excluir NF.'); return; }
   confirmarAcao("Tem certeza que deseja excluir esta Nota Fiscal permanentemente?", async () => {
     try {
       const { error } = await supabaseClient.from("nfs").delete().eq("id", nfId);
@@ -2716,46 +3484,139 @@ if (progHistorySearchInput) {
 
 // ENVIAR PARA ROTA
 async function enviarParaRota(nfId) {
-  if (isUserViewer()) return;
-  if (typeof supabaseClient === 'undefined') {
-    console.error('enviarParaRota: Cliente supabaseClient não está definido.');
-    mostrarAviso('Erro: O serviço de banco de dados não está disponível.');
-    return;
-  }
-  
-  if (!rotaSelecionada) {
-    mostrarAviso("Selecione uma rota primeiro clicando nela!");
-    return;
-  }
+    if (!usuarioPodeAcao('Roteirização', 'adicionar_nf_rota')) { mostrarAviso('⛔ Você não possui permissão para adicionar NF à rota.'); return; }
+    if (typeof supabaseClient === 'undefined') {
+        console.error('enviarParaRota: Cliente supabaseClient não está definido.');
+        mostrarAviso('Erro: O serviço de banco de dados não está disponível.');
+        return;
+    }
 
-  await supabaseClient
-    .from("nfs")
-    .update({ rota_id: rotaSelecionada })
-    .eq("id", nfId);
+    if (!rotaSelecionada) {
+        mostrarAviso("Selecione uma rota primeiro clicando nela!");
+        return;
+    }
 
-  carregarTudo();
+    try {
+        const resultadoLimite = await validarLimiteAoAdicionarNFRetirada(nfId, rotaSelecionada);
+        if (!resultadoLimite.permitido) {
+            mostrarAviso(`⛔ Limite de Retirada atingido para ${formatarDataBR((await supabaseClient.from('rotas').select('data').eq('id', rotaSelecionada).single()).data?.data)}. O limite é de ${resultadoLimite.limite} NF${resultadoLimite.limite === 1 ? '' : 's'} de Retirada programadas para esse dia.`);
+            return;
+        }
+
+        const { error } = await supabaseClient
+            .from("nfs")
+            .update({ rota_id: rotaSelecionada })
+            .eq("id", nfId);
+        if (error) throw error;
+
+        carregarTudo();
+    } catch (error) {
+        console.error('Erro ao adicionar NF à rota:', error);
+        mostrarAviso('Não foi possível programar esta NF na rota.');
+    }
 }
 
-// Referências dos filtros de rota
+// FILTRO GLOBAL DE PERÍODO
+// Um único intervalo (Início/Fim) é compartilhado entre Roteirização, Programação, Histórico e Painel de Controle.
+const CHAVE_FILTRO_DATA_GLOBAL = 'rota_sirius_filtro_data_global';
+
 const filtroNomeRota = document.getElementById('filtro-nome-rota');
-const filtroDataRota = document.getElementById('filtro-data-rota');
+const filtroDataRotaInicio = document.getElementById('filtro-data-rota-inicio');
+const filtroDataRotaFim = document.getElementById('filtro-data-rota-fim');
+
+const filtroNomeProg = document.getElementById('filtro-nome-programacao');
+const filtroDataProgInicio = document.getElementById('filtro-data-programacao-inicio');
+const filtroDataProgFim = document.getElementById('filtro-data-programacao-fim');
+
+const filtroNomeNewHistory = document.getElementById('filtro-nome-new-history');
+const filtroDataNewHistoryInicio = document.getElementById('filtro-data-new-history-inicio');
+const filtroDataNewHistoryFim = document.getElementById('filtro-data-new-history-fim');
+
+const filtroDataPainelInicio = document.getElementById('filtro-data-painel-inicio');
+const filtroDataPainelFim = document.getElementById('filtro-data-painel-fim');
+
+function obterFiltroDataGlobal() {
+    try {
+        const salvo = JSON.parse(localStorage.getItem(CHAVE_FILTRO_DATA_GLOBAL) || '{}');
+        return { inicio: salvo.inicio || '', fim: salvo.fim || '' };
+    } catch {
+        return { inicio: '', fim: '' };
+    }
+}
+
+function sincronizarCamposFiltroDataGlobal(inicio, fim) {
+    [
+        [filtroDataRotaInicio, filtroDataRotaFim],
+        [filtroDataProgInicio, filtroDataProgFim],
+        [filtroDataNewHistoryInicio, filtroDataNewHistoryFim],
+        [filtroDataPainelInicio, filtroDataPainelFim]
+    ].forEach(([campoInicio, campoFim]) => {
+        if (campoInicio) campoInicio.value = inicio || '';
+        if (campoFim) campoFim.value = fim || '';
+    });
+}
+
+function definirFiltroDataGlobal(inicio, fim, recarregar = true) {
+    if (inicio && fim && inicio > fim) {
+        mostrarAviso('A data de início não pode ser maior que a data de fim.');
+        const atual = obterFiltroDataGlobal();
+        sincronizarCamposFiltroDataGlobal(atual.inicio, atual.fim);
+        return false;
+    }
+
+    const filtro = { inicio: inicio || '', fim: fim || '' };
+    localStorage.setItem(CHAVE_FILTRO_DATA_GLOBAL, JSON.stringify(filtro));
+    sincronizarCamposFiltroDataGlobal(filtro.inicio, filtro.fim);
+
+    if (recarregar) {
+        // Recarrega apenas a tela atualmente visível. O intervalo continua global
+        // e será reaplicado automaticamente ao abrir qualquer outra tela.
+        if (dashboardView && !dashboardView.classList.contains('hidden')) {
+            carregarRotas();
+        } else if (controlPanelView && !controlPanelView.classList.contains('hidden')) {
+            carregarDashboard();
+        } else if (programacaoView && !programacaoView.classList.contains('hidden')) {
+            carregarProgramacao();
+        } else if (newHistoryView && !newHistoryView.classList.contains('hidden')) {
+            if (currentNewHistoryViewMode === 'roteirizacao') carregarNovoHistorico();
+            else carregarNovoHistoricoProgramacao();
+        }
+    }
+    return true;
+}
+
+function dataDentroDoFiltroGlobal(dataISO, filtro = obterFiltroDataGlobal()) {
+    if (!dataISO) return !filtro.inicio && !filtro.fim;
+    if (filtro.inicio && dataISO < filtro.inicio) return false;
+    if (filtro.fim && dataISO > filtro.fim) return false;
+    return true;
+}
+
+function obterDataReferenciaNF(nf, rotasPorId = new Map()) {
+    const rota = nf?.rota_id ? rotasPorId.get(nf.rota_id) : null;
+    if (rota?.data) return rota.data;
+    if (nf?.created_at) return String(nf.created_at).slice(0, 10);
+    return '';
+}
+
+const filtroDataGlobalAtual = obterFiltroDataGlobal();
+sincronizarCamposFiltroDataGlobal(filtroDataGlobalAtual.inicio, filtroDataGlobalAtual.fim);
+
+function listenerFiltroDataGlobal(campoInicio, campoFim) {
+    if (!campoInicio || !campoFim) return;
+    const atualizar = () => definirFiltroDataGlobal(campoInicio.value, campoFim.value);
+    campoInicio.addEventListener('change', atualizar);
+    campoFim.addEventListener('change', atualizar);
+}
+
+listenerFiltroDataGlobal(filtroDataRotaInicio, filtroDataRotaFim);
+listenerFiltroDataGlobal(filtroDataProgInicio, filtroDataProgFim);
+listenerFiltroDataGlobal(filtroDataNewHistoryInicio, filtroDataNewHistoryFim);
+listenerFiltroDataGlobal(filtroDataPainelInicio, filtroDataPainelFim);
 
 if (filtroNomeRota) filtroNomeRota.addEventListener('input', carregarRotas);
-if (filtroDataRota) filtroDataRota.addEventListener('change', carregarRotas);
-
-// Referências dos filtros de programação
-const filtroNomeProg = document.getElementById('filtro-nome-programacao');
-const filtroDataProg = document.getElementById('filtro-data-programacao');
-
 if (filtroNomeProg) filtroNomeProg.addEventListener('input', carregarProgramacao);
-if (filtroDataProg) filtroDataProg.addEventListener('change', carregarProgramacao);
-
-// Referências dos filtros do novo histórico
-const filtroNomeNewHistory = document.getElementById('filtro-nome-new-history');
-const filtroDataNewHistory = document.getElementById('filtro-data-new-history');
-
 if (filtroNomeNewHistory) filtroNomeNewHistory.addEventListener('input', () => currentNewHistoryViewMode === 'roteirizacao' ? carregarNovoHistorico() : carregarNovoHistoricoProgramacao());
-if (filtroDataNewHistory) filtroDataNewHistory.addEventListener('change', () => currentNewHistoryViewMode === 'roteirizacao' ? carregarNovoHistorico() : carregarNovoHistoricoProgramacao());
 
 // CARREGAR ROTAS (COM 3 COLUNAS)
 async function carregarRotas() {
@@ -2785,7 +3646,7 @@ async function carregarRotas() {
 
   // Lógica de Filtragem Local para resposta instantânea
   const termoNome = filtroNomeRota ? filtroNomeRota.value.toLowerCase() : "";
-  const termoData = filtroDataRota ? filtroDataRota.value : "";
+  const filtroData = obterFiltroDataGlobal();
 
   const rotasFiltradas = rotas.filter(rota => {
     const nomeMatch = rota.nome.toLowerCase().includes(termoNome);
@@ -2800,7 +3661,7 @@ async function carregarRotas() {
       return numeroMatch || destinoMatch;
     }) : false;
 
-    const dataMatch = termoData ? rota.data === termoData : true;
+    const dataMatch = dataDentroDoFiltroGlobal(rota.data, filtroData);
     return (nomeMatch || transportadoraMatch || nfDestinoMatch) && dataMatch;
   });
 
@@ -2935,7 +3796,7 @@ async function carregarRotas() {
 
 // REMOVER DA ROTA
 async function removerDaRota(nfId) {
-  if (isUserViewer()) return;
+    if (!usuarioPodeAcao('Roteirização', 'remover_nf_rota')) { mostrarAviso('⛔ Você não possui permissão para remover NF da rota.'); return; }
   if (typeof supabaseClient === 'undefined') {
     console.error('removerDaRota: Cliente supabaseClient não está definido.');
     alert('Erro: O serviço de banco de dados não está disponível.');
@@ -2951,7 +3812,7 @@ async function removerDaRota(nfId) {
 
 // EDITAR NOME DA ROTA
 window.editarRota = async function(rotaId, nomeAtual, dataAtual, transportadoraAtual) {
-  if (isUserViewer()) return;
+    if (!usuarioPodeAcao('Roteirização', 'editar_rota')) { mostrarAviso('⛔ Você não possui permissão para editar rota.'); return; }
   if (rotaModalTitle) rotaModalTitle.innerText = "Editar Rota";
   if (rotaIdHidden) rotaIdHidden.value = rotaId;
   if (rotaNomeInput) rotaNomeInput.value = nomeAtual;
@@ -2962,6 +3823,7 @@ window.editarRota = async function(rotaId, nomeAtual, dataAtual, transportadoraA
 
 // COPIAR RESUMO DA ROTA
 window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
+    if (!usuarioPodeAcao('Roteirização', 'copiar_resumo')) { mostrarAviso('⛔ Você não possui permissão para copiar o resumo.'); return; }
   try {
     // Busca dados complementares da rota (data e transportadora) no Supabase
     const { data: rota, error: errRota } = await supabaseClient
@@ -3006,7 +3868,7 @@ window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
 
 // FINALIZAR ROTA (Deleta a rota sem devolver NFs para pendentes)
 window.finalizarRota = async function(rotaId) {
-  if (isUserViewer()) return;
+    if (!usuarioPodeAcao('Roteirização', 'finalizar_rota')) { mostrarAviso('⛔ Você não possui permissão para finalizar rota.'); return; }
   confirmarAcao("Deseja finalizar esta rota? Ela será movida para o histórico.", async () => {
     try {
       // TAREFA 2: Garantir que os dados sejam capturados antes da exclusão
@@ -3150,8 +4012,8 @@ window.renderizarHistorico = async function(termoBusca = "") {
 
 // EXCLUIR ROTA DO HISTÓRICO
 window.excluirHistorico = function(historicoId) {
-    if (isUserViewer()) return;
-    confirmarAcao("Tem certeza que deseja excluir esta rota permanentemente do histórico?", () => {
+    if (!usuarioPodeAcao('Histórico', 'excluir_historico')) { mostrarAviso('⛔ Você não possui permissão para excluir histórico.'); return; }
+      confirmarAcao("Tem certeza que deseja excluir esta rota permanentemente do histórico?", () => {
         let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
         historico = historico.filter(h => h.id !== historicoId);
         localStorage.setItem('rota_historico', JSON.stringify(historico));
@@ -3162,8 +4024,8 @@ window.excluirHistorico = function(historicoId) {
 
 // RETORNAR ROTA PARA ATIVA
 window.retornarRota = async function(rotaId) {
-    if (isUserViewer()) return;
-    try {
+    if (!usuarioPodeAcao('Histórico', 'retornar_rota')) { mostrarAviso('⛔ Você não possui permissão para retornar rota.'); return; }
+      try {
         const { error } = await supabaseClient
             .from("rotas")
             .update({ 
@@ -3189,6 +4051,7 @@ window.retornarRota = async function(rotaId) {
 };
 
 window.copiarResumoHistorico = async function(rotaId) {
+    if (!usuarioPodeAcao('Histórico', 'visualizar_detalhes')) { mostrarAviso('⛔ Você não possui permissão para visualizar este resumo.'); return; }
     try {
         const { data: rota, error: errR } = await supabaseClient.from("rotas").select("*").eq("id", rotaId).single();
         const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*").eq("rota_id", rotaId);
@@ -3214,7 +4077,7 @@ window.copiarResumoHistorico = async function(rotaId) {
     }
 };
 window.deletarRota = async function(rotaId) {
-  if (isUserViewer()) return;
+    if (!usuarioPodeAcao('Roteirização', 'excluir_rota')) { mostrarAviso('⛔ Você não possui permissão para excluir rota.'); return; }
   confirmarAcao("Tem certeza que deseja excluir esta rota? As Notas Fiscais vinculadas retornarão para a lista de pendentes.", async () => {
     try {
       // Primeiro removemos o vínculo das NFs com esta rota
@@ -3298,13 +4161,123 @@ function formatarDataHora(dataISO, fallback = '---') {
     return dataISO ? new Date(dataISO).toLocaleString('pt-BR') : fallback;
 }
 
+// Estado de ordenação das tabelas diárias da Programação.
+// Cada data possui sua própria coluna/ordem, evitando que uma tabela afete outra.
+const ordenacaoProgramacaoPorData = {};
+
+function normalizarValorOrdenacaoProgramacao(valor) {
+    return String(valor ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLowerCase();
+}
+
+function obterValorOrdenacaoProgramacao(nf, infoRota, coluna) {
+    switch (coluna) {
+        case 'nf':
+            return Number.isFinite(Number(nf.numero)) ? Number(nf.numero) : normalizarValorOrdenacaoProgramacao(nf.numero);
+        case 'destino':
+            return normalizarValorOrdenacaoProgramacao(nf.uf === 'RT' ? 'RETIRA' : `${nf.cidade || nf.destino || ''}/${nf.uf || ''}`);
+        case 'tipo':
+            return normalizarValorOrdenacaoProgramacao(nf.tipo);
+        case 'qtd':
+            return Number.isFinite(Number(nf.qtd)) ? Number(nf.qtd) : normalizarValorOrdenacaoProgramacao(nf.qtd);
+        case 'marca':
+            return normalizarValorOrdenacaoProgramacao(nf.marca);
+        case 'potencia':
+            return normalizarValorOrdenacaoProgramacao(nf.potencia);
+        case 'kam':
+            return normalizarValorOrdenacaoProgramacao(nf.kam);
+        case 'rota':
+            return normalizarValorOrdenacaoProgramacao(infoRota.nome);
+        case 'transportadora':
+            return normalizarValorOrdenacaoProgramacao(infoRota.transportadora);
+        case 'status':
+            return normalizarValorOrdenacaoProgramacao(nf.status);
+        default:
+            return '';
+    }
+}
+
+function compararValoresOrdenacaoProgramacao(a, b, direcao) {
+    let comparacao = 0;
+
+    if (typeof a === 'number' && typeof b === 'number') {
+        comparacao = a - b;
+    } else {
+        comparacao = String(a).localeCompare(String(b), 'pt-BR', { numeric: true, sensitivity: 'base' });
+    }
+
+    return direcao === 'desc' ? -comparacao : comparacao;
+}
+
+function ordenarNfsDaRotaProgramacao(nfs, infoRota, coluna, direcao) {
+    return [...nfs].sort((a, b) => {
+        const valorA = obterValorOrdenacaoProgramacao(a, infoRota, coluna);
+        const valorB = obterValorOrdenacaoProgramacao(b, infoRota, coluna);
+        return compararValoresOrdenacaoProgramacao(valorA, valorB, direcao);
+    });
+}
+
+window.alternarOrdenacaoProgramacao = function(dataKey, coluna) {
+    const atual = ordenacaoProgramacaoPorData[dataKey];
+
+    if (atual?.coluna === coluna) {
+        atual.direcao = atual.direcao === 'asc' ? 'desc' : 'asc';
+    } else {
+        ordenacaoProgramacaoPorData[dataKey] = { coluna, direcao: 'asc' };
+    }
+
+    // Mantém o filtro global, a busca e todas as regras atuais; apenas redesenha
+    // a tabela do dia com a ordenação escolhida.
+    carregarProgramacao();
+};
+
+function obterIndicadorOrdenacaoProgramacao(dataKey, coluna) {
+    const ordenacao = ordenacaoProgramacaoPorData[dataKey];
+    if (!ordenacao || ordenacao.coluna !== coluna) return '↕';
+    return ordenacao.direcao === 'asc' ? '↑' : '↓';
+}
+
+function obterLabelColunaProgramacao(coluna) {
+    const labels = {
+        nf: 'NF',
+        destino: 'Destino',
+        tipo: 'Tipo',
+        qtd: 'Qtd',
+        marca: 'Marca',
+        potencia: 'Potência',
+        kam: 'KAM',
+        rota: 'Rota',
+        transportadora: 'Transportadora',
+        status: 'Status'
+    };
+    return labels[coluna] || coluna;
+}
+
+function renderizarCabecalhoOrdenavelProgramacao(dataKey) {
+    const colunas = ['nf', 'destino', 'tipo', 'qtd', 'marca', 'potencia', 'kam', 'rota', 'transportadora', 'status'];
+
+    return colunas.map(coluna => `
+        <th class="programacao-sortable-header">
+            <button type="button"
+                    class="programacao-sort-button"
+                    onclick="window.alternarOrdenacaoProgramacao('${String(dataKey).replace(/'/g, "\\'")}', '${coluna}')"
+                    title="Ordenar ${obterLabelColunaProgramacao(coluna)}">
+                <span>${obterLabelColunaProgramacao(coluna)}</span>
+                <span class="programacao-sort-indicator" aria-hidden="true">${obterIndicadorOrdenacaoProgramacao(dataKey, coluna)}</span>
+            </button>
+        </th>
+    `).join('');
+}
+
 function renderizarProgramacaoAutomatica(agrupado) {
     const container = document.getElementById('programacao-dinamica-container');
     if (!container) return;
     container.innerHTML = "";
 
-    const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
-    const canEdit = usuarioLogado && usuarioLogado.permissao !== "Visualizador";
+    const canEdit = usuarioPodeAcao('Programação', 'alterar_status');
 
     const datas = Object.keys(agrupado).sort((a, b) => {
         if (a === "sem-data") return 1;
@@ -3320,7 +4293,24 @@ function renderizarProgramacaoAutomatica(agrupado) {
     datas.forEach(dataKey => {
         const cardData = document.createElement('div');
         cardData.className = "panel-container";
-        
+
+        const ordenacao = ordenacaoProgramacaoPorData[dataKey] || null;
+        let rotasIds = Object.keys(agrupado[dataKey]);
+
+        // "Rota" é uma ordenação especial: reorganiza os grupos de rota,
+        // mas nunca mistura as NFs de uma rota com outra.
+        if (ordenacao?.coluna === 'rota') {
+            rotasIds.sort((a, b) => {
+                const infoA = agrupado[dataKey][a];
+                const infoB = agrupado[dataKey][b];
+                const valorA = normalizarValorOrdenacaoProgramacao(infoA.nome);
+                const valorB = normalizarValorOrdenacaoProgramacao(infoB.nome);
+                return compararValoresOrdenacaoProgramacao(valorA, valorB, ordenacao.direcao);
+            });
+        } else {
+            rotasIds.sort((a, b) => agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome, 'pt-BR', { numeric: true, sensitivity: 'base' }));
+        }
+
         let html = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
                 <h3 style="margin: 0; color: var(--primary); font-size: 16px;">
@@ -3333,51 +4323,62 @@ function renderizarProgramacaoAutomatica(agrupado) {
                     </button>
                     <div class="user-dropdown hidden" style="top: calc(100% + 5px); right: 0; width: 140px;">
                         <button type="button" onclick="handleExportExcel(event, '${dataKey}')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #22c55e;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #22c55e;"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="3" y1="15" x2="21" y2="15"></line><line x1="9" y1="3" x2="9" y2="21"></line><line x1="15" y1="3" x2="15" y2="21"></line></svg>
                             Excel
                         </button>
                         <button type="button" onclick="handleExportPDF(event, '${dataKey}')">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #ef4444;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0-2 2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                             PDF
                         </button>
                     </div>
                 </div>
             </div>
-            <table class="data-table">
+            <table class="data-table programacao-data-table">
                 <thead>
                     <tr>
-                        <th>NF</th>
-                        <th>Destino</th>
-                        <th>Tipo</th>
-                        <th>Qtd</th>
-                        <th>Marca</th>
-                        <th>Potência</th>
-                        <th>KAM</th>
-                        <th>Rota</th>
-                        <th>Transportadora</th>
-                        <th>Status</th>
+                        ${renderizarCabecalhoOrdenavelProgramacao(dataKey)}
                     </tr>
                 </thead>
                 <tbody>
         `;
 
-        const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) => 
-            agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome)
-        );
-
-        rotasIds.forEach(rotaId => {
+        rotasIds.forEach((rotaId, indiceRota) => {
             const infoRota = agrupado[dataKey][rotaId];
-            infoRota.nfs.forEach(nf => {
-                // Destaque visual para observação da NF
+
+            // Separação visual entre grupos de rota, mantendo tudo dentro
+            // do mesmo card do dia e sem misturar as NFs entre rotas.
+            if (indiceRota > 0) {
+                html += `
+                    <tr class="programacao-route-separator" aria-hidden="true">
+                        <td colspan="10"></td>
+                    </tr>
+                `;
+            }
+
+            // Identificação discreta do início de cada rota para facilitar
+            // a leitura da produção sem criar um novo card.
+            html += `
+                <tr class="programacao-route-heading">
+                    <td colspan="10">
+                        <div class="programacao-route-heading-content">
+                            <span class="programacao-route-heading-label">ROTA</span>
+                            <span class="programacao-route-heading-name">${infoRota.nome}</span>
+                            ${infoRota.transportadora ? `<span class="programacao-route-heading-transportadora">${infoRota.transportadora}</span>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+            const nfsOrdenadas = ordenacao && ordenacao.coluna !== 'rota'
+                ? ordenarNfsDaRotaProgramacao(infoRota.nfs, infoRota, ordenacao.coluna, ordenacao.direcao)
+                : infoRota.nfs;
+
+            nfsOrdenadas.forEach((nf, indiceNF) => {
                 const temObsNF = nf.observacao && nf.observacao.trim() !== "";
                 const infoStyleNF = temObsNF ? 'color: #fbbf24; opacity: 1;' : '';
                 const infoTitleNF = temObsNF ? "Informações (Possui Observação)" : "Informações";
-
                 const statusAtual = nf.status || "";
                 const statusDisplay = statusAtual || "---";
-                // Atributo de clique apenas se tiver permissão
-                const editAttr = canEdit ? `onclick="window.abrirEdicaoStatus(event, '${nf.id}', '${statusAtual}')" title="Clique para editar status" style="cursor: pointer;"` : "";
-
+                const editAttr = canEdit ? `onclick="window.abrirEdicaoStatus(event, '${nf.id}', '${String(statusAtual).replace(/'/g, "\\'")}')" title="Clique para editar status" style="cursor: pointer;"` : "";
                 html += `
                     <tr>
                         <td>
@@ -3444,8 +4445,8 @@ window.abrirEdicaoStatus = function(event, nfId, statusAtual) {
 };
 
 window.salvarStatusNF = async function(nfId, novoStatus) {
-    if (isUserViewer()) return;
-    try {
+    if (!usuarioPodeAcao('Programação', 'alterar_status')) { mostrarAviso('⛔ Você não possui permissão para alterar status.'); return; }
+      try {
         const { error } = await supabaseClient.from("nfs").update({ status: novoStatus }).eq("id", nfId);
         if (error) throw error;
         carregarProgramacao(); // Atualiza a tabela para refletir a mudança
@@ -3462,12 +4463,10 @@ async function carregarProgramacao() {
 
         // Lógica de Filtragem
         const termoTexto = filtroNomeProg ? filtroNomeProg.value : "";
-        const termoData = filtroDataProg ? filtroDataProg.value : "";
+        const filtroData = obterFiltroDataGlobal();
 
-        // Filtramos as rotas apenas por data inicialmente
-        const rotasPorData = rotas.filter(rota => {
-            return termoData ? rota.data === termoData : true;
-        });
+        // Filtramos as rotas pelo intervalo global (inclusivo)
+        const rotasPorData = rotas.filter(rota => dataDentroDoFiltroGlobal(rota.data, filtroData));
 
         const agrupado = agruparDadosProgramacao(rotasPorData, nfs, termoTexto);
         renderizarProgramacaoAutomatica(agrupado);
@@ -3505,14 +4504,11 @@ window.handleExportExcel = async function (e, specificDate = null) {
         const { rotas, nfs } = await buscarDadosParaProgramacao();
         const termoTexto = filtroNomeProg ? filtroNomeProg.value : "";
         
-        // Se houver uma data específica (clique no card), ela ignora o filtro global de data
-        const termoData = specificDate || (filtroDataProg ? filtroDataProg.value : "");
-
-        // Filtrar rotas conforme filtros de data da tela de programação
+        // Se houver uma data específica (clique no card), mantém o comportamento de exportar somente aquele dia.
+        const filtroData = obterFiltroDataGlobal();
         const rotasFiltradas = rotas.filter(rota => {
-            if (!termoData) return true;
-            if (termoData === "sem-data") return !rota.data;
-            return rota.data === termoData;
+            if (specificDate) return specificDate === 'sem-data' ? !rota.data : rota.data === specificDate;
+            return dataDentroDoFiltroGlobal(rota.data, filtroData);
         });
 
         // Agrupar usando a lógica já existente no sistema
@@ -3700,12 +4696,11 @@ window.handleExportPDF = async function(e, specificDate = null) {
     try {
         const { rotas, nfs } = await buscarDadosParaProgramacao();
         const termoTexto = filtroNomeProg ? filtroNomeProg.value : "";
-        const termoData = specificDate || (filtroDataProg ? filtroDataProg.value : "");
+        const filtroData = obterFiltroDataGlobal();
 
         const rotasFiltradas = rotas.filter(rota => {
-            if (!termoData) return true;
-            if (termoData === "sem-data") return !rota.data;
-            return rota.data === termoData;
+            if (specificDate) return specificDate === 'sem-data' ? !rota.data : rota.data === specificDate;
+            return dataDentroDoFiltroGlobal(rota.data, filtroData);
         });
 
         const agrupado = agruparDadosProgramacao(rotasFiltradas, nfs, termoTexto);
@@ -3748,28 +4743,6 @@ window.handleExportPDF = async function(e, specificDate = null) {
         const sectionPadding = 2;
         let currentY = 24;
 
-        // Contorno externo de cada grupo de data. O contorno envolve todas as rotas
-        // pertencentes ao mesmo dia, sem misturar um dia com o seguinte.
-        const desenharContornoData = (pagina, topY, bottomY) => {
-            const top = Math.max(10, topY);
-            const bottom = Math.min(pageHeight - 13, bottomY);
-            const height = bottom - top;
-            if (height <= 2) return;
-
-            doc.setPage(pagina);
-            doc.setDrawColor(borda[0], borda[1], borda[2]);
-            doc.setLineWidth(0.35);
-            doc.roundedRect(
-                margem - sectionPadding,
-                top,
-                (pageWidth - (margem * 2)) + (sectionPadding * 2),
-                height,
-                sectionRadius,
-                sectionRadius,
-                'S'
-            );
-        };
-
         // Cabeçalho
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(18);
@@ -3792,12 +4765,29 @@ window.handleExportPDF = async function(e, specificDate = null) {
 
         datas.forEach((dataKey) => {
             const dataTitulo = formatarDataComDiaSemana(dataKey).toUpperCase();
+            // A exportação do PDF deve reproduzir exatamente a ordenação
+            // atualmente aplicada na tabela daquele dia. Isso vale tanto para
+            // o PDF geral quanto para o PDF de um dia específico.
+            const ordenacaoPDF = ordenacaoProgramacaoPorData[dataKey] || null;
+
             const rotasIds = Object.keys(agrupado[dataKey]).filter(rotaId => {
                 const infoRota = agrupado[dataKey][rotaId];
                 return infoRota && Array.isArray(infoRota.nfs) && infoRota.nfs.length > 0;
-            }).sort((a, b) =>
-                agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome)
-            );
+            });
+
+            if (ordenacaoPDF?.coluna === 'rota') {
+                rotasIds.sort((a, b) => {
+                    const infoA = agrupado[dataKey][a];
+                    const infoB = agrupado[dataKey][b];
+                    const valorA = normalizarValorOrdenacaoProgramacao(infoA.nome);
+                    const valorB = normalizarValorOrdenacaoProgramacao(infoB.nome);
+                    return compararValoresOrdenacaoProgramacao(valorA, valorB, ordenacaoPDF.direcao);
+                });
+            } else {
+                rotasIds.sort((a, b) =>
+                    agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome, 'pt-BR', { numeric: true, sensitivity: 'base' })
+                );
+            }
 
             if (rotasIds.length === 0) return;
 
@@ -3806,11 +4796,6 @@ window.handleExportPDF = async function(e, specificDate = null) {
                 doc.addPage();
                 currentY = 20;
             }
-
-            const paginaDataInicial = doc.internal.getCurrentPageInfo().pageNumber;
-            const topoData = currentY - 5;
-            const segmentosData = new Map();
-            segmentosData.set(paginaDataInicial, { top: topoData, bottom: null });
 
             // Bloco visual da data
             doc.setFillColor(fundoBloco[0], fundoBloco[1], fundoBloco[2]);
@@ -3823,12 +4808,17 @@ window.handleExportPDF = async function(e, specificDate = null) {
             // Espaço entre a faixa da data e o primeiro bloco de rota.
             currentY += 19;
 
+            const segmentosRotas = [];
+
             rotasIds.forEach((rotaId, rotaIndex) => {
                 const infoRota = agrupado[dataKey][rotaId];
-                const nfsRota = infoRota.nfs || [];
+                const nfsOriginais = infoRota.nfs || [];
+                const nfsRota = ordenacaoPDF && ordenacaoPDF.coluna !== 'rota'
+                    ? ordenarNfsDaRotaProgramacao(nfsOriginais, infoRota, ordenacaoPDF.coluna, ordenacaoPDF.direcao)
+                    : nfsOriginais;
                 const totalModulos = nfsRota.reduce((total, nf) => total + (Number(nf.qtd) || 0), 0);
 
-                if (currentY > pageHeight - 62) {
+                if (currentY > pageHeight - 78) {
                     doc.addPage();
                     currentY = 20;
                 }
@@ -3846,6 +4836,10 @@ window.handleExportPDF = async function(e, specificDate = null) {
                 doc.text(`NFs: ${nfsRota.length}  •  Módulos: ${totalModulos}`, pageWidth - margem, currentY + 5, { align: 'right' });
                 currentY += 10;
 
+                // Guarda o ponto de início do bloco da rota para desenhar
+                // um contorno visual próprio ao redor de cada rota.
+                const paginaRotaInicial = doc.internal.getCurrentPageInfo().pageNumber;
+                const topoRota = currentY - 9;
                 const tableBody = nfsRota.map(nf => {
                     const ehRetira = String(nf.tipo_operacao || nf.tipo || '').toLowerCase() === 'retira'
                         || nf.uf === 'RT'
@@ -3908,11 +4902,16 @@ window.handleExportPDF = async function(e, specificDate = null) {
                 });
 
                 const paginaDepoisDaTabela = doc.internal.getCurrentPageInfo().pageNumber;
-                if (!segmentosData.has(paginaDepoisDaTabela)) {
-                    segmentosData.set(paginaDepoisDaTabela, { top: 12, bottom: null });
-                }
                 currentY = doc.lastAutoTable.finalY + 9;
-                segmentosData.get(paginaDepoisDaTabela).bottom = currentY + 4;
+
+                // Registra as páginas ocupadas por esta rota. Se uma tabela
+                // ultrapassar uma página, o contorno será fechado por trecho.
+                segmentosRotas.push({
+                    paginaInicial: paginaRotaInicial,
+                    paginaFinal: paginaDepoisDaTabela,
+                    topo: topoRota,
+                    finalY: doc.lastAutoTable.finalY
+                });
 
                 if (rotaIndex < rotasIds.length - 1) {
                     doc.setDrawColor(borda[0], borda[1], borda[2]);
@@ -3922,20 +4921,47 @@ window.handleExportPDF = async function(e, specificDate = null) {
                 }
             });
 
-            // Fecha o contorno externo do dia. Se o dia ocupar mais de uma página,
-            // cada trecho recebe seu próprio contorno para não atravessar páginas.
-            const paginaFinalData = doc.internal.getCurrentPageInfo().pageNumber;
-            if (!segmentosData.has(paginaFinalData)) {
-                segmentosData.set(paginaFinalData, { top: 12, bottom: null });
-            }
-            segmentosData.get(paginaFinalData).bottom = currentY + 4;
+            // Contorno individual de cada rota. Mantemos as rotas dentro do mesmo
+            // card do dia, mas cada grupo recebe uma caixa discreta para facilitar
+            // a leitura operacional no PDF.
+            segmentosRotas.forEach((segmento) => {
+                for (let pagina = segmento.paginaInicial; pagina <= segmento.paginaFinal; pagina++) {
+                    // A caixa começa antes do título da rota e acompanha a tabela.
+                    // Em páginas de continuação, ela ocupa apenas o trecho daquela página.
+                    let topo = pagina === segmento.paginaInicial ? segmento.topo : 12;
+                    let bottom = pagina === segmento.paginaFinal ? segmento.finalY + 5 : pageHeight - 13;
 
-            segmentosData.forEach((segmento, pagina) => {
-                desenharContornoData(pagina, segmento.top, segmento.bottom);
+                    topo = Math.max(9, topo);
+                    bottom = Math.min(pageHeight - 11, bottom);
+                    if (bottom <= topo + 4) continue;
+
+                    doc.setPage(pagina);
+                    doc.setFillColor(252, 253, 255);
+                    doc.setDrawColor(203, 213, 225);
+                    doc.setLineWidth(0.35);
+                    doc.roundedRect(
+                        margem - 2.2,
+                        topo,
+                        (pageWidth - (margem * 2)) + 4.4,
+                        bottom - topo,
+                        2.2,
+                        2.2,
+                        'S'
+                    );
+
+                    // Destaque verde apenas no início de cada rota, alinhado ao título.
+                    if (pagina === segmento.paginaInicial) {
+                        doc.setDrawColor(verdeSirius[0], verdeSirius[1], verdeSirius[2]);
+                        doc.setLineWidth(0.9);
+                        doc.line(margem - 2.2, topo + 3, margem - 2.2, Math.min(topo + 15, bottom - 3));
+                    }
+                }
             });
-            doc.setPage(paginaFinalData);
 
-            // Espaço maior entre grupos de datas para deixar cada dia claramente separado.
+            // Mantém uma separação clara entre dias sem criar uma segunda moldura
+            // envolvendo todas as rotas do dia.
+            const paginaFinalData = doc.internal.getCurrentPageInfo().pageNumber;
+            doc.setPage(paginaFinalData);
             currentY += 11;
         });
 
@@ -4116,7 +5142,7 @@ function toggleNewHistoryViewMode(mode) {
 
 window.abrirModalDetalhesRota = async function(rotaId) {
     if (!rotaId) return;
-    const isViewer = isUserViewer();
+    const isViewer = !usuarioPodeAcao('Histórico', 'observacao');
 
     const content = document.getElementById('route-details-content');
     if (!content) return;
@@ -4224,7 +5250,10 @@ window.abrirModalDetalhesRota = async function(rotaId) {
 };
 
 window.salvarObservacaoHistorico = async function(rotaId) {
-    if (isUserViewer()) return;
+    if (!usuarioPodeAcao('Histórico', 'observacao')) {
+        mostrarAviso('⛔ Você não possui permissão para salvar observações.');
+        return;
+    }
     const textarea = document.getElementById(`hist-obs-${rotaId}`);
     if (!textarea) return;
 
@@ -4269,7 +5298,7 @@ async function carregarNovoHistorico() {
     if (!container) return;
 
     const termoTexto = filtroNomeNewHistory ? filtroNomeNewHistory.value.toLowerCase() : "";
-    const termoData = filtroDataNewHistory ? filtroDataNewHistory.value : "";
+    const filtroData = obterFiltroDataGlobal();
 
     // Feedback visual de carregamento
     container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Carregando histórico...</p>`;
@@ -4311,7 +5340,7 @@ async function carregarNovoHistorico() {
             });
             
             const matchTexto = matchRotaNome || matchTransportadora || matchNfInfo;
-            const matchData = termoData ? rota.data === termoData : true;
+            const matchData = dataDentroDoFiltroGlobal(rota.data, filtroData);
             return matchTexto && matchData;
         });
 
@@ -4394,7 +5423,7 @@ async function carregarNovoHistoricoProgramacao() {
     if (!container) return;
 
     const termoTexto = filtroNomeNewHistory ? filtroNomeNewHistory.value : "";
-    const termoData = filtroDataNewHistory ? filtroDataNewHistory.value : "";
+    const filtroData = obterFiltroDataGlobal();
 
     container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Carregando histórico agrupado...</p>`;
 
@@ -4422,9 +5451,7 @@ async function carregarNovoHistoricoProgramacao() {
         if (errN) throw errN;
 
         // Filtra as rotas pela data antes de agrupar (mesma lógica da tela Programação ativa)
-        const rotasFiltradasPelaData = rotas.filter(rota => {
-            return termoData ? rota.data === termoData : true;
-        });
+        const rotasFiltradasPelaData = rotas.filter(rota => dataDentroDoFiltroGlobal(rota.data, filtroData));
 
         const agrupado = agruparDadosProgramacao(rotasFiltradasPelaData, nfs, termoTexto);
         
@@ -4518,8 +5545,8 @@ async function carregarNovoHistoricoProgramacao() {
 }
 
 window.retornarRotaNovaPagina = async function(rotaId) {
-    if (isUserViewer()) return;
-    confirmarAcao("Deseja retornar esta rota para a tela principal (Ativa)?", async () => {
+    if (!usuarioPodeAcao('Histórico', 'retornar_rota')) { mostrarAviso('⛔ Você não possui permissão para retornar rota.'); return; }
+      confirmarAcao("Deseja retornar esta rota para a tela principal (Ativa)?", async () => {
         await retornarRota(rotaId);
         carregarNovoHistorico();
     });
@@ -4559,12 +5586,17 @@ async function carregarDashboard() {
 
         if (errN || errR) throw new Error("Erro ao buscar dados para o dashboard.");
 
-        const rotasAtivas = todasAsRotas.filter(r => r.status === 'ativa');
-        const rotasFinalizadas = todasAsRotas.filter(r => r.status === 'finalizada');
+        const filtroDataPainel = obterFiltroDataGlobal();
+        const rotasPorId = new Map(todasAsRotas.map(r => [r.id, r]));
+        const rotasAtivas = todasAsRotas.filter(r => r.status === 'ativa' && dataDentroDoFiltroGlobal(r.data, filtroDataPainel));
+        const rotasFinalizadas = todasAsRotas.filter(r => r.status === 'finalizada' && dataDentroDoFiltroGlobal(r.data, filtroDataPainel));
 
         // FILTRO DE DADOS ATIVOS (Ignorar NFs de rotas já finalizadas)
         const activeRotaIds = new Set(rotasAtivas.map(r => r.id));
-        const nfsAtivas = nfs.filter(n => !n.rota_id || activeRotaIds.has(n.rota_id));
+        const nfsAtivas = nfs.filter(n => {
+            if (n.rota_id) return activeRotaIds.has(n.rota_id);
+            return dataDentroDoFiltroGlobal(obterDataReferenciaNF(n, rotasPorId), filtroDataPainel);
+        });
         const nfsEmRotaAtiva = nfs.filter(n => n.rota_id && activeRotaIds.has(n.rota_id));
 
         // 1. ATUALIZAR CARDS DE RESUMO
