@@ -17,9 +17,10 @@ async function carregarPermissoesUsuarioLogado() {
         if (error) throw error;
         const registro = Array.isArray(data) ? data[0] : data;
         if (registro) {
+            // O perfil-base oficial vem de usuarios.permissao. A RPC fornece
+            // apenas as personalizações persistidas e não deve sobrescrever
+            // o perfil atual com um perfil antigo gravado no JSON.
             usuarioLogado.__permissoesPersonalizadas = registro.permissoes || {};
-            const perfilSalvo = usuarioLogado.__permissoesPersonalizadas.__perfilBase;
-            if (perfilSalvo) usuarioLogado.permissao = perfilSalvo;
             localStorage.setItem("usuarioLogado", JSON.stringify(usuarioLogado));
         }
     } catch (err) {
@@ -1274,7 +1275,7 @@ const permissoesConfigBase = {
 };
 
 function obterPermissoesVisuaisUsuario(user) {
-    const acesso = user?.__permissoesPersonalizadas?.__perfilBase || user?.permissao || 'Operador';
+    const acesso = user?.permissao || user?.__permissoesPersonalizadas?.__perfilBase || 'Operador';
     const defaults = JSON.parse(JSON.stringify(permissoesConfigBase));
 
     if (acesso === 'Visualizador') {
@@ -1322,18 +1323,38 @@ function obterPermissoesVisuaisUsuario(user) {
         });
     }
 
-    // IMPORTANTE: as personalizações são exceções sobre o perfil-base.
-    // Elas devem ser aplicadas DEPOIS do preset, nunca antes dos returns.
+    // As personalizações novas são exceções sobre o perfil-base.
+    // Formato novo: { __perfilBase, __excecoes: { Tela: { flag: boolean } } }
     const personalizadas = user?.__permissoesPersonalizadas;
     if (personalizadas && typeof personalizadas === 'object') {
-        Object.keys(personalizadas).forEach(tela => {
-            if (!defaults[tela] || !personalizadas[tela] || typeof personalizadas[tela] !== 'object') return;
-            Object.keys(personalizadas[tela]).forEach(chave => {
-                if (chave in defaults[tela] && typeof personalizadas[tela][chave] === 'boolean') {
-                    defaults[tela][chave] = personalizadas[tela][chave];
-                }
+        if (personalizadas.__excecoes && typeof personalizadas.__excecoes === 'object') {
+            Object.keys(personalizadas.__excecoes).forEach(tela => {
+                if (!defaults[tela] || !personalizadas.__excecoes[tela] || typeof personalizadas.__excecoes[tela] !== 'object') return;
+                Object.keys(personalizadas.__excecoes[tela]).forEach(chave => {
+                    if (chave in defaults[tela] && typeof personalizadas.__excecoes[tela][chave] === 'boolean') {
+                        defaults[tela][chave] = personalizadas.__excecoes[tela][chave];
+                    }
+                });
             });
-        });
+        } else {
+            // Compatibilidade com registros antigos que gravavam a matriz inteira.
+            // Se o perfil salvo no registro antigo for diferente do perfil atual,
+            // descartamos a matriz antiga para não carregar flags do perfil anterior.
+            const perfilLegado = personalizadas.__perfilBase;
+            const perfilAtual = user?.permissao || perfilLegado;
+            if (!perfilLegado || perfilLegado === perfilAtual) {
+                Object.keys(personalizadas).forEach(tela => {
+                    if (!defaults[tela] || !personalizadas[tela] || typeof personalizadas[tela] !== 'object') return;
+                    Object.keys(personalizadas[tela]).forEach(chave => {
+                        if (chave in defaults[tela] && typeof personalizadas[tela][chave] === 'boolean') {
+                            if (personalizadas[tela][chave] !== defaults[tela][chave]) {
+                                defaults[tela][chave] = personalizadas[tela][chave];
+                            }
+                        }
+                    });
+                });
+            }
+        }
     }
 
     return defaults;
@@ -1355,9 +1376,10 @@ function usuarioPodeGerenciar(tela) {
 
 function usuarioPodeAcao(tela, acao) {
     const p = obterPermissaoUsuario(tela);
-    if (!p) return false;
-    if (typeof p[acao] === 'boolean') return p[acao];
-    return !!p.gerenciamento;
+    if (!p || !acao) return false;
+    // Cada flag é independente. "Gerenciar" nunca concede automaticamente
+    // acesso às ações específicas da tela.
+    return p[acao] === true;
 }
 
 function usuarioPodeTransportar() {
@@ -1376,11 +1398,11 @@ async function salvarPermissoesUsuario(button, usuarioId) {
     }
     const detalhes = button.closest('.permission-detail-inner');
     if (!detalhes) return;
-    const telas = {};
+    const telasEfetivas = {};
     const usuarioConfigurado = listaUsuariosLocal.find(u => String(u.id) === String(usuarioId));
     const acessoSelect = button.closest('.permission-user-item')?.querySelector('.permission-access-select');
     const perfilBase = acessoSelect?.value || usuarioConfigurado?.permissao || 'Operador';
-    telas.__perfilBase = perfilBase;
+
     detalhes.querySelectorAll('.permission-screen').forEach(screen => {
         const tela = screen.dataset.screen;
         if (!tela) return;
@@ -1389,8 +1411,30 @@ async function salvarPermissoesUsuario(button, usuarioId) {
             const chave = input.dataset.permission;
             if (chave) config[chave] = input.checked;
         });
-        telas[tela] = config;
+        telasEfetivas[tela] = config;
     });
+
+    // Salva somente as diferenças em relação ao preset do perfil.
+    const defaultsPerfil = obterPermissoesVisuaisUsuario({ permissao: perfilBase });
+    const excecoes = {};
+    Object.keys(telasEfetivas).forEach(tela => {
+        if (!defaultsPerfil[tela]) return;
+        const diferencas = {};
+        Object.keys(telasEfetivas[tela]).forEach(chave => {
+            const valor = telasEfetivas[tela][chave];
+            const padrao = defaultsPerfil[tela][chave];
+            if (typeof valor === 'boolean' && typeof padrao === 'boolean' && valor !== padrao) {
+                diferencas[chave] = valor;
+            }
+        });
+        if (Object.keys(diferencas).length) excecoes[tela] = diferencas;
+    });
+
+    const permissoesParaSalvar = {
+        __perfilBase: perfilBase,
+        __excecoes: excecoes
+    };
+
     const administrador = JSON.parse(localStorage.getItem("usuarioLogado"));
     if (!administrador?.email || !administrador?.senha) { mostrarAviso('Sessão administrativa inválida. Faça login novamente.'); return; }
     button.disabled = true;
@@ -1398,16 +1442,13 @@ async function salvarPermissoesUsuario(button, usuarioId) {
     button.textContent = 'Salvando...';
     try {
         const { data, error } = await supabaseClient.rpc('salvar_permissoes_usuarios', {
-            p_email: administrador.email, p_senha: administrador.senha, p_usuario_id: usuarioId, p_permissoes: telas
+            p_email: administrador.email, p_senha: administrador.senha, p_usuario_id: usuarioId, p_permissoes: permissoesParaSalvar
         });
         if (error) throw error;
 
         const salvo = Array.isArray(data) ? data[0] : data;
-        const permissoesSalvas = salvo?.permissoes || telas;
+        const permissoesSalvas = salvo?.permissoes || permissoesParaSalvar;
 
-        // O perfil-base precisa ficar sincronizado em `usuarios.permissao`.
-        // A tabela `permissoes_usuarios` guarda as permissões efetivas, mas a
-        // tela Gerencial usa `usuarios.permissao` para exibir o perfil atual.
         const perfilAnterior = usuarioConfigurado?.permissao;
         const { data: usuarioAtualizado, error: erroPerfil } = await supabaseClient
             .from('usuarios')
@@ -1417,8 +1458,6 @@ async function salvarPermissoesUsuario(button, usuarioId) {
             .single();
 
         if (erroPerfil) {
-            // Tenta manter os dois registros consistentes se a atualização do
-            // perfil falhar depois que as permissões já foram salvas.
             if (perfilAnterior) {
                 await supabaseClient
                     .from('usuarios')
@@ -1435,8 +1474,6 @@ async function salvarPermissoesUsuario(button, usuarioId) {
             });
         }
 
-        // Se o usuário alterado for o próprio usuário logado, atualiza a sessão
-        // local para que a mudança de perfil seja aplicada imediatamente.
         const usuarioLogadoAtual = JSON.parse(localStorage.getItem('usuarioLogado') || 'null');
         if (usuarioLogadoAtual && String(usuarioLogadoAtual.id) === String(usuarioId)) {
             usuarioLogadoAtual.permissao = perfilBase;
@@ -1502,6 +1539,11 @@ function renderizarPermissoes() {
             accessSelect.addEventListener('change', (event) => {
                 event.stopPropagation();
                 user.permissao = event.target.value;
+                // Ao trocar o perfil, começa pelo preset do novo perfil.
+                user.__permissoesPersonalizadas = {
+                    __perfilBase: user.permissao,
+                    __excecoes: {}
+                };
                 if (!details.classList.contains('hidden')) {
                     details.innerHTML = criarPainelPermissoesUsuario(user);
                     details.dataset.rendered = 'true';
@@ -1565,7 +1607,9 @@ function aplicarPermissoesNaInterface() {
     if (cardUsuarios) cardUsuarios.classList.toggle('hidden', !usuarioPodeAcao('Gerencial', 'gerenciar_usuarios'));
     if (kamSection) kamSection.classList.toggle('hidden', !usuarioPodeAcao('Gerencial', 'gerenciar_kam'));
 
-    // Exceções para Visualizador: ações específicas podem ser liberadas individualmente.
+    // As ações específicas são independentes do "Gerenciar" e do perfil.
+    // O CSS também acompanha as flags para não deixar botões visualmente utilizáveis
+    // quando a ação está bloqueada.
     const styleId = 'permissoes-granulares-runtime';
     let style = document.getElementById(styleId);
     if (!style) {
@@ -1574,25 +1618,22 @@ function aplicarPermissoesNaInterface() {
         document.head.appendChild(style);
     }
     const regras = [];
-    const permitir = (acao, selector) => {
-        if (usuarioPodeAcao('Roteirização', acao)) regras.push(`body.is-viewer ${selector}{display:flex!important;}`);
+    const definirVisibilidade = (acao, selector, display = 'flex') => {
+        regras.push(`${selector}{display:${usuarioPodeAcao('Roteirização', acao) ? display : 'none'}!important;}`);
     };
 
-    // A entrada de NF só é útil se pelo menos uma das operações estiver liberada.
-    if (
-        usuarioPodeAcao('Roteirização', 'adicionar_nf') &&
-        (usuarioPodeTransportar() || usuarioPodeRetirar())
-    ) {
-        regras.push('body.is-viewer #open-nf-modal-btn{display:flex!important;}');
-    }
-    permitir('criar_rota', '#open-rota-modal-btn');
-    permitir('editar_nf', '.nf-actions-top .edit');
-    permitir('excluir_nf', '.nf-actions-top .delete');
-    permitir('editar_rota', '.rota-actions .edit');
-    permitir('excluir_rota', '.rota-actions .delete');
-    permitir('finalizar_rota', '.rota-footer .btn:not(.btn-outline):not(.btn-map-route)');
-    if (usuarioPodeAcao('Histórico', 'retornar_rota')) regras.push('body.is-viewer .history-card .btn[onclick*="retornar"]{display:block!important;}');
-    if (usuarioPodeAcao('Histórico', 'excluir_historico')) regras.push('body.is-viewer .history-card .btn[onclick*="excluirHistorico"]{display:block!important;}');
+    definirVisibilidade('adicionar_nf', '#open-nf-modal-btn');
+    definirVisibilidade('criar_rota', '#open-rota-modal-btn');
+    definirVisibilidade('editar_nf', '.nf-actions-top .edit');
+    definirVisibilidade('excluir_nf', '.nf-actions-top .delete');
+    definirVisibilidade('editar_rota', '.rota-actions .edit');
+    definirVisibilidade('excluir_rota', '.rota-actions .delete');
+    definirVisibilidade('finalizar_rota', '.rota-footer .btn:not(.btn-outline):not(.btn-map-route)');
+    regras.push(`.maps-wrapper{display:flex!important;}`);
+    regras.push(`.rota-footer .btn.btn-outline{display:${usuarioPodeAcao('Roteirização', 'copiar_resumo') ? 'inline-flex' : 'none'}!important;}`);
+    regras.push(`.history-card .btn[onclick*="retornar"]{display:${usuarioPodeAcao('Histórico', 'retornar_rota') ? 'block' : 'none'}!important;}`);
+    regras.push(`.history-card .btn[onclick*="excluirHistorico"]{display:${usuarioPodeAcao('Histórico', 'excluir_historico') ? 'block' : 'none'}!important;}`);
+    regras.push(`#export-programacao-btn{display:${usuarioPodeAcao('Programação', 'exportar') ? 'inline-flex' : 'none'}!important;}`);
     style.textContent = regras.join('\n');
     inicializarMenuGlobal();
 }
@@ -1745,7 +1786,48 @@ async function carregarUsuarios() {
         const { data, error } = await supabaseClient.from("usuarios").select("*").order("nome");
         console.log("Usuários carregados:", data, error);
         if (error) throw error;
-        listaUsuariosLocal = data || [];
+
+        // IMPORTANTE: a tabela permissoes_usuarios pode estar protegida por RLS
+        // para consultas diretas feitas pelo navegador. Nesse caso, um SELECT
+        // simples retorna vazio e o editor volta a mostrar apenas o padrão do perfil.
+        // Como já existe a RPC obter_minhas_permissoes, usamos a própria RPC para
+        // recuperar a configuração persistida de cada usuário, sem criar/alterar
+        // nenhuma tabela ou coluna.
+        listaUsuariosLocal = await Promise.all((data || []).map(async user => {
+            let personalizadas = null;
+
+            if (user.email && user.senha) {
+                try {
+                    const { data: permissaoRpc, error: permissaoRpcError } = await supabaseClient.rpc('obter_minhas_permissoes', {
+                        p_email: user.email,
+                        p_senha: user.senha
+                    });
+
+                    if (!permissaoRpcError) {
+                        const registro = Array.isArray(permissaoRpc) ? permissaoRpc[0] : permissaoRpc;
+                        personalizadas = registro?.permissoes || null;
+                    } else {
+                        console.warn(`Não foi possível carregar permissões de ${user.email}:`, permissaoRpcError);
+                    }
+                } catch (errPermissao) {
+                    console.warn(`Erro ao carregar permissões de ${user.email}:`, errPermissao);
+                }
+            }
+
+            // O editor administrativo trabalha com o perfil salvo em usuarios.permissao
+            // + as flags efetivas persistidas em permissoes_usuarios.
+            if (personalizadas && typeof personalizadas === 'object') {
+                user.__permissoesPersonalizadas = JSON.parse(JSON.stringify(personalizadas));
+                if (!user.__permissoesPersonalizadas.__perfilBase) {
+                    user.__permissoesPersonalizadas.__perfilBase = user.permissao || 'Operador';
+                }
+            } else {
+                user.__permissoesPersonalizadas = {};
+            }
+
+            return user;
+        }));
+
         renderizarUsuarios(listaUsuariosLocal);
     } catch (err) {
         console.error("Erro ao carregar usuários:", err);
@@ -2678,6 +2760,10 @@ if (createUserForm) {
 // Event Listeners para abrir modais
 if (openNfModalBtn) {
   openNfModalBtn.addEventListener('click', () => {
+    if (!usuarioPodeAcao('Roteirização', 'adicionar_nf')) {
+      mostrarAviso('⛔ Você não possui permissão para adicionar NF.');
+      return;
+    }
     if (nfModalTitle) nfModalTitle.innerText = "Adicionar Nova NF";
     if (nfIdHidden) nfIdHidden.value = "";
     if (createNfForm) createNfForm.reset();
@@ -2967,6 +3053,10 @@ if (btnLerDocs) {
 }
 if (openRotaModalBtn) {
   openRotaModalBtn.addEventListener('click', () => {
+    if (!usuarioPodeAcao('Roteirização', 'criar_rota')) {
+      mostrarAviso('⛔ Você não possui permissão para criar rota.');
+      return;
+    }
     if (rotaModalTitle) rotaModalTitle.innerText = "Adicionar Nova Rota";
     if (rotaIdHidden) rotaIdHidden.value = "";
     if (rotaNomeInput) rotaNomeInput.value = "";
@@ -4534,6 +4624,10 @@ const exportDropdown = document.getElementById('export-dropdown');
 if (exportProgramacaoBtn) {
     exportProgramacaoBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (!usuarioPodeAcao('Programação', 'exportar')) {
+            mostrarAviso('⛔ Você não possui permissão para exportar.');
+            return;
+        }
         if (exportDropdown) {
             // Fecha outros dropdowns abertos (como o de perfil)
             document.querySelectorAll('.user-dropdown').forEach(d => {
@@ -4546,6 +4640,10 @@ if (exportProgramacaoBtn) {
 
 window.handleExportExcel = async function (e, specificDate = null) {
     if (e) e.stopPropagation();
+    if (!usuarioPodeAcao('Programação', 'exportar')) {
+        mostrarAviso('⛔ Você não possui permissão para exportar.');
+        return;
+    }
 
     // 1. Fechar todos os menus de exportação (principal e individuais)
     document.querySelectorAll('.user-dropdown').forEach(d => d.classList.add('hidden'));
