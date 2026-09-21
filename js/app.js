@@ -436,32 +436,41 @@ if (loginForm) {
 
         try {
             let usuarioLogado = null;
-            
             const usersLocais = JSON.parse(localStorage.getItem('sirios_usuarios') || '[]');
-            usuarioLogado = usersLocais.find(u => u.email === email && u.senha === pass);
 
-            // 2. Se não encontrou localmente, tenta autenticar via Supabase
-            if (!usuarioLogado && window.supabaseClient) {
+            // O banco é a fonte principal do usuário. O cache local não deve decidir
+            // qual ID será usado, pois pode conter dados antigos de versões anteriores.
+            if (window.supabaseClient) {
                 const { data, error } = await supabaseClient
                     .from("usuarios")
                     .select("*")
                     .eq("email", email)
                     .eq("senha", pass)
                     .single();
-                
+
                 if (error) {
                     console.error("Erro detalhado do Supabase:", error.message, error.details, error.hint);
-                    // Se o erro for '406' ou similar, geralmente é RLS.
                 }
 
                 if (!error && data) {
                     usuarioLogado = data;
-                    // Salva no cache local para evitar ficar preso se o Supabase oscilar
-                    if (!usersLocais.some(u => u.id === data.id)) {
+
+                    // Atualiza/substitui o cadastro local pelo registro oficial do banco.
+                    // Isso garante que o ID usado pelo sistema seja o UUID de usuarios.id.
+                    const indiceLocal = usersLocais.findIndex(u => u.email === data.email);
+                    if (indiceLocal >= 0) {
+                        usersLocais[indiceLocal] = data;
+                    } else {
                         usersLocais.push(data);
-                        localStorage.setItem('sirios_usuarios', JSON.stringify(usersLocais));
                     }
+                    localStorage.setItem('sirios_usuarios', JSON.stringify(usersLocais));
                 }
+            }
+
+            // Fallback somente se o Supabase não estiver disponível.
+            // Não é usado quando o banco respondeu, evitando IDs antigos do cache.
+            if (!usuarioLogado && !window.supabaseClient) {
+                usuarioLogado = usersLocais.find(u => u.email === email && u.senha === pass);
             }
 
             if (!usuarioLogado) {
@@ -1369,7 +1378,9 @@ async function salvarPermissoesUsuario(button, usuarioId) {
     if (!detalhes) return;
     const telas = {};
     const usuarioConfigurado = listaUsuariosLocal.find(u => String(u.id) === String(usuarioId));
-    if (usuarioConfigurado?.permissao) telas.__perfilBase = usuarioConfigurado.permissao;
+    const acessoSelect = button.closest('.permission-user-item')?.querySelector('.permission-access-select');
+    const perfilBase = acessoSelect?.value || usuarioConfigurado?.permissao || 'Operador';
+    telas.__perfilBase = perfilBase;
     detalhes.querySelectorAll('.permission-screen').forEach(screen => {
         const tela = screen.dataset.screen;
         if (!tela) return;
@@ -1390,11 +1401,52 @@ async function salvarPermissoesUsuario(button, usuarioId) {
             p_email: administrador.email, p_senha: administrador.senha, p_usuario_id: usuarioId, p_permissoes: telas
         });
         if (error) throw error;
+
         const salvo = Array.isArray(data) ? data[0] : data;
-        if (usuarioConfigurado) usuarioConfigurado.__permissoesPersonalizadas = salvo?.permissoes || telas;
+        const permissoesSalvas = salvo?.permissoes || telas;
+
+        // O perfil-base precisa ficar sincronizado em `usuarios.permissao`.
+        // A tabela `permissoes_usuarios` guarda as permissões efetivas, mas a
+        // tela Gerencial usa `usuarios.permissao` para exibir o perfil atual.
+        const perfilAnterior = usuarioConfigurado?.permissao;
+        const { data: usuarioAtualizado, error: erroPerfil } = await supabaseClient
+            .from('usuarios')
+            .update({ permissao: perfilBase })
+            .eq('id', usuarioId)
+            .select('*')
+            .single();
+
+        if (erroPerfil) {
+            // Tenta manter os dois registros consistentes se a atualização do
+            // perfil falhar depois que as permissões já foram salvas.
+            if (perfilAnterior) {
+                await supabaseClient
+                    .from('usuarios')
+                    .update({ permissao: perfilAnterior })
+                    .eq('id', usuarioId);
+            }
+            throw erroPerfil;
+        }
+
+        if (usuarioConfigurado) {
+            Object.assign(usuarioConfigurado, usuarioAtualizado || {}, {
+                permissao: perfilBase,
+                __permissoesPersonalizadas: permissoesSalvas
+            });
+        }
+
+        // Se o usuário alterado for o próprio usuário logado, atualiza a sessão
+        // local para que a mudança de perfil seja aplicada imediatamente.
+        const usuarioLogadoAtual = JSON.parse(localStorage.getItem('usuarioLogado') || 'null');
+        if (usuarioLogadoAtual && String(usuarioLogadoAtual.id) === String(usuarioId)) {
+            usuarioLogadoAtual.permissao = perfilBase;
+            usuarioLogadoAtual.__permissoesPersonalizadas = permissoesSalvas;
+            localStorage.setItem('usuarioLogado', JSON.stringify(usuarioLogadoAtual));
+        }
+
         const badge = detalhes.querySelector('.permission-stage-badge');
         if (badge) badge.textContent = 'Configuração salva';
-        mostrarAviso('Permissões salvas com sucesso.');
+        mostrarAviso('Permissões e perfil salvos com sucesso.');
     } catch (err) {
         console.error('Gerencial: erro ao salvar permissões:', err);
         mostrarAviso('Erro ao salvar as permissões.');
@@ -2135,7 +2187,7 @@ if (backToGerencialFromUsuariosBtn) {
     });
 }
 
-window.abrirTelaPermissoes = function(event) {
+window.abrirTelaPermissoes = async function(event) {
     if (!usuarioPodeAcao('Gerencial', 'gerenciar_permissoes')) {
         mostrarAviso('⛔ Você não possui permissão para gerenciar permissões.');
         return;
@@ -2154,6 +2206,9 @@ window.abrirTelaPermissoes = function(event) {
     mostrarSomenteView(permissoesView);
     document.querySelector('.app')?.classList.add('panel-active');
 
+    // A tela de permissões deve sempre trabalhar com os usuários vindos do Supabase.
+    // Assim o dataset usado pelo botão Salvar contém o UUID real de usuarios.id.
+    await carregarUsuarios();
     renderizarPermissoes();
     atualizarPerfilPermissoes();
 };
