@@ -1390,6 +1390,26 @@ function usuarioPodeRetirar() {
     return !!obterPermissaoUsuario('Roteirização')?.retirada;
 }
 
+// Transporte e Retirada controlam operações sobre o tipo da NF.
+// Eles são independentes das demais flags de Roteirização.
+function obterTipoOperacaoNF(nf) {
+    return (nf?.tipo === 'retira' || nf?.uf === 'RT') ? 'retira' : 'transporte';
+}
+
+function usuarioPodeTipoNF(nf) {
+    return obterTipoOperacaoNF(nf) === 'retira' ? usuarioPodeRetirar() : usuarioPodeTransportar();
+}
+
+function verificarPermissaoTipoNFs(nfs, acaoDescricao = 'alterar estas NFs') {
+    const lista = Array.isArray(nfs) ? nfs : (nfs ? [nfs] : []);
+    const bloqueada = lista.find(nf => !usuarioPodeTipoNF(nf));
+    if (!bloqueada) return true;
+
+    const tipo = obterTipoOperacaoNF(bloqueada) === 'retira' ? 'Retirada' : 'Transporte';
+    mostrarAviso(`⛔ Você não possui permissão para ${acaoDescricao} de ${tipo}.`);
+    return false;
+}
+
 async function salvarPermissoesUsuario(button, usuarioId) {
     if (!button || !usuarioId) return;
     if (!usuarioPodeAcao('Gerencial', 'gerenciar_permissoes')) {
@@ -3642,6 +3662,19 @@ async function enviarParaRota(nfId) {
     }
 
     try {
+        const { data: nf, error: nfError } = await supabaseClient
+            .from('nfs')
+            .select('id,numero,tipo,uf,rota_id')
+            .eq('id', nfId)
+            .single();
+
+        if (nfError || !nf) {
+            mostrarAviso('Não foi possível identificar o tipo desta NF.');
+            return;
+        }
+
+        if (!verificarPermissaoTipoNFs(nf, 'adicionar NFs de')) return;
+
         const resultadoLimite = await validarLimiteAoAdicionarNFRetirada(nfId, rotaSelecionada);
         if (!resultadoLimite.permitido) {
             mostrarAviso(`⛔ Limite de Retirada atingido para ${formatarDataBR((await supabaseClient.from('rotas').select('data').eq('id', rotaSelecionada).single()).data?.data)}. O limite é de ${resultadoLimite.limite} NF${resultadoLimite.limite === 1 ? '' : 's'} de Retirada programadas para esse dia.`);
@@ -3947,10 +3980,30 @@ async function removerDaRota(nfId) {
     alert('Erro: O serviço de banco de dados não está disponível.');
     return;
   }
-  await supabaseClient
+
+  const { data: nf, error: nfError } = await supabaseClient
+    .from('nfs')
+    .select('id,numero,tipo,uf,rota_id')
+    .eq('id', nfId)
+    .single();
+
+  if (nfError || !nf) {
+    mostrarAviso('Não foi possível identificar o tipo desta NF.');
+    return;
+  }
+
+  if (!verificarPermissaoTipoNFs(nf, 'remover NFs de')) return;
+
+  const { error } = await supabaseClient
     .from("nfs")
     .update({ rota_id: null })
     .eq("id", nfId);
+
+  if (error) {
+    console.error('Erro ao remover NF da rota:', error);
+    mostrarAviso('Não foi possível remover a NF da rota.');
+    return;
+  }
 
   carregarTudo();
 }
@@ -4021,6 +4074,8 @@ window.finalizarRota = async function(rotaId) {
       const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*").eq("rota_id", rotaId);
 
       if (errR || errN) throw new Error("Erro ao buscar dados para o histórico.");
+
+      if (!verificarPermissaoTipoNFs(nfs || [], 'finalizar rotas com NFs de')) return;
 
       if (rotas && rotas.length > 0) {
           let total = 0;
@@ -4223,6 +4278,20 @@ window.copiarResumoHistorico = async function(rotaId) {
 };
 window.deletarRota = async function(rotaId) {
     if (!usuarioPodeAcao('Roteirização', 'excluir_rota')) { mostrarAviso('⛔ Você não possui permissão para excluir rota.'); return; }
+
+  const { data: nfsDaRota, error: nfsError } = await supabaseClient
+    .from('nfs')
+    .select('id,numero,tipo,uf,rota_id')
+    .eq('rota_id', rotaId);
+
+  if (nfsError) {
+    console.error('Erro ao verificar NFs da rota antes da exclusão:', nfsError);
+    mostrarAviso('Não foi possível verificar as NFs desta rota.');
+    return;
+  }
+
+  if (!verificarPermissaoTipoNFs(nfsDaRota || [], 'excluir rotas com NFs de')) return;
+
   confirmarAcao("Tem certeza que deseja excluir esta rota? As Notas Fiscais vinculadas retornarão para a lista de pendentes.", async () => {
     try {
       // Primeiro removemos o vínculo das NFs com esta rota
