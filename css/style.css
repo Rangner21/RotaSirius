@@ -5987,3 +5987,79 @@ body.light-theme .rota-collapse-btn:hover {
   height: auto;
   min-height: 0;
 }
+
+
+/* DOCUMENTOS DA ROTA */
+.route-documents-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-route-documents {
+  gap: 7px;
+  min-width: 136px;
+}
+
+.btn-route-documents svg {
+  flex-shrink: 0;
+}
+
+.route-documents-chevron {
+  transition: transform 0.18s ease;
+  opacity: 0.7;
+}
+
+.btn-route-documents[aria-expanded="true"] .route-documents-chevron {
+  transform: rotate(180deg);
+}
+
+.route-documents-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 205px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: 0 14px 30px -10px rgba(0, 0, 0, 0.55);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: dropdownFadeIn 0.18s ease-out;
+}
+
+.route-documents-dropdown button {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 13px;
+  background: transparent;
+  border: 0;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.route-documents-dropdown button + button {
+  border-top: 1px solid var(--border);
+}
+
+.route-documents-dropdown button:hover {
+  background: rgba(34, 197, 94, 0.10);
+  color: var(--primary);
+}
+
+.route-documents-dropdown button svg {
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.route-documents-dropdown button:hover svg {
+  opacity: 1;
+}
