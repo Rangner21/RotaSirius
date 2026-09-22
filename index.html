@@ -137,131 +137,85 @@
       </div>
 
       <!-- FILTRO GLOBAL DE PERÍODO -->
-      <div class="panel-container" style="margin-bottom: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
-        <strong style="font-size: 13px; color: var(--text);">Período</strong>
-        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted);">
-          Início
-          <input type="date" id="filtro-data-painel-inicio" class="date-filter">
-        </label>
-        <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted);">
-          Fim
-          <input type="date" id="filtro-data-painel-fim" class="date-filter">
-        </label>
-        <span style="font-size: 11px; color: var(--text-muted);">O período é aplicado aos indicadores e gráficos do Painel.</span>
-      </div>
-      
-      <!-- FAIXA DE INDICADORES RÁPIDOS -->
-      <div class="dashboard-stats">
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(148, 163, 184, 0.1); color: #94a3b8;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">NFs Pendentes</span>
-            <h3 id="stat-nfs-pendentes">0</h3>
-          </div>
+      <div class="panel-container painel-filtros-container">
+        <div class="painel-filtro-periodo">
+          <strong>Período</strong>
+          <label>
+            Início
+            <input type="date" id="filtro-data-painel-inicio" class="date-filter">
+          </label>
+          <label>
+            Fim
+            <input type="date" id="filtro-data-painel-fim" class="date-filter">
+          </label>
+          <span class="painel-filtro-hint">O período é aplicado aos indicadores e gráficos do Painel.</span>
         </div>
 
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1); color: var(--primary);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">NFs em Rota</span>
-            <h3 id="stat-nfs-em-rota">0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(56, 189, 248, 0.1); color: var(--accent);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 18l-2-1-2 1V3l2 1 2-1 2 1 2-1v15l-2-1-2 1z"></path></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Rotas Ativas</span>
-            <h3 id="stat-rotas-ativas">0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(168, 85, 247, 0.1); color: #a855f7;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Rotas Finalizadas</span>
-            <h3 id="stat-rotas-finalizadas">0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(251, 191, 36, 0.1); color: #fbbf24;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Em Produção</span>
-            <h3 id="stat-nfs-producao">0</h3>
-          </div>
-        </div>
-
-        <div class="stat-card">
-          <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1); color: var(--primary);">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-label">Produzidas</span>
-            <h3 id="stat-nfs-produzidas">0</h3>
+        <div class="painel-filtro-nf">
+          <label class="painel-filtro-nf-label" for="pesquisa-nf-painel">Pesquisar NF</label>
+          <div class="painel-filtro-nf-input-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+            <input type="search" id="pesquisa-nf-painel" class="date-filter" placeholder="Digite o número da NF..." autocomplete="off">
+            <button type="button" id="limpar-pesquisa-nf-painel" class="painel-filtro-nf-clear hidden" title="Limpar pesquisa" aria-label="Limpar pesquisa">×</button>
           </div>
         </div>
       </div>
+
+      <div id="resultado-pesquisa-nf-painel" class="painel-nf-search-result hidden" aria-live="polite"></div>
       
-      <!-- SEGUNDA FAIXA: GRÁFICOS -->
-      <div class="dashboard-charts">
-        <div class="chart-container">
-          <h3>Status das NFs</h3>
-          <div class="chart-canvas-wrapper">
-            <canvas id="chart-status-nfs"></canvas>
+      <!-- DASHBOARD KPI -->
+      <section class="kpi-dashboard">
+        <div class="kpi-section-heading">
+          <div>
+            <span class="kpi-eyebrow">VISÃO EXECUTIVA</span>
+            <h3>Desempenho da operação</h3>
+            <p>Indicadores consolidados do período selecionado.</p>
           </div>
-          <div id="msg-status-nfs" class="empty-chart-msg hidden">Sem dados suficientes no momento</div>
-        </div>
-        <div class="chart-container">
-          <h3>NFs por Dia (Em Rota)</h3>
-          <div class="chart-canvas-wrapper">
-            <canvas id="chart-nfs-dia"></canvas>
-          </div>
-          <div id="msg-nfs-dia" class="empty-chart-msg hidden">Sem dados suficientes no momento</div>
-        </div>
-        <div class="chart-container">
-          <h3>Rotas Ativas por Dia</h3>
-          <div class="chart-canvas-wrapper">
-            <canvas id="chart-rotas-dia"></canvas>
-          </div>
-          <div id="msg-rotas-dia" class="empty-chart-msg hidden">Sem dados suficientes no momento</div>
-        </div>
-      </div>
-      
-      <!-- TERCEIRA FAIXA: RANKINGS E ALERTAS -->
-      <div class="dashboard-rankings">
-        <div class="panel-container">
-          <h3 style="font-size: 12px; margin-bottom: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Top Transportadoras</h3>
-          <div id="ranking-transportadoras" class="ranking-list">
-            <!-- Dinâmico -->
-          </div>
+          <div class="kpi-live-status"><span></span> Dados atualizados ao abrir o painel</div>
         </div>
 
-        <div class="panel-container">
-          <h3 style="font-size: 12px; margin-bottom: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Top KAMs</h3>
-          <div id="ranking-kams" class="ranking-list">
-            <!-- Dinâmico -->
-          </div>
+        <div class="dashboard-stats kpi-primary-grid">
+          <div class="stat-card kpi-card kpi-card-main"><div class="stat-icon kpi-icon-neutral"><span>NF</span></div><div class="stat-info"><span class="stat-label">NFs no período</span><h3 id="stat-nfs-total">0</h3><small id="stat-nfs-total-sub">Todas as NFs</small></div></div>
+          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-green"><span>✓</span></div><div class="stat-info"><span class="stat-label">NFs produzidas</span><h3 id="stat-nfs-produzidas">0</h3><small id="stat-nfs-produzidas-sub">0% do total</small></div></div>
+          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-blue"><span>↗</span></div><div class="stat-info"><span class="stat-label">NFs expedidas</span><h3 id="stat-nfs-expedidas">0</h3><small id="stat-nfs-expedidas-sub">0% do total</small></div></div>
+          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-purple"><span>✓</span></div><div class="stat-info"><span class="stat-label">NFs finalizadas</span><h3 id="stat-nfs-finalizadas">0</h3><small id="stat-nfs-finalizadas-sub">0% do total</small></div></div>
+          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-orange"><span>!</span></div><div class="stat-info"><span class="stat-label">NFs pendentes</span><h3 id="stat-nfs-pendentes">0</h3><small id="stat-nfs-pendentes-sub">Sem rota</small></div></div>
+          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-cyan"><span>R</span></div><div class="stat-info"><span class="stat-label">Rotas no período</span><h3 id="stat-rotas-total">0</h3><small id="stat-rotas-total-sub">0 finalizadas</small></div></div>
         </div>
 
-        <div class="panel-container">
-          <h3 style="font-size: 12px; margin-bottom: 20px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;">Alertas de Preenchimento</h3>
-          <div id="alerts-summary" class="alerts-list">
-            <!-- Dinâmico -->
-          </div>
+        <div class="kpi-secondary-grid">
+          <div class="kpi-metric-card"><div><span class="kpi-metric-label">Taxa de conclusão</span><strong id="kpi-taxa-conclusao">0%</strong></div><div class="kpi-progress"><span id="kpi-taxa-conclusao-bar"></span></div><small>NFs finalizadas sobre o total do período</small></div>
+          <div class="kpi-metric-card"><div><span class="kpi-metric-label">Taxa de expedição</span><strong id="kpi-taxa-expedicao">0%</strong></div><div class="kpi-progress"><span id="kpi-taxa-expedicao-bar"></span></div><small>NFs expedidas sobre o total do período</small></div>
+          <div class="kpi-metric-card"><div><span class="kpi-metric-label">Média de NFs por rota</span><strong id="kpi-media-nfs-rota">0</strong></div><small>Quantidade média por rota do período</small></div>
+          <div class="kpi-metric-card"><div><span class="kpi-metric-label">Volume movimentado</span><strong id="kpi-volume-total">0</strong></div><small>Quantidade de itens informada nas NFs</small></div>
         </div>
-      </div>
-      
+
+        <div class="dashboard-charts kpi-charts-primary">
+          <div class="chart-container chart-container-large"><div class="chart-title-row"><div><span class="kpi-eyebrow">FLUXO</span><h3>Evolução operacional</h3></div><span class="chart-note">Produção · Expedição · Finalização</span></div><div class="chart-canvas-wrapper"><canvas id="chart-evolucao-operacional"></canvas></div><div id="msg-evolucao-operacional" class="empty-chart-msg hidden">Sem dados suficientes no período.</div></div>
+          <div class="chart-container"><div class="chart-title-row"><div><span class="kpi-eyebrow">STATUS</span><h3>Status das NFs</h3></div></div><div class="chart-canvas-wrapper"><canvas id="chart-status-nfs"></canvas></div><div id="msg-status-nfs" class="empty-chart-msg hidden">Sem dados suficientes no período.</div></div>
+        </div>
+
+        <div class="dashboard-charts kpi-charts-secondary">
+          <div class="chart-container"><div class="chart-title-row"><div><span class="kpi-eyebrow">DISTRIBUIÇÃO</span><h3>Transporte x Retirada</h3></div></div><div class="chart-canvas-wrapper"><canvas id="chart-tipos-nf"></canvas></div><div id="msg-tipos-nf" class="empty-chart-msg hidden">Sem dados suficientes no período.</div></div>
+          <div class="chart-container"><div class="chart-title-row"><div><span class="kpi-eyebrow">DESTINOS</span><h3>Principais destinos</h3></div></div><div class="chart-canvas-wrapper"><canvas id="chart-destinos"></canvas></div><div id="msg-destinos" class="empty-chart-msg hidden">Sem dados suficientes no período.</div></div>
+          <div class="chart-container"><div class="chart-title-row"><div><span class="kpi-eyebrow">ROTAS</span><h3>Rotas por dia</h3></div></div><div class="chart-canvas-wrapper"><canvas id="chart-rotas-dia"></canvas></div><div id="msg-rotas-dia" class="empty-chart-msg hidden">Sem dados suficientes no período.</div></div>
+        </div>
+
+        <div class="dashboard-rankings kpi-bottom-grid">
+          <div class="panel-container kpi-panel"><div class="kpi-panel-heading"><div><span class="kpi-eyebrow">DESEMPENHO</span><h3>Transportadoras</h3></div><span class="kpi-panel-caption">Rotas · NFs</span></div><div id="ranking-transportadoras" class="ranking-list"></div></div>
+          <div class="panel-container kpi-panel"><div class="kpi-panel-heading"><div><span class="kpi-eyebrow">COMERCIAL</span><h3>KAMs</h3></div><span class="kpi-panel-caption">NFs · participação</span></div><div id="ranking-kams" class="ranking-list"></div></div>
+          <div class="panel-container kpi-panel"><div class="kpi-panel-heading"><div><span class="kpi-eyebrow">QUALIDADE</span><h3>Alertas operacionais</h3></div><span class="kpi-panel-caption">Pontos de atenção</span></div><div id="alerts-summary" class="alerts-list"></div></div>
+        </div>
+
+        <div class="kpi-summary-strip">
+          <div><span>Transporte</span><strong id="kpi-transporte">0 NFs</strong></div>
+          <div><span>Retirada</span><strong id="kpi-retirada">0 NFs</strong></div>
+          <div><span>Sem transportadora</span><strong id="kpi-sem-transportadora">0</strong></div>
+          <div><span>Sem status</span><strong id="kpi-sem-status">0</strong></div>
+          <div><span>Rotas ativas</span><strong id="kpi-rotas-ativas">0</strong></div>
+          <div><span>Rotas finalizadas</span><strong id="kpi-rotas-finalizadas">0</strong></div>
+        </div>
+      </section>
     </div>
 
     <!-- Visão Gerencial -->
@@ -1051,6 +1005,10 @@
       <span><strong>Simular Rota</strong><small>Simulação e cálculo de rota</small></span>
     </button>
     <div class="global-menu-divider"></div>
+    <button type="button" class="global-menu-item theme-toggle-item" data-menu-action="toggle-theme" aria-label="Alterar tema">
+      <span class="global-menu-item-icon theme-toggle-icon"></span>
+      <span><strong class="theme-toggle-label">Modo claro</strong><small>Alterar aparência do sistema</small></span>
+    </button>
     <button type="button" class="global-menu-item" data-menu-action="painel" data-menu-permission="Painel de Controle">
       <span class="global-menu-item-icon">
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="7" y1="8" x2="17" y2="8"></line><line x1="7" y1="12" x2="17" y2="12"></line><line x1="7" y1="16" x2="13" y2="16"></line></svg>
