@@ -4222,7 +4222,38 @@ async function carregarRotas() {
             </button>
           </div>
         </div>
-        <button class="btn btn-outline" onclick="event.stopPropagation(); copiarResumo('${rota.id}', '${rota.nome}', ${total})">Copiar Resumo</button>
+        <div class="route-documents-wrapper">
+          <button class="btn btn-outline btn-route-documents" type="button" onclick="toggleRouteDocumentsMenu(event)" aria-expanded="false">
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="8" y1="13" x2="16" y2="13"></line>
+              <line x1="8" y1="17" x2="16" y2="17"></line>
+            </svg>
+            Documentos
+            <svg class="route-documents-chevron" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+          <div class="route-documents-dropdown hidden">
+            <button type="button" onclick="event.stopPropagation(); gerarRomaneioPartida('${rota.id}')">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="11"></line>
+                <polyline points="9 14 12 17 15 14"></polyline>
+              </svg>
+              Romaneio de partida
+            </button>
+            <button type="button" onclick="event.stopPropagation(); copiarResumo('${rota.id}', '${rota.nome}', ${total})">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copiar resumo
+            </button>
+          </div>
+        </div>
         <button class="btn" onclick="event.stopPropagation(); finalizarRota('${rota.id}')">Finalizar Rota</button>
       </div>
     `;
@@ -4304,6 +4335,319 @@ window.editarRota = async function(rotaId, nomeAtual, dataAtual, transportadoraA
   if (rotaTransportadoraInput) rotaTransportadoraInput.value = transportadoraAtual || "";
   openModal(createRotaModal);
 }
+
+// DOCUMENTOS DA ROTA
+window.toggleRouteDocumentsMenu = function(event) {
+  if (event) event.stopPropagation();
+  const btn = event?.currentTarget;
+  const dropdown = btn?.nextElementSibling;
+  if (!dropdown) return;
+
+  document.querySelectorAll('.route-documents-dropdown, .maps-dropdown, .user-dropdown').forEach(d => {
+    if (d !== dropdown) d.classList.add('hidden');
+  });
+  document.querySelectorAll('.btn-route-documents').forEach(b => {
+    if (b !== btn) b.setAttribute('aria-expanded', 'false');
+  });
+
+  const aberto = dropdown.classList.toggle('hidden') === false;
+  btn.setAttribute('aria-expanded', String(aberto));
+};
+
+function formatarDataRomaneio(data) {
+  if (!data) return '';
+  const partes = String(data).split('-');
+  if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
+  return data;
+}
+
+function limparNomeArquivoRomaneio(valor) {
+  return String(valor || 'rota')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+// Número de controle do romaneio.
+// O número é atribuído à rota apenas na primeira emissão e fica persistido no banco.
+// Gerar o PDF novamente para a mesma rota sempre retorna o mesmo número.
+async function obterNumeroControleRomaneio(rotaId) {
+  const { data, error } = await supabaseClient.rpc('obter_numero_romaneio', {
+    p_rota_id: rotaId
+  });
+
+  if (error) throw error;
+
+  const numero = Number(data);
+  if (!Number.isInteger(numero) || numero <= 0) {
+    throw new Error('O número de controle do romaneio não foi retornado corretamente.');
+  }
+
+  return String(numero).padStart(5, '0');
+}
+
+
+// Converte quantidades do cadastro da NF para um número confiável no romaneio.
+// O cadastro atual utiliza "qtd"; "quantidade" fica como compatibilidade.
+function obterQuantidadeRomaneio(valor) {
+  if (valor === null || valor === undefined || valor === '') return 0;
+  if (typeof valor === 'number' && Number.isFinite(valor)) return Math.max(0, Math.round(valor));
+  const texto = String(valor).trim();
+  if (!texto) return 0;
+
+  // Quantidades de módulos são inteiras. Aceita formatos como "240", "1.248" e "1,248".
+  const somenteDigitos = texto.replace(/\D/g, '');
+  const numero = Number(somenteDigitos);
+  return Number.isFinite(numero) ? Math.max(0, numero) : 0;
+}
+
+// GERA O ROMANEIO DE PARTIDA DA ROTA SELECIONADA
+window.gerarRomaneioPartida = async function(rotaId) {
+  if (!usuarioPodeAcao('Roteirização', 'copiar_resumo')) {
+    mostrarAviso('⛔ Você não possui permissão para gerar documentos da rota.');
+    return;
+  }
+
+  try {
+    mostrarAviso('Gerando romaneio de partida...');
+
+    const [{ data: rota, error: errRota }, { data: nfs, error: errNfs }] = await Promise.all([
+      supabaseClient.from('rotas').select('*').eq('id', rotaId).single(),
+      supabaseClient.from('nfs').select('*').eq('rota_id', rotaId).order('numero', { ascending: true })
+    ]);
+
+    if (errRota) throw errRota;
+    if (errNfs) throw errNfs;
+    if (!rota) throw new Error('Rota não encontrada.');
+
+    const lista = Array.isArray(nfs) ? nfs : [];
+    const obterQtdNF = (nf) => obterQuantidadeRomaneio(nf.qtd ?? nf.quantidade);
+    const totalModulos = lista.reduce((total, nf) => total + obterQtdNF(nf), 0);
+    const dataRota = formatarDataRomaneio(rota.data);
+    const numeroControle = await obterNumeroControleRomaneio(rota.id || rotaId);
+    const transportadora = rota.transportadora || 'Não informada';
+    const nomeRota = rota.nome || 'Rota sem nome';
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margem = 13;
+    const verdeEscuro = [21, 128, 61];
+    const texto = [30, 41, 59];
+    const textoSec = [100, 116, 139];
+    const fundo = [248, 250, 252];
+    const borda = [226, 232, 240];
+    const boxW = pageWidth - margem * 2;
+
+    const desenharRodape = () => {
+      const page = doc.internal.getNumberOfPages();
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.8);
+      doc.setTextColor(...textoSec);
+      doc.text('Romaneio emitido pelo sistema RotaSirius.', margem, pageHeight - 7);
+      doc.text(`Página ${page}`, pageWidth - margem, pageHeight - 7, { align: 'right' });
+    };
+
+    // CABEÇALHO
+    doc.setFillColor(...verdeEscuro);
+    doc.roundedRect(margem, 10, boxW, 20, 2.5, 2.5, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15.5);
+    doc.text('SIRIUS', margem + 5, 19);
+    doc.setFontSize(12.5);
+    doc.text('ROMANEIO DE PARTIDA', pageWidth - margem - 5, 20.5, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(235, 248, 239);
+    doc.text(`Nº ${numeroControle}`, pageWidth - margem - 5, 25.5, { align: 'right' });
+    doc.setFontSize(7.8);
+    doc.text('Documento de conferência e recebimento de carga para transporte', margem + 5, 25.5);
+
+    // IDENTIFICAÇÃO: células com label e valor em posições fixas para nunca sobrepor.
+    let y = 37;
+    doc.setTextColor(...texto);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.text('IDENTIFICAÇÃO DA CARGA', margem, y);
+
+    y += 4;
+    const infoH = 27;
+    const colW = boxW / 2;
+    const linhaH = 9;
+    doc.setFillColor(...fundo);
+    doc.setDrawColor(...borda);
+    doc.roundedRect(margem, y, boxW, infoH, 1.8, 1.8, 'FD');
+
+    const infos = [
+      ['ROTA', nomeRota],
+      ['DATA DE PARTIDA', dataRota || 'Não informada'],
+      ['TRANSPORTADORA', transportadora],
+      ['QUANTIDADE DE NFs', String(lista.length)],
+      ['TOTAL DE MÓDULOS', String(totalModulos)],
+      ['TIPO DE CARGA', 'Produtos para transporte']
+    ];
+
+    infos.forEach((info, i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const x = margem + col * colW + 5;
+      const top = y + row * linhaH;
+
+      if (col === 1) {
+        doc.setDrawColor(...borda);
+        doc.line(margem + colW, top, margem + colW, top + linhaH);
+      }
+      if (row > 0) {
+        doc.setDrawColor(...borda);
+        doc.line(margem, top, margem + boxW, top);
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.8);
+      doc.setTextColor(...textoSec);
+      doc.text(info[0], x, top + 3.2);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.7);
+      doc.setTextColor(...texto);
+      const valor = doc.splitTextToSize(String(info[1]), colW - 10);
+      // Uma linha é suficiente para o valor; corta somente se um dado excepcionalmente longo aparecer.
+      doc.text(valor[0] || '-', x, top + 7.1);
+    });
+
+    y += infoH + 6;
+
+    // TABELA DA CARGA
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...texto);
+    doc.text('ITENS DA CARGA', margem, y);
+    y += 3;
+
+    const body = lista.map(nf => [
+      String(nf.numero || '-'),
+      nf.uf === 'RT'
+        ? 'RETIRA'
+        : `${nf.cidade || nf.destino || '-'}${nf.uf ? '/' + nf.uf : ''}`,
+      String(obterQtdNF(nf)),
+      String(nf.marca || '-'),
+      String(nf.potencia || '-')
+    ]);
+
+    doc.autoTable({
+      startY: y,
+      margin: { left: margem, right: margem, top: 12, bottom: 13 },
+      head: [['NF', 'DESTINO', 'QTD', 'MARCA', 'POTÊNCIA']],
+      body,
+      theme: 'grid',
+      pageBreak: 'auto',
+      showHead: 'everyPage',
+      styles: {
+        font: 'helvetica',
+        fontSize: 7.6,
+        textColor: texto,
+        lineColor: borda,
+        lineWidth: 0.2,
+        cellPadding: 1.8,
+        valign: 'middle',
+        overflow: 'linebreak',
+        minCellHeight: 6.2
+      },
+      headStyles: {
+        fillColor: verdeEscuro,
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 7.3,
+        cellPadding: 1.9
+      },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 22, halign: 'center' },
+        1: { cellWidth: 66 },
+        2: { cellWidth: 18, halign: 'center' },
+        3: { cellWidth: 38 },
+        4: { cellWidth: 28, halign: 'center' }
+      },
+      didDrawPage: desenharRodape
+    });
+
+    y = doc.lastAutoTable.finalY + 5;
+
+    // BLOCO FINAL: só cria nova página quando realmente não houver espaço.
+    const alturaObservacoes = 18;
+    const alturaDeclaracao = 19;
+    const alturaAssinaturas = 28;
+    const alturaNecessaria = 5 + alturaObservacoes + 6 + alturaDeclaracao + 8 + alturaAssinaturas;
+    if (y + alturaNecessaria > pageHeight - 12) {
+      doc.addPage();
+      y = 17;
+    }
+
+    // OBSERVAÇÕES
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.7);
+    doc.setTextColor(...texto);
+    doc.text('OBSERVAÇÕES', margem, y);
+    y += 3;
+
+    const obsH = alturaObservacoes;
+    doc.setDrawColor(...borda);
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(margem, y, boxW, obsH, 1.8, 1.8, 'FD');
+    doc.setDrawColor(185, 194, 205);
+    doc.setLineWidth(0.25);
+    doc.line(margem + 4, y + 6.5, margem + boxW - 4, y + 6.5);
+    doc.line(margem + 4, y + 11.5, margem + boxW - 4, y + 11.5);
+    doc.line(margem + 4, y + 16.5, margem + boxW - 4, y + 16.5);
+    y += obsH + 5;
+
+    // DECLARAÇÃO
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.3);
+    doc.setTextColor(...texto);
+    doc.text('DECLARAÇÃO DE RECEBIMENTO E RESPONSABILIDADE', margem, y);
+    y += 4;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.1);
+    const declaracao = 'A transportadora declara ter recebido os produtos relacionados neste romaneio para transporte, assumindo a responsabilidade pela integridade e entrega da carga conforme as informações apresentadas neste documento.';
+    const linhasDeclaracao = doc.splitTextToSize(declaracao, boxW);
+    doc.text(linhasDeclaracao, margem, y, { lineHeightFactor: 1.2 });
+    y += Math.max(6, linhasDeclaracao.length * 2.9) + 7;
+
+    // ASSINATURAS
+    const assinaturaGap = 12;
+    const assinaturaW = (boxW - assinaturaGap) / 2;
+    const x1 = margem;
+    const x2 = margem + assinaturaW + assinaturaGap;
+    doc.setDrawColor(...textoSec);
+    doc.line(x1, y, x1 + assinaturaW, y);
+    doc.line(x2, y, x2 + assinaturaW, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.8);
+    doc.setTextColor(...texto);
+    doc.text('RESPONSÁVEL SIRIUS', x1 + assinaturaW / 2, y + 4, { align: 'center' });
+    doc.text('RESPONSÁVEL TRANSPORTADORA', x2 + assinaturaW / 2, y + 4, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.2);
+    doc.setTextColor(...textoSec);
+    doc.text('Nome: ______________________________', x1, y + 10);
+    doc.text('Nome: ______________________________', x2, y + 10);
+    doc.text('Data: ____/____/________', x1, y + 17);
+    doc.text('Data: ____/____/________', x2, y + 17);
+
+    desenharRodape();
+
+    const nomeArquivo = `Romaneio_${limparNomeArquivoRomaneio(nomeRota)}_${dataRota.replace(/\//g, '-') || 'sem-data'}.pdf`;
+    doc.save(nomeArquivo);
+    mostrarAviso('Romaneio de partida gerado com sucesso!');
+  } catch (err) {
+    console.error('Erro ao gerar romaneio de partida:', err);
+    mostrarAviso('Erro ao gerar o romaneio de partida.');
+  }
+};
 
 // COPIAR RESUMO DA ROTA
 window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
@@ -6631,8 +6975,9 @@ if (nfCepInput) {
 // Evento global para deselecionar rota ao clicar fora
 document.addEventListener('click', (e) => {
   // Fecha dropdown do usuário ao clicar fora
-  if (!e.target.closest('.user-display') && !e.target.closest('.export-wrapper') && !e.target.closest('.export-day-wrapper') && !e.target.closest('.maps-wrapper') && !e.target.closest('.export-powerbi-wrapper')) {
-    document.querySelectorAll('.user-dropdown, .maps-dropdown').forEach(d => d.classList.add('hidden'));
+  if (!e.target.closest('.user-display') && !e.target.closest('.export-wrapper') && !e.target.closest('.export-day-wrapper') && !e.target.closest('.maps-wrapper') && !e.target.closest('.route-documents-wrapper') && !e.target.closest('.export-powerbi-wrapper')) {
+    document.querySelectorAll('.user-dropdown, .maps-dropdown, .route-documents-dropdown').forEach(d => d.classList.add('hidden'));
+    document.querySelectorAll('.btn-route-documents').forEach(b => b.setAttribute('aria-expanded', 'false'));
   }
 
   // Se o clique não foi em uma rota nem em uma NF da lista lateral, limpa a seleção
