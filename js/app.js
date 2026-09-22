@@ -1,3 +1,30 @@
+
+// --- TEMA DO SISTEMA ---
+function aplicarTemaSistema() {
+    const tema = localStorage.getItem('rota_sirius_theme') || 'dark';
+    document.body.classList.toggle('light-theme', tema === 'light');
+    document.documentElement.dataset.theme = tema;
+    document.querySelectorAll('.theme-toggle-label').forEach(el => {
+        el.textContent = tema === 'light' ? 'Modo escuro' : 'Modo claro';
+    });
+    document.querySelectorAll('.theme-toggle-item').forEach(el => {
+        el.setAttribute('aria-pressed', tema === 'light' ? 'true' : 'false');
+    });
+    document.querySelectorAll('.theme-toggle-icon').forEach(el => {
+        el.innerHTML = tema === 'light'
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>';
+    });
+}
+
+window.handleToggleTheme = function(event) {
+    if (event) event.stopPropagation();
+    const atual = localStorage.getItem('rota_sirius_theme') || 'dark';
+    localStorage.setItem('rota_sirius_theme', atual === 'light' ? 'dark' : 'light');
+    aplicarTemaSistema();
+};
+aplicarTemaSistema();
+
 // --- SISTEMA DE LOGIN ---
 const loginScreen = document.getElementById('login-screen');
 const mainApp = document.querySelector('.app');
@@ -99,7 +126,14 @@ function inicializarMenuGlobal() {
         });
 
         document.querySelectorAll('.global-menu-item').forEach(item => {
-            item.addEventListener('click', () => navegarPeloMenuGlobal(item.dataset.menuAction));
+            item.addEventListener('click', event => {
+                if (item.dataset.menuAction === 'toggle-theme') {
+                    event.stopPropagation();
+                    handleToggleTheme(event);
+                    return;
+                }
+                navegarPeloMenuGlobal(item.dataset.menuAction);
+            });
         });
         menu.dataset.initialized = 'true';
     }
@@ -625,6 +659,14 @@ const programacaoView = document.getElementById('programacao-view'); // Nova ref
 const newHistoryView = document.getElementById('new-history-view');
 const simulateRouteView = document.getElementById('simulate-route-view');
 
+// Estado da tela Simular Rota
+// Declarado explicitamente para evitar ReferenceError ao abrir a tela.
+let simulateMap = null;
+let simulateMarkersLayer = null;
+let simulateRouteLayer = null;
+let simulateMarkersData = {};
+let simulateStopCounter = 1;
+
 
 // Navegação exclusiva das telas gerenciais.
 // As telas gerenciais ficam mutuamente exclusivas e as demais telas
@@ -716,147 +758,352 @@ function createNumberedStopIcon(number) {
 }
 
 async function buscarLocalizacaoPorCep(cep) {
-    const cleanCep = cep.replace(/\D/g, '');
+    const cleanCep = String(cep || '').replace(/\D/g, '');
     if (cleanCep.length !== 8) return null;
 
     try {
         const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        if (!response.ok) throw new Error(`ViaCEP HTTP ${response.status}`);
         const data = await response.json();
         if (data.erro) return null;
 
-        // Tenta geocodificar o endereço retornado pelo ViaCEP usando Nominatim (OSM)
-        const query = `${data.logradouro}, ${data.localidade}, ${data.uf}, Brasil`;
-        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        // O Open-Meteo possui geocodificação pública com CORS e sem chave.
+        // Usamos cidade + UF para evitar depender do Nominatim no cliente.
+        const query = [data.localidade, data.uf].filter(Boolean).join(', ');
+        const geoRes = await fetch(
+            `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=pt&format=json&countryCode=BR`
+        );
+        if (!geoRes.ok) throw new Error(`Open-Meteo HTTP ${geoRes.status}`);
         const geoData = await geoRes.json();
+        const resultado = (geoData.results || []).find(r =>
+            String(r.country_code || '').toUpperCase() === 'BR' &&
+            (!data.uf || String(r.admin1 || '').toUpperCase().includes(String(data.uf).toUpperCase()))
+        ) || (geoData.results || [])[0];
 
-        if (geoData && geoData.length > 0) {
+        if (resultado) {
             return {
-                lat: parseFloat(geoData[0].lat),
-                lng: parseFloat(geoData[0].lon),
-                label: `${data.logradouro || 'CEP ' + cleanCep}, ${data.localidade}`
+                lat: Number(resultado.latitude),
+                lng: Number(resultado.longitude),
+                label: `${data.logradouro || 'CEP ' + cleanCep}, ${data.localidade}/${data.uf}`
             };
         }
     } catch (err) {
-        console.error("Erro ao converter CEP em localização:", err);
+        console.error('Erro ao converter CEP em localização:', err);
     }
     return null;
 }
 
-async function geocodificarNF(nf) {
-    const parts = [];
-    if (nf.endereco) parts.push(nf.endereco);
-    if (nf.numero_endereco) parts.push(nf.numero_endereco);
-    if (nf.cidade) parts.push(nf.cidade);
-    if (nf.uf && nf.uf !== 'RT') parts.push(nf.uf);
-    if (nf.cep) {
-        let cleanCep = String(nf.cep).replace(/\D/g, '');
-        if (cleanCep.length === 8) parts.push(cleanCep);
-    }
-    parts.push("Brasil");
+const simulacaoGeocodeCache = new Map();
+const SIMULACAO_CD = { lat: -8.242185, lng: -34.996948, label: 'Centro de distribuição Grupo Via1' };
 
-    const query = parts.filter(p => p).join(", ");
-    if (!query) return null;
+function normalizarDestinoSimulacao(valor) {
+    return String(valor || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+async function geocodificarDestinoSimulacao(destino, uf) {
+    const cidade = normalizarDestinoSimulacao(destino)
+        .replace(/\s*\/\s*[A-Za-z]{2}\s*$/i, '')
+        .replace(/\s*-\s*[A-Za-z]{2}\s*$/i, '')
+        .trim();
+    const estado = normalizarDestinoSimulacao(uf).toUpperCase();
+    if (!cidade || !estado || estado === 'RT') return null;
+
+    const cacheKey = `${cidade.toUpperCase()}|${estado}`;
+    if (simulacaoGeocodeCache.has(cacheKey)) return simulacaoGeocodeCache.get(cacheKey);
 
     try {
-        const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-        const geoData = await geoRes.json();
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(`${cidade}, ${estado}`)}&count=10&language=pt&format=json&countryCode=BR`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Open-Meteo HTTP ${response.status}`);
+        const data = await response.json();
+        const resultados = Array.isArray(data.results) ? data.results : [];
 
-        if (geoData && geoData.length > 0) {
-            return {
-                lat: parseFloat(geoData[0].lat),
-                lng: parseFloat(geoData[0].lon),
-                label: `NF ${nf.numero}: ${nf.cidade || ''}`
-            };
-        }
+        const resultado = resultados.find(r =>
+            String(r.country_code || '').toUpperCase() === 'BR' &&
+            String(r.admin1 || '').toUpperCase() === estado
+        ) || resultados.find(r => String(r.country_code || '').toUpperCase() === 'BR');
+
+        const loc = resultado ? {
+            lat: Number(resultado.latitude),
+            lng: Number(resultado.longitude),
+            label: `${resultado.name || cidade}/${estado}`
+        } : null;
+
+        simulacaoGeocodeCache.set(cacheKey, loc);
+        return loc;
     } catch (err) {
-        console.error("Erro ao geocodificar NF:", nf.numero, err);
+        console.error('Erro ao geocodificar destino da simulação:', cidade, estado, err);
+        simulacaoGeocodeCache.set(cacheKey, null);
+        return null;
     }
-    return null;
+}
+
+async function geocodificarNF(nf) {
+    if (String(nf?.uf || '').toUpperCase() === 'RT' || String(nf?.destino || '').toUpperCase() === 'RETIRA') {
+        return null;
+    }
+
+    // Se existir CEP, ele é a referência mais precisa disponível no cadastro.
+    if (nf?.cep && String(nf.cep).replace(/\D/g, '').length === 8) {
+        const cepKey = `CEP:${String(nf.cep).replace(/\D/g, '')}`;
+        if (simulacaoGeocodeCache.has(cepKey)) return simulacaoGeocodeCache.get(cepKey);
+        const loc = await buscarLocalizacaoPorCep(nf.cep);
+        simulacaoGeocodeCache.set(cepKey, loc);
+        if (loc) return loc;
+    }
+
+    return geocodificarDestinoSimulacao(nf?.destino || nf?.cidade, nf?.uf);
+}
+
+async function obterOrdemOtimizadaRoteirizada(pontos) {
+    if (!Array.isArray(pontos) || pontos.length < 3) return pontos;
+
+    const optDistancia = document.getElementById('simulate-opt-distance')?.checked;
+    const optTempo = document.getElementById('simulate-opt-time')?.checked;
+    const retornarOrigem = document.getElementById('simulate-opt-return')?.checked;
+    const ultimaFixa = document.getElementById('simulate-opt-last-fixed')?.checked;
+
+    // Se nenhuma opção estiver marcada, mantém a ordem cadastrada.
+    if (!optDistancia && !optTempo) return pontos;
+
+    const coordenadas = pontos.map(p => `${p.lng},${p.lat}`).join(';');
+    const quantidade = pontos.length;
+    const destinationParam = ultimaFixa && quantidade > 2 ? '&destination=last' : '';
+
+    try {
+        // Para distância usamos a matriz de distâncias e um algoritmo de vizinho mais próximo,
+        // refinado por 2-opt. Para tempo usamos o Trip Service do OSRM.
+        if (optDistancia && !optTempo) {
+            const tableUrl = `https://router.project-osrm.org/table/v1/driving/${coordenadas}?annotations=distance,duration`;
+            const response = await fetch(tableUrl);
+            if (!response.ok) throw new Error(`OSRM Table HTTP ${response.status}`);
+            const data = await response.json();
+            if (data.code && data.code !== 'Ok') throw new Error(`OSRM Table: ${data.code}`);
+
+            const distances = data.distances;
+            if (!Array.isArray(distances)) throw new Error('OSRM não retornou a matriz de distâncias.');
+
+            const ultimoIndex = quantidade - 1;
+            const destinoFixo = ultimaFixa ? ultimoIndex : null;
+            const naoVisitados = new Set();
+            for (let i = 1; i < quantidade; i++) {
+                if (i !== destinoFixo) naoVisitados.add(i);
+            }
+
+            const ordem = [0];
+            let atual = 0;
+            while (naoVisitados.size) {
+                let proximo = null;
+                let menor = Infinity;
+                naoVisitados.forEach(i => {
+                    const d = Number(distances[atual]?.[i]);
+                    if (Number.isFinite(d) && d < menor) {
+                        menor = d;
+                        proximo = i;
+                    }
+                });
+                if (proximo === null) break;
+                ordem.push(proximo);
+                naoVisitados.delete(proximo);
+                atual = proximo;
+            }
+
+            if (destinoFixo !== null) ordem.push(destinoFixo);
+
+            // 2-opt: melhora cruzamentos e reduz a distância total sem alterar origem/destino fixos.
+            const inicio = 1;
+            const fim = destinoFixo !== null ? ordem.length - 2 : ordem.length - 1;
+            let melhorou = true;
+            let tentativas = 0;
+            const custo = (a, b) => Number(distances[a]?.[b]);
+            while (melhorou && tentativas < 50) {
+                melhorou = false;
+                tentativas++;
+                for (let i = inicio; i < fim - 1; i++) {
+                    for (let k = i + 1; k <= fim - 1; k++) {
+                        const a = ordem[i - 1], b = ordem[i];
+                        const c = ordem[k], d = ordem[k + 1];
+                        const atualCusto = custo(a, b) + custo(c, d);
+                        const novoCusto = custo(a, c) + custo(b, d);
+                        if (Number.isFinite(novoCusto) && novoCusto + 0.5 < atualCusto) {
+                            const trecho = ordem.slice(i, k + 1).reverse();
+                            ordem.splice(i, trecho.length, ...trecho);
+                            melhorou = true;
+                        }
+                    }
+                }
+            }
+
+            return ordem.map(i => pontos[i]);
+        }
+
+        // Menor tempo (ou quando as duas opções estão marcadas): OSRM otimiza a sequência.
+        const params = new URLSearchParams({
+            overview: 'full',
+            geometries: 'geojson',
+            source: 'first',
+            roundtrip: retornarOrigem ? 'true' : 'false'
+        });
+        if (!retornarOrigem && destinationParam) params.set('destination', 'last');
+
+        const tripUrl = `https://router.project-osrm.org/trip/v1/driving/${coordenadas}?${params.toString()}`;
+        const response = await fetch(tripUrl);
+        if (!response.ok) throw new Error(`OSRM Trip HTTP ${response.status}`);
+        const data = await response.json();
+        if (data.code && data.code !== 'Ok') throw new Error(`OSRM Trip: ${data.code}${data.message ? ' - ' + data.message : ''}`);
+
+        const waypointInfo = Array.isArray(data.waypoints) ? data.waypoints : [];
+        const ordenada = waypointInfo
+            .map((wp, inputIndex) => ({ inputIndex, ordem: Number(wp.waypoint_index) }))
+            .filter(item => Number.isFinite(item.ordem))
+            .sort((a, b) => a.ordem - b.ordem)
+            .map(item => pontos[item.inputIndex]);
+
+        return ordenada.length === pontos.length ? ordenada : pontos;
+    } catch (err) {
+        console.error('Não foi possível otimizar a sequência da rota:', err);
+        mostrarAviso('Não foi possível otimizar a rota automaticamente. A sequência original será mantida.');
+        return pontos;
+    }
 }
 
 window.atualizarMapaRoteirizado = async function(nfs) {
     if (!simulateMap || !simulateMarkersLayer || !simulateRouteLayer) return;
-    
+
     const statsContainer = document.getElementById('simulate-stats-container');
     const distElem = document.getElementById('simulate-total-distance');
     const durElem = document.getElementById('simulate-total-duration');
 
-    // Limpa o mapa antes de começar
     simulateMarkersLayer.clearLayers();
     simulateRouteLayer.clearLayers();
-    
-    const coords = [];
-    // Esconde os stats por padrão até que uma nova rota seja calculada com sucesso
     if (statsContainer) statsContainer.classList.add('hidden');
 
-    // 1. ADICIONAR ORIGEM FIXA (CD / Galpão) - PONTO INICIAL OBRIGATÓRIO
-    const latCD = -8.242185;
-    const lngCD = -34.996948;
-    const nomeExibicaoCD = "Centro de distribuição Grupo Via1";
+    const pontos = [{
+        lat: SIMULACAO_CD.lat,
+        lng: SIMULACAO_CD.lng,
+        label: SIMULACAO_CD.label,
+        tipo: 'origem',
+        nf: null
+    }];
 
-    // Adiciona o marcador de Origem (CD) com ícone personalizado usando coordenadas fixas
-    L.marker([latCD, lngCD], { icon: createOriginIcon() }) 
-        .addTo(simulateMarkersLayer) 
-        .bindPopup(`<b>Origem Fixa:</b><br>${nomeExibicaoCD}`);
-    
-    // Coloca o CD como o primeiro ponto real do trajeto para a lógica de rota e Maps
-    coords.push({ lat: latCD, lng: lngCD });
-
-    // Geocodifica cada NF mantendo a ordem sequencial da rota
-    let nfStopNumber = 1; // Contador para a numeração das paradas de NF
-    for (const nf of nfs) {
+    let pontosIgnorados = 0;
+    for (const nf of (nfs || [])) {
         const loc = await geocodificarNF(nf);
         if (loc) {
-            const marker = L.marker([loc.lat, loc.lng], { icon: createNumberedStopIcon(nfStopNumber) }) // Adiciona ícone numerado
-                .addTo(simulateMarkersLayer) 
-                .bindPopup(`<b>${loc.label}</b>`);
-            coords.push({ lat: loc.lat, lng: loc.lng });
-            nfStopNumber++; // Incrementa para a próxima NF
+            pontos.push({
+                lat: loc.lat,
+                lng: loc.lng,
+                label: loc.label,
+                tipo: 'nf',
+                nf
+            });
+        } else {
+            pontosIgnorados++;
         }
     }
 
-    window.currentSimulatedPoints = coords; // Armazena a sequência para o Google Maps
+    if (pontos.length < 2) {
+        L.marker([SIMULACAO_CD.lat, SIMULACAO_CD.lng], { icon: createOriginIcon() })
+            .addTo(simulateMarkersLayer)
+            .bindPopup(`<b>Origem Fixa:</b><br>${SIMULACAO_CD.label}`);
+        mostrarAviso('Não foi possível localizar os destinos das NFs desta rota para montar a simulação.');
+        window.currentSimulatedPoints = pontos.map(p => ({ lat: p.lat, lng: p.lng }));
+        return;
+    }
 
-    // Desenha a rota real no mapa se houver pelo menos 2 pontos encontrados
-    if (coords.length >= 2) {
+    const pontosOrdenados = await obterOrdemOtimizadaRoteirizada(pontos);
+    const retornarOrigem = document.getElementById('simulate-opt-return')?.checked;
+    const ultimaFixa = document.getElementById('simulate-opt-last-fixed')?.checked;
+
+    // O OSRM não repete automaticamente a origem no array de waypoints usado para desenhar.
+    // Aqui adicionamos o retorno visualmente quando solicitado.
+    const sequenciaFinal = pontosOrdenados.slice();
+    if (retornarOrigem && sequenciaFinal.length > 1) {
+        sequenciaFinal.push({ ...sequenciaFinal[0], retorno: true });
+    } else if (ultimaFixa && sequenciaFinal.length > 2) {
+        // destination=last já preserva a última parada cadastrada como destino.
+    }
+
+    // Desenha os marcadores já na ordem otimizada.
+    let parada = 1;
+    sequenciaFinal.forEach(ponto => {
+        if (ponto.tipo === 'origem') {
+            L.marker([ponto.lat, ponto.lng], { icon: createOriginIcon() })
+                .addTo(simulateMarkersLayer)
+                .bindPopup(`<b>Origem Fixa:</b><br>${SIMULACAO_CD.label}`);
+        } else if (!ponto.retorno) {
+            L.marker([ponto.lat, ponto.lng], { icon: createNumberedStopIcon(parada) })
+                .addTo(simulateMarkersLayer)
+                .bindPopup(`<b>${ponto.label}</b><br>NF ${ponto.nf?.numero || '---'}`);
+            parada++;
+        }
+    });
+
+    window.currentSimulatedPoints = sequenciaFinal.map(p => ({ lat: p.lat, lng: p.lng }));
+
+    if (pontosIgnorados > 0 && nfs.length > 0 && parada === 1) {
+        mostrarAviso('Nenhum destino das NFs pôde ser localizado.');
+    }
+
+    if (sequenciaFinal.length >= 2) {
         try {
-            const waypoints = coords.map(c => `${c.lng},${c.lat}`).join(';');
-            const url = `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`;
+            const waypoints = sequenciaFinal.map(c => `${c.lng},${c.lat}`).join(';');
+            const url = `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson&steps=false`;
             const response = await fetch(url);
+            if (!response.ok) throw new Error(`OSRM HTTP ${response.status}`);
             const data = await response.json();
+            if (data.code && data.code !== 'Ok') throw new Error(`OSRM: ${data.code}${data.message ? ' - ' + data.message : ''}`);
 
             if (data.routes && data.routes.length > 0) {
                 const route = data.routes[0];
                 L.geoJSON(route.geometry, {
-                    style: { color: '#38bdf8', weight: 5, opacity: 0.7, lineJoin: 'round' }
+                    style: { color: '#38bdf8', weight: 5, opacity: 0.78, lineJoin: 'round' }
                 }).addTo(simulateRouteLayer);
-                
-                // EXIBIÇÃO DE DISTÂNCIA E TEMPO (MODO ROTEIRIZADO)
+
                 if (statsContainer && distElem && durElem) {
                     const distanceKm = (route.distance / 1000).toFixed(1);
                     const durationMins = Math.round(route.duration / 60);
-                    
                     let durationText = `${durationMins} min`;
                     if (durationMins >= 60) {
                         const h = Math.floor(durationMins / 60);
                         const m = durationMins % 60;
                         durationText = m > 0 ? `${h}h ${m}min` : `${h}h`;
                     }
-
                     distElem.innerText = `${distanceKm} km`;
                     durElem.innerText = durationText;
-                    statsContainer.classList.remove('hidden'); // Mostra as estatísticas
+                    statsContainer.classList.remove('hidden');
                 }
             }
         } catch (err) {
-            console.error("Erro ao calcular rota roteirizada:", err);
-            // Fallback para linha reta em caso de erro na API de roteamento (e stats permanecem ocultos)
-            const latLngs = coords.map(c => [c.lat, c.lng]);
+            console.error('Erro ao calcular rota roteirizada:', err);
+            const latLngs = sequenciaFinal.map(c => [c.lat, c.lng]);
             L.polyline(latLngs, { color: '#38bdf8', weight: 5, opacity: 0.7, dashArray: '10, 10' }).addTo(simulateRouteLayer);
         }
     }
 
-    // Ajusta o zoom para enquadrar todos os pontos e o traçado
+    // Atualiza a lista lateral para refletir a mesma sequência mostrada no mapa.
+    const lista = document.querySelector('#simulate-route-details-container .simulate-stop-item')?.parentElement;
+    if (lista) {
+        const itens = sequenciaFinal.filter(p => p.tipo === 'nf' && !p.retorno);
+        const contador = document.querySelector('#simulate-route-details-container .address-label + span');
+        if (contador) contador.textContent = String(itens.length);
+        lista.innerHTML = `
+            <div class="simulate-stop-item">
+                <div class="stop-order-badge" style="background: var(--accent); color: white;">CD</div>
+                <div class="stop-details"><div class="stop-main-info"><span class="stop-title">Origem Fixa</span><span class="stop-location">CD Sirius</span></div></div>
+            </div>
+            ${itens.map((p, index) => `
+                <div class="simulate-stop-item">
+                    <div class="stop-order-badge">${index + 1}</div>
+                    <div class="stop-details"><div class="stop-main-info"><span class="stop-title">NF ${p.nf?.numero || '---'}</span><span class="stop-location">${p.label || '---'}</span></div></div>
+                </div>
+            `).join('')}
+        `;
+    }
+
     const markers = simulateMarkersLayer.getLayers();
     const routes = simulateRouteLayer.getLayers();
     if (markers.length > 0) {
@@ -1007,11 +1254,19 @@ async function carregarOpcoesRotasSimulacao() {
         if (error) throw error;
 
         selector.innerHTML = '<option value="" disabled selected>Escolha uma rota...</option>';
+
+        if (!rotas || rotas.length === 0) {
+            selector.innerHTML = '<option value="" disabled selected>Nenhuma rota ativa disponível</option>';
+            const detalhes = document.getElementById('simulate-route-details-container');
+            if (detalhes) detalhes.innerHTML = '<p style="color: var(--text-muted); font-size: 13px;">Não há rotas ativas disponíveis para simulação.</p>';
+            return;
+        }
+
         rotas.forEach(r => {
             const dataFmt = r.data ? r.data.split('-').reverse().join('/') : 'S/D';
             const option = document.createElement('option');
             option.value = r.id;
-            option.textContent = `${r.nome} (${dataFmt})`;
+            option.textContent = `${r.nome || 'Rota sem nome'} (${dataFmt})`;
             selector.appendChild(option);
         });
 
@@ -1175,7 +1430,9 @@ async function ajustarMapaSimulacao() {
             const waypoints = coords.map(c => `${c.lng},${c.lat}`).join(';');
             const url = `https://router.project-osrm.org/route/v1/driving/${waypoints}?overview=full&geometries=geojson`;
             const response = await fetch(url);
+            if (!response.ok) throw new Error(`OSRM HTTP ${response.status}`);
             const data = await response.json();
+            if (data.code && data.code !== 'Ok') throw new Error(`OSRM: ${data.code}${data.message ? ' - ' + data.message : ''}`);
 
             if (data.routes && data.routes.length > 0) {
                 const route = data.routes[0];
@@ -2136,7 +2393,16 @@ if (openSimulateRouteBtn) {
         newHistoryView.classList.add('hidden');
         simulateRouteView.classList.remove('hidden');
         document.querySelector('.app').classList.add('panel-active');
-        initSimulateMap();
+        // O mapa deve ser inicializado sem impedir o restante dos listeners caso o Leaflet/CDN falhe.
+        try {
+            initSimulateMap();
+        } catch (err) {
+            console.error('Erro ao inicializar o mapa da Simulação:', err);
+            const mapEl = document.getElementById('map-simulate');
+            if (mapEl) {
+                mapEl.innerHTML = '<div style=\"height:100%;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;color:var(--text-muted);\">Não foi possível carregar o mapa. Verifique sua conexão e tente novamente.</div>';
+            }
+        }
 
         // Configura os listeners para os campos de entrada de CEP da simulação
         const originInput = document.getElementById('simulate-origin-cep');
@@ -2162,6 +2428,25 @@ if (openSimulateRouteBtn) {
         if (clearBtn && !clearBtn.dataset.listener) {
             clearBtn.addEventListener('click', limparRotaSimulacao);
             clearBtn.dataset.listener = "true";
+        }
+
+        const routedCalcBtn = document.getElementById('simulate-routed-calc-btn');
+        if (routedCalcBtn && !routedCalcBtn.dataset.listener) {
+            routedCalcBtn.addEventListener('click', async () => {
+                const rotaId = document.getElementById('simulate-route-selector')?.value;
+                if (!rotaId) {
+                    mostrarAviso('Selecione uma rota ativa primeiro.');
+                    return;
+                }
+                const { data: nfs, error } = await supabaseClient.from('nfs').select('*').eq('rota_id', rotaId).order('created_at', { ascending: true });
+                if (error) {
+                    console.error('Erro ao recalcular rota:', error);
+                    mostrarAviso('Não foi possível carregar as NFs da rota.');
+                    return;
+                }
+                await atualizarMapaRoteirizado(nfs || []);
+            });
+            routedCalcBtn.dataset.listener = 'true';
         }
 
         // Configura os botões de modo (CEP / Roteirizado)
@@ -2195,7 +2480,23 @@ if (openSimulateRouteBtn) {
         // Vincula o botão "Calcular Rota" para disparar o ajuste manual se necessário
         const calcBtn = document.querySelector('#simulate-route-view .simulate-config-panel .btn-primary');
         if (calcBtn && !calcBtn.dataset.listener) {
-            calcBtn.addEventListener('click', ajustarMapaSimulacao);
+            calcBtn.addEventListener('click', async () => {
+                // Reprocessa os CEPs que já estiverem preenchidos ao abrir a tela.
+                const originInputAtual = document.getElementById('simulate-origin-cep');
+                if (originInputAtual?.value) {
+                    await lidarComInputCepSimulacao({ target: originInputAtual }, 'origin');
+                }
+
+                const stopInputs = document.querySelectorAll('#simulate-stops-container input[id^=\"simulate-stop\"][id$=\"-cep\"]');
+                for (const input of stopInputs) {
+                    if (input.value) {
+                        const tipo = input.id.replace('simulate-', '').replace('-cep', '');
+                        await lidarComInputCepSimulacao({ target: input }, tipo);
+                    }
+                }
+
+                await ajustarMapaSimulacao();
+            });
             calcBtn.dataset.listener = "true";
         }
 
@@ -3712,6 +4013,12 @@ const filtroDataNewHistoryFim = document.getElementById('filtro-data-new-history
 
 const filtroDataPainelInicio = document.getElementById('filtro-data-painel-inicio');
 const filtroDataPainelFim = document.getElementById('filtro-data-painel-fim');
+const pesquisaNfPainel = document.getElementById('pesquisa-nf-painel');
+const limparPesquisaNfPainel = document.getElementById('limpar-pesquisa-nf-painel');
+const resultadoPesquisaNfPainel = document.getElementById('resultado-pesquisa-nf-painel');
+let nfsDashboardCache = [];
+let rotasDashboardCache = [];
+let timerPesquisaNfPainel = null;
 
 function obterFiltroDataGlobal() {
     try {
@@ -3791,6 +4098,7 @@ listenerFiltroDataGlobal(filtroDataRotaInicio, filtroDataRotaFim);
 listenerFiltroDataGlobal(filtroDataProgInicio, filtroDataProgFim);
 listenerFiltroDataGlobal(filtroDataNewHistoryInicio, filtroDataNewHistoryFim);
 listenerFiltroDataGlobal(filtroDataPainelInicio, filtroDataPainelFim);
+configurarPesquisaNfPainel();
 
 if (filtroNomeRota) filtroNomeRota.addEventListener('input', carregarRotas);
 if (filtroNomeProg) filtroNomeProg.addEventListener('input', carregarProgramacao);
@@ -3861,6 +4169,12 @@ async function carregarRotas() {
       card.classList.add("selected");
     }
 
+    // Mantém o estado recolhido de cada rota entre atualizações da tela.
+    const rotasRecolhidas = JSON.parse(localStorage.getItem('rotas_recolhidas') || '[]');
+    if (rotasRecolhidas.map(String).includes(String(rota.id))) {
+      card.classList.add('collapsed');
+    }
+
     // Lógica de seleção de rota por clique
     card.onclick = (e) => {
       e.stopPropagation(); // Impede que o clique chegue no document e deselecione
@@ -3893,6 +4207,9 @@ async function carregarRotas() {
         <div>
           <div class="rota-title-group">
             <h3>${displayNome}</h3>
+            <button type="button" class="rota-collapse-btn" title="Recolher rota" aria-label="Recolher rota" aria-expanded="true" onclick="event.stopPropagation(); alternarRotaRecolhida('${rota.id}', this)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
             <div class="rota-actions">
               <button class="icon-btn info" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle}" onclick="event.stopPropagation(); abrirModalDetalhesRota('${rota.id}')">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
@@ -3971,6 +4288,28 @@ async function carregarRotas() {
     container.appendChild(card);
   });
 }
+
+// ALTERNAR RECOLHIMENTO DO CARD DE ROTA
+window.alternarRotaRecolhida = function(rotaId, button) {
+  const card = button?.closest('.rota-card');
+  if (!card) return;
+
+  const recolhida = card.classList.toggle('collapsed');
+  const rotasRecolhidas = JSON.parse(localStorage.getItem('rotas_recolhidas') || '[]').map(String);
+  const id = String(rotaId);
+
+  if (recolhida) {
+    if (!rotasRecolhidas.includes(id)) rotasRecolhidas.push(id);
+  } else {
+    const index = rotasRecolhidas.indexOf(id);
+    if (index !== -1) rotasRecolhidas.splice(index, 1);
+  }
+
+  localStorage.setItem('rotas_recolhidas', JSON.stringify(rotasRecolhidas));
+  button.setAttribute('aria-expanded', String(!recolhida));
+  button.setAttribute('aria-label', recolhida ? 'Expandir rota' : 'Recolher rota');
+  button.setAttribute('title', recolhida ? 'Expandir rota' : 'Recolher rota');
+};
 
 // REMOVER DA ROTA
 async function removerDaRota(nfId) {
@@ -4378,6 +4717,8 @@ function formatarDataHora(dataISO, fallback = '---') {
 // Estado de ordenação das tabelas diárias da Programação.
 // Cada data possui sua própria coluna/ordem, evitando que uma tabela afete outra.
 const ordenacaoProgramacaoPorData = {};
+// Ordenação independente do histórico de programação, para não alterar a tela de Programação ativa.
+const ordenacaoHistoricoProgramacaoPorData = {};
 
 function normalizarValorOrdenacaoProgramacao(valor) {
     return String(valor ?? '')
@@ -5512,17 +5853,16 @@ window.salvarObservacaoHistorico = async function(rotaId) {
 };
 
 async function carregarNovoHistorico() {
-    // Garante que só carrega se o modo atual for 'roteirizacao'
+    // Histórico de Roteirização segue as mesmas regras visuais e de interação
+    // da tela principal: filtro global, busca multi-campo, grid/lista e cards retráteis.
     if (currentNewHistoryViewMode !== 'roteirizacao') return;
 
     const container = document.getElementById('new-history-roteirizacao-content');
-    const countElem = document.getElementById('new-history-count'); // Já é o span correto
+    const countElem = document.getElementById('new-history-count');
     if (!container) return;
 
-    const termoTexto = filtroNomeNewHistory ? filtroNomeNewHistory.value.toLowerCase() : "";
+    const termoTexto = filtroNomeNewHistory ? filtroNomeNewHistory.value.toLowerCase().trim() : "";
     const filtroData = obterFiltroDataGlobal();
-
-    // Feedback visual de carregamento
     container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Carregando histórico...</p>`;
 
     try {
@@ -5531,111 +5871,154 @@ async function carregarNovoHistorico() {
             .select("*")
             .eq("status", "finalizada")
             .order("finalizada_em", { ascending: false });
-
         if (errR) throw errR;
 
         if (!rotas || rotas.length === 0) {
             container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Nenhuma rota finalizada encontrada.</p>`;
             if (countElem) countElem.innerText = "0 Rotas";
-            return; 
-        }
-
-        const rotaIds = rotas.map(r => r.id);
-        const { data: nfs, error: errN } = await supabaseClient
-            .from("nfs")
-            .select("*")
-            .in("rota_id", rotaIds);
-
-        if (errN) throw errN;
-
-        // FILTRAGEM (TEXTO E DATA)
-        const rotasFiltradas = rotas.filter(rota => {
-            const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
-            const matchRotaNome = (rota.nome || "").toLowerCase().includes(termoTexto);
-            const matchTransportadora = (rota.transportadora || "").toLowerCase().includes(termoTexto);
-            const matchNfInfo = nfsDaRota.some(nf => {
-                const matchNfNum = String(nf.numero || "").toLowerCase().includes(termoTexto);
-                const matchCidade = (nf.cidade || nf.destino || "").toLowerCase().includes(termoTexto);
-                const matchUf = (nf.uf || "").toLowerCase().includes(termoTexto);
-                const matchKam = (nf.kam || "").toLowerCase().includes(termoTexto);
-                return matchNfNum || matchCidade || matchUf || matchKam;
-            });
-            
-            const matchTexto = matchRotaNome || matchTransportadora || matchNfInfo;
-            const matchData = dataDentroDoFiltroGlobal(rota.data, filtroData);
-            return matchTexto && matchData;
-        });
-
-        if (countElem) countElem.innerText = `${rotasFiltradas.length} Rota(s)`;
-
-        if (rotasFiltradas.length === 0) {
-            container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Nenhum resultado encontrado para a busca.</p>`;
             return;
         }
 
-        container.innerHTML = "";
-        rotasFiltradas.forEach(rota => {
-            const hasObs = rota.observacao_historico && rota.observacao_historico.trim() !== "";
-            const iconStyle = hasObs ? 'color: #fbbf24; opacity: 1;' : 'color: var(--accent); opacity: 0.7;';
+        const rotaIds = rotas.map(r => r.id);
+        const { data: nfs, error: errN } = rotaIds.length
+            ? await supabaseClient.from("nfs").select("*").in("rota_id", rotaIds)
+            : { data: [], error: null };
+        if (errN) throw errN;
 
-            const nfsDaRota = nfs.filter(n => n.rota_id === rota.id);
-            const total = nfsDaRota.reduce((acc, n) => acc + Number(n.valor_frete), 0);
+        // Mesma lógica de pesquisa da Roteirização: rota, transportadora,
+        // NF, destino e KAM. A busca na NF retorna a rota inteira.
+        const rotasFiltradas = rotas.filter(rota => {
+            const nfsDaRota = (nfs || []).filter(n => n.rota_id === rota.id);
+            const nomeMatch = (rota.nome || '').toLowerCase().includes(termoTexto);
+            const transportadoraMatch = (rota.transportadora || '').toLowerCase().includes(termoTexto);
+            const nfMatch = nfsDaRota.some(nf => {
+                const numero = String(nf.numero || '').toLowerCase();
+                const destino = String(nf.cidade || nf.destino || '').toLowerCase();
+                const uf = String(nf.uf || '').toLowerCase();
+                const kam = String(nf.kam || '').toLowerCase();
+                return numero.includes(termoTexto) || destino.includes(termoTexto) || uf.includes(termoTexto) || kam.includes(termoTexto);
+            });
+            return (nomeMatch || transportadoraMatch || nfMatch) && dataDentroDoFiltroGlobal(rota.data, filtroData);
+        });
+
+        if (countElem) countElem.innerText = `${rotasFiltradas.length} Rota(s)`;
+        if (rotasFiltradas.length === 0) {
+            container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Nenhum resultado encontrado para os filtros aplicados.</p>`;
+            return;
+        }
+
+        // O histórico usa exatamente o mesmo modo de visualização salvo da Roteirização.
+        const viewMode = localStorage.getItem('rota_view_mode') || 'grid';
+        container.classList.toggle('list-view', viewMode === 'list');
+        container.innerHTML = "";
+
+        rotasFiltradas.forEach(rota => {
+            const nfsDaRota = (nfs || []).filter(n => n.rota_id === rota.id);
+            const total = nfsDaRota.reduce((acc, n) => acc + Number(n.valor_frete || 0), 0);
+            const hasObs = !!(rota.observacao_historico && rota.observacao_historico.trim() !== "");
+            const iconStyle = hasObs ? 'color: #fbbf24; opacity: 1;' : 'color: var(--accent); opacity: 0.7;';
             const dataFin = formatarDataHora(rota.finalizada_em);
             const dataRotaFormatada = rota.data ? rota.data.split('-').reverse().join('/') : '---';
+            const recolhida = JSON.parse(localStorage.getItem('rotas_recolhidas') || '[]').map(String).includes(String(rota.id));
+            const podeResumo = usuarioPodeAcao('Histórico', 'visualizar_detalhes');
+            const podeRetornar = usuarioPodeAcao('Histórico', 'retornar_rota');
+            const podeExcluir = usuarioPodeAcao('Histórico', 'excluir_historico');
 
-            const card = document.createElement("div");
-            card.className = "rota-card";
-            card.style.cursor = "default"; // No histórico a seleção de card não é necessária
+            const card = document.createElement('div');
+            card.className = `rota-card${recolhida ? ' collapsed' : ''}`;
+            card.style.cursor = 'default';
+
+            const displayNome = rota.data
+                ? `${rota.nome} - ${rota.data.split('-')[2]}/${rota.data.split('-')[1]}`
+                : rota.nome;
 
             card.innerHTML = `
                 <div class="rota-header">
                     <div>
                         <div class="rota-title-group">
-                            <h3>${rota.nome}</h3>
+                            <h3>${displayNome}</h3>
+                            <button type="button" class="rota-collapse-btn" title="${recolhida ? 'Expandir rota' : 'Recolher rota'}" aria-label="${recolhida ? 'Expandir rota' : 'Recolher rota'}" aria-expanded="${!recolhida}" onclick="event.stopPropagation(); alternarRotaRecolhida('${rota.id}', this)">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            </button>
                             <div class="rota-actions">
-                                <button class="icon-btn info" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle}" onclick="abrirModalDetalhesRota('${rota.id}')">
+                                <button class="icon-btn info" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle}" onclick="event.stopPropagation(); abrirModalDetalhesRota('${rota.id}')">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                                 </button>
                             </div>
                         </div>
                         <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 2px;">Data: ${dataRotaFormatada} | Finalizada em: ${dataFin}</div>
                         ${rota.transportadora ? `<div style="font-size: 11px; color: var(--text-muted);">Transportadora: ${rota.transportadora}</div>` : ''}
-                        <span style="display: block; margin-top: 4px;">${nfsDaRota.length} NFs</span>
+                        <span>${nfsDaRota.length} NFs</span>
                     </div>
                     <div class="valor">R$ ${formatar(total)}</div>
                 </div>
+
                 <div class="rota-body">
                     <div class="nf-header"><span>NF</span><span>DESTINO</span><span>FRETE</span><span></span></div>
-                    ${nfsDaRota.map(nf => {
-                        // Destaque visual para observação
-                        const temObs = nf.observacao && nf.observacao.trim() !== "";
-                        const infoStyle = temObs ? 'color: #fbbf24; opacity: 1;' : '';
-                        const infoTitle = temObs ? "Informações (Possui Observação)" : "Informações";
-                        return `
-                        <div class="nf-row" style="cursor: default;">
-                            <span>NF ${nf.numero}</span>
-                            <span>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</span>
-                            <span>R$ ${formatar(nf.valor_frete)}</span>
-                            <button class="icon-btn info" title="${infoTitle}" style="padding: 2px; ${infoStyle}" onclick="event.stopPropagation(); abrirModalInfoNF('${nf.id}');">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                            </button>
-                        </div>
-                    `}).join('')}
                 </div>
-                <div class="rota-footer" style="padding-top: 15px;">
-                    <button class="btn btn-outline" onclick="copiarResumoHistorico('${rota.id}')">Copiar Resumo</button>
-                    <button class="btn btn-outline" style="border-color: var(--accent); color: var(--accent);" onclick="retornarRotaNovaPagina('${rota.id}')">Retornar para Ativa</button>
+
+                <div class="rota-footer">
+                    ${podeResumo ? `<button class="btn btn-outline" onclick="event.stopPropagation(); copiarResumoHistorico('${rota.id}')">Copiar Resumo</button>` : ''}
+                    ${podeRetornar ? `<button class="btn btn-outline" style="border-color: var(--accent); color: var(--accent);" onclick="event.stopPropagation(); retornarRotaNovaPagina('${rota.id}')">Retornar para Ativa</button>` : ''}
                 </div>
             `;
+
+            const body = card.querySelector('.rota-body');
+            nfsDaRota.forEach(nf => {
+                const linha = document.createElement('div');
+                linha.className = 'nf-row';
+                const temObs = nf.observacao && nf.observacao.trim() !== '';
+                const infoStyle = temObs ? 'color: #fbbf24; opacity: 1;' : '';
+                const infoTitle = temObs ? 'Informações (Possui Observação)' : 'Informações';
+                linha.innerHTML = `
+                    <span>NF ${nf.numero}</span>
+                    <span>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</span>
+                    <span>R$ ${formatar(nf.valor_frete)}</span>
+                    <button class="icon-btn info" title="${infoTitle}" style="padding:2px; ${infoStyle}" onclick="event.stopPropagation(); abrirModalInfoNF('${nf.id}');">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    </button>
+                `;
+                body.appendChild(linha);
+            });
             container.appendChild(card);
         });
     } catch (err) {
-        console.error("Erro ao carregar novo histórico:", err);
+        console.error('Erro ao carregar novo histórico:', err);
         container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 40px;">Erro ao carregar dados do servidor.</p>`;
     }
 }
 
 let currentRouteDetailsId = null;
+
+function obterIndicadorOrdenacaoHistoricoProgramacao(dataKey, coluna) {
+    const ordenacao = ordenacaoHistoricoProgramacaoPorData[dataKey];
+    if (!ordenacao || ordenacao.coluna !== coluna) return '↕';
+    return ordenacao.direcao === 'asc' ? '↑' : '↓';
+}
+
+window.alternarOrdenacaoHistoricoProgramacao = function(dataKey, coluna) {
+    const atual = ordenacaoHistoricoProgramacaoPorData[dataKey];
+    if (atual?.coluna === coluna) {
+        atual.direcao = atual.direcao === 'asc' ? 'desc' : 'asc';
+    } else {
+        ordenacaoHistoricoProgramacaoPorData[dataKey] = { coluna, direcao: 'asc' };
+    }
+    carregarNovoHistoricoProgramacao();
+};
+
+function renderizarCabecalhoOrdenavelHistoricoProgramacao(dataKey) {
+    const colunas = ['nf', 'destino', 'tipo', 'qtd', 'marca', 'potencia', 'kam', 'rota', 'transportadora', 'status'];
+    return colunas.map(coluna => `
+        <th class="programacao-sortable-header">
+            <button type="button" class="programacao-sort-button"
+                onclick="window.alternarOrdenacaoHistoricoProgramacao('${String(dataKey).replace(/'/g, "\\'")}', '${coluna}')"
+                title="Ordenar ${obterLabelColunaProgramacao(coluna)}">
+                <span>${obterLabelColunaProgramacao(coluna)}</span>
+                <span class="programacao-sort-indicator" aria-hidden="true">${obterIndicadorOrdenacaoHistoricoProgramacao(dataKey, coluna)}</span>
+            </button>
+        </th>
+    `).join('');
+}
 
 async function carregarNovoHistoricoProgramacao() {
     if (currentNewHistoryViewMode !== 'programacao') return;
@@ -5644,125 +6027,124 @@ async function carregarNovoHistoricoProgramacao() {
     const countElem = document.getElementById('new-history-count');
     if (!container) return;
 
-    const termoTexto = filtroNomeNewHistory ? filtroNomeNewHistory.value : "";
+    const termoTexto = filtroNomeNewHistory ? filtroNomeNewHistory.value : '';
     const filtroData = obterFiltroDataGlobal();
-
-    container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 40px;">Carregando histórico agrupado...</p>`;
+    container.innerHTML = `<p style="text-align:center; color:var(--text-muted); padding:40px;">Carregando histórico de programação...</p>`;
 
     try {
         const { data: rotas, error: errR } = await supabaseClient
-            .from("rotas")
-            .select("*")
-            .eq("status", "finalizada")
-            .order("data", { ascending: false });
-
+            .from('rotas').select('*').eq('status', 'finalizada').order('data', { ascending: false });
         if (errR) throw errR;
 
         if (!rotas || rotas.length === 0) {
-            container.innerHTML = `<div class="panel-container"><p style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhuma rota finalizada encontrada.</p></div>`;
-            if (countElem) countElem.innerText = "0 Rotas";
+            container.innerHTML = `<div class="panel-container"><p style="text-align:center; color:var(--text-muted); padding:20px;">Nenhuma programação finalizada encontrada.</p></div>`;
+            if (countElem) countElem.innerText = '0 Rotas';
             return;
         }
 
         const rotaIds = rotas.map(r => r.id);
         const { data: nfs, error: errN } = await supabaseClient
-            .from("nfs")
-            .select("*")
-            .in("rota_id", rotaIds);
-
+            .from('nfs').select('*').in('rota_id', rotaIds);
         if (errN) throw errN;
 
-        // Filtra as rotas pela data antes de agrupar (mesma lógica da tela Programação ativa)
-        const rotasFiltradasPelaData = rotas.filter(rota => dataDentroDoFiltroGlobal(rota.data, filtroData));
-
-        const agrupado = agruparDadosProgramacao(rotasFiltradasPelaData, nfs, termoTexto);
-        
-        // Contabiliza rotas restantes após o filtro
-        let rotasContadas = 0;
-        Object.values(agrupado).forEach(dia => {
-            rotasContadas += Object.keys(dia).length;
+        const rotasFiltradas = rotas.filter(rota => dataDentroDoFiltroGlobal(rota.data, filtroData));
+        const agrupado = agruparDadosProgramacao(rotasFiltradas, nfs || [], termoTexto);
+        const datas = Object.keys(agrupado).sort((a, b) => {
+            if (a === 'sem-data') return 1;
+            if (b === 'sem-data') return -1;
+            return b.localeCompare(a);
         });
 
+        let rotasContadas = 0;
+        datas.forEach(dataKey => { rotasContadas += Object.keys(agrupado[dataKey] || {}).length; });
         if (countElem) countElem.innerText = `${rotasContadas} Rota(s)`;
 
-        if (rotasContadas === 0) {
-            container.innerHTML = `<div class="panel-container"><p style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhum resultado encontrado para a busca.</p></div>`;
+        if (!rotasContadas) {
+            container.innerHTML = `<div class="panel-container"><p style="text-align:center; color:var(--text-muted); padding:20px;">Nenhum resultado encontrado para os filtros aplicados.</p></div>`;
             return;
         }
 
-        container.innerHTML = "";
-        const datas = Object.keys(agrupado).sort((a, b) => b.localeCompare(a));
-
+        container.innerHTML = '';
         datas.forEach(dataKey => {
             const section = document.createElement('div');
-            section.className = "panel-container";
-            section.style.marginBottom = "32px";
+            section.className = 'panel-container';
+            section.style.marginBottom = '32px';
+
+            const ordenacao = ordenacaoHistoricoProgramacaoPorData[dataKey] || null;
+            let rotasIds = Object.keys(agrupado[dataKey] || {});
+
+            if (ordenacao?.coluna === 'rota') {
+                rotasIds.sort((a, b) => compararValoresOrdenacaoProgramacao(
+                    normalizarValorOrdenacaoProgramacao(agrupado[dataKey][a].nome),
+                    normalizarValorOrdenacaoProgramacao(agrupado[dataKey][b].nome),
+                    ordenacao.direcao
+                ));
+            } else {
+                rotasIds.sort((a, b) => agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome, 'pt-BR', { numeric: true, sensitivity: 'base' }));
+            }
 
             let html = `
-                <h3 style="margin: 0 0 20px 0; color: var(--primary); font-size: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.7"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                    ${formatarDataComDiaSemana(dataKey)}
-                </h3>
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>NF</th>
-                            <th>DESTINO</th>
-                            <th style="text-align:center">TIPO</th>
-                            <th>QTD</th>
-                            <th>MARCA</th>
-                            <th>POTÊNCIA</th>
-                            <th>KAM</th>
-                            <th>ROTA</th>
-                            <th>TRANSPORTADORA</th>
-                            <th style="text-align:center">STATUS</th>
-                        </tr>
-                    </thead>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px;">
+                    <h3 style="margin:0; color:var(--primary); font-size:15px;">${formatarDataComDiaSemana(dataKey)}</h3>
+                    <span style="font-size:11px; color:var(--text-muted);">${rotasIds.length} rota(s)</span>
+                </div>
+                <div class="table-scroll">
+                <table class="data-table programacao-data-table">
+                    <thead><tr>${renderizarCabecalhoOrdenavelHistoricoProgramacao(dataKey)}</tr></thead>
                     <tbody>
             `;
 
-            // Ordena IDs de rotas por nome dentro do dia
-            const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) => 
-                agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome)
-            );
-
-            rotasIds.forEach(rotaId => {
+            rotasIds.forEach((rotaId, indiceRota) => {
                 const infoRota = agrupado[dataKey][rotaId];
-                const hasObs = infoRota.observacao_historico && infoRota.observacao_historico.trim() !== "";
-                const iconStyle = hasObs ? 'color: #fbbf24; opacity: 1;' : 'color: var(--accent); opacity: 0.7;';
+                if (indiceRota > 0) {
+                    html += `<tr class="programacao-route-separator" aria-hidden="true"><td colspan="10"></td></tr>`;
+                }
+                const hasObs = infoRota.observacao_historico && infoRota.observacao_historico.trim() !== '';
+                const iconStyle = hasObs ? 'color:#fbbf24; opacity:1;' : 'color:var(--accent); opacity:.7;';
+                html += `
+                    <tr class="programacao-route-heading">
+                        <td colspan="10">
+                            <div class="programacao-route-heading-content">
+                                <span class="programacao-route-heading-label">ROTA</span>
+                                <span class="programacao-route-heading-name">${infoRota.nome}</span>
+                                ${infoRota.transportadora ? `<span class="programacao-route-heading-transportadora">${infoRota.transportadora}</span>` : ''}
+                                <button class="icon-btn info" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle} padding:2px;" onclick="event.stopPropagation(); abrirModalDetalhesRota('${rotaId}')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
 
-                infoRota.nfs.forEach(nf => {
+                const nfsOrdenadas = ordenacao && ordenacao.coluna !== 'rota'
+                    ? ordenarNfsDaRotaProgramacao(infoRota.nfs, infoRota, ordenacao.coluna, ordenacao.direcao)
+                    : infoRota.nfs;
+
+                nfsOrdenadas.forEach(nf => {
                     html += `
                         <tr>
                             <td><strong>${nf.numero}</strong></td>
                             <td>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</td>
-                            <td style="text-transform: capitalize; text-align:center">${nf.tipo}</td>
+                            <td style="text-transform:capitalize; text-align:center">${nf.tipo || nf.tipo_operacao || '---'}</td>
                             <td>${nf.qtd || '---'}</td>
                             <td>${nf.marca || '---'}</td>
                             <td>${nf.potencia || '---'}</td>
                             <td>${nf.kam || '---'}</td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="background: var(--border); padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap;">${infoRota.nome}</span>
-                                    <button class="icon-btn info" title="${hasObs ? 'Ver detalhes da rota (Possui observação)' : 'Ver detalhes da rota'}" style="${iconStyle} padding: 2px;" onclick="abrirModalDetalhesRota('${rotaId}')">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                                    </button>
-                                </div>
-                            </td>
+                            <td><span style="background:var(--border); padding:2px 6px; border-radius:4px; font-size:11px; white-space:nowrap;">${infoRota.nome}</span></td>
                             <td>${infoRota.transportadora || '---'}</td>
-                            <td style="text-align:center"><span style="color: var(--text-muted); font-size: 11px;">${nf.status || '---'}</span></td>
+                            <td style="text-align:center"><span style="color:var(--text-muted); font-size:11px;">${nf.status || '---'}</span></td>
                         </tr>
                     `;
                 });
             });
 
-            html += `</tbody></table>`;
+            html += '</tbody></table></div>';
             section.innerHTML = html;
             container.appendChild(section);
         });
     } catch (err) {
-        console.error("Erro ao carregar histórico de programação:", err);
-        container.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: #ef4444; padding: 40px;">Erro ao carregar dados do servidor.</p>`;
+        console.error('Erro ao carregar histórico de programação:', err);
+        container.innerHTML = `<p style="text-align:center; color:#ef4444; padding:40px;">Erro ao carregar dados do servidor.</p>`;
     }
 }
 
@@ -5801,178 +6183,257 @@ function carregarTudo() {
 let charts = {}; // Para armazenar as instâncias e destruir antes de recriar
 
 async function carregarDashboard() {
-    console.log("Dashboard: Iniciando processamento de indicadores...");
+    console.log("Dashboard KPI: processando indicadores...");
     try {
-        const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*");
-        const { data: todasAsRotas, error: errR } = await supabaseClient.from("rotas").select("*");
-
+        const [{ data: nfs, error: errN }, { data: todasAsRotas, error: errR }] = await Promise.all([
+            supabaseClient.from("nfs").select("*"),
+            supabaseClient.from("rotas").select("*")
+        ]);
         if (errN || errR) throw new Error("Erro ao buscar dados para o dashboard.");
 
-        const filtroDataPainel = obterFiltroDataGlobal();
-        const rotasPorId = new Map(todasAsRotas.map(r => [r.id, r]));
-        const rotasAtivas = todasAsRotas.filter(r => r.status === 'ativa' && dataDentroDoFiltroGlobal(r.data, filtroDataPainel));
-        const rotasFinalizadas = todasAsRotas.filter(r => r.status === 'finalizada' && dataDentroDoFiltroGlobal(r.data, filtroDataPainel));
+        nfsDashboardCache = nfs || [];
+        rotasDashboardCache = todasAsRotas || [];
+        if (pesquisaNfPainel?.value) renderizarResultadoPesquisaNfPainel();
 
-        // FILTRO DE DADOS ATIVOS (Ignorar NFs de rotas já finalizadas)
-        const activeRotaIds = new Set(rotasAtivas.map(r => r.id));
-        const nfsAtivas = nfs.filter(n => {
-            if (n.rota_id) return activeRotaIds.has(n.rota_id);
-            return dataDentroDoFiltroGlobal(obterDataReferenciaNF(n, rotasPorId), filtroDataPainel);
-        });
-        const nfsEmRotaAtiva = nfs.filter(n => n.rota_id && activeRotaIds.has(n.rota_id));
+        const filtro = obterFiltroDataGlobal();
+        const rotasPorId = new Map((todasAsRotas || []).map(r => [r.id, r]));
+        const nfsPeriodo = (nfs || []).filter(n => dataDentroDoFiltroGlobal(obterDataReferenciaNF(n, rotasPorId), filtro));
+        const rotasPeriodo = (todasAsRotas || []).filter(r => dataDentroDoFiltroGlobal(r.data, filtro));
+        const rotasAtivas = rotasPeriodo.filter(r => r.status === 'ativa');
+        const rotasFinalizadas = rotasPeriodo.filter(r => r.status === 'finalizada');
+        const rotaAtivaIds = new Set(rotasAtivas.map(r => r.id));
 
-        // 1. ATUALIZAR CARDS DE RESUMO
-        const setStat = (id, val) => {
-            const el = document.getElementById(id);
-            if (el) el.innerText = val;
-        };
+        const totalNfs = nfsPeriodo.length;
+        const produzidas = nfsPeriodo.filter(n => n.status === 'Produzida').length;
+        const expedidas = nfsPeriodo.filter(n => n.status === 'Expedida').length;
+        const finalizadas = nfsPeriodo.filter(n => n.rota_id && rotasPorId.get(n.rota_id)?.status === 'finalizada').length;
+        const pendentes = nfsPeriodo.filter(n => !n.rota_id).length;
+        const semStatus = nfsPeriodo.filter(n => !n.status || !String(n.status).trim()).length;
+        const semTransportadora = rotasPeriodo.filter(r => !r.transportadora || !String(r.transportadora).trim()).length;
+        const transporte = nfsPeriodo.filter(n => n.uf !== 'RT').length;
+        const retirada = nfsPeriodo.filter(n => n.uf === 'RT').length;
+        const volume = nfsPeriodo.reduce((s, n) => s + (Number(n.qtd) || 0), 0);
+        const taxa = (v, total) => total ? Math.round((v / total) * 100) : 0;
+        const pctConclusao = taxa(finalizadas, totalNfs);
+        const pctExpedicao = taxa(expedidas, totalNfs);
+        const mediaNfsRota = rotasPeriodo.length ? (totalNfs / rotasPeriodo.length).toFixed(1).replace('.', ',') : '0';
 
-        setStat('stat-nfs-pendentes', nfs.filter(n => !n.rota_id).length); // NFs sem rota_id são sempre pendentes
-        setStat('stat-nfs-em-rota', nfsEmRotaAtiva.length);
-        setStat('stat-rotas-ativas', rotasAtivas.length);
-        setStat('stat-rotas-finalizadas', rotasFinalizadas.length);
-        setStat('stat-nfs-producao', nfsAtivas.filter(n => n.status === "Em produção").length);
-        setStat('stat-nfs-produzidas', nfsAtivas.filter(n => n.status === "Produzida").length);
+        const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+        const setPct = (id, barId, value) => { setText(id, `${value}%`); const bar = document.getElementById(barId); if (bar) bar.style.width = `${Math.min(100, value)}%`; };
+        const pctSub = (value) => `${taxa(value, totalNfs)}% do total`;
 
-        // 2. GRÁFICO 1: STATUS DAS NFs (ROSCA)
+        setText('stat-nfs-total', totalNfs);
+        setText('stat-nfs-total-sub', `${transporte} transporte · ${retirada} retirada`);
+        setText('stat-nfs-produzidas', produzidas); setText('stat-nfs-produzidas-sub', pctSub(produzidas));
+        setText('stat-nfs-expedidas', expedidas); setText('stat-nfs-expedidas-sub', pctSub(expedidas));
+        setText('stat-nfs-finalizadas', finalizadas); setText('stat-nfs-finalizadas-sub', pctSub(finalizadas));
+        setText('stat-nfs-pendentes', pendentes); setText('stat-nfs-pendentes-sub', pendentes ? 'Aguardando rota' : 'Nenhuma pendência');
+        setText('stat-rotas-total', rotasPeriodo.length); setText('stat-rotas-total-sub', `${rotasFinalizadas.length} finalizadas`);
+        setPct('kpi-taxa-conclusao', 'kpi-taxa-conclusao-bar', pctConclusao);
+        setPct('kpi-taxa-expedicao', 'kpi-taxa-expedicao-bar', pctExpedicao);
+        setText('kpi-media-nfs-rota', mediaNfsRota);
+        setText('kpi-volume-total', volume.toLocaleString('pt-BR'));
+        setText('kpi-transporte', `${transporte} NFs`); setText('kpi-retirada', `${retirada} NFs`);
+        setText('kpi-sem-transportadora', semTransportadora); setText('kpi-sem-status', semStatus);
+        setText('kpi-rotas-ativas', rotasAtivas.length); setText('kpi-rotas-finalizadas', rotasFinalizadas.length);
+
+        const light = document.body.classList.contains('light-theme');
+        const gridColor = light ? 'rgba(100,116,139,0.12)' : 'rgba(255,255,255,0.06)';
+        const textColor = light ? '#64748b' : '#94a3b8';
+        const green = '#22c55e', blue = '#38bdf8', purple = '#a855f7', orange = '#f59e0b';
+
+        const hideMsg = id => document.getElementById(id)?.classList.add('hidden');
+        const showMsg = id => document.getElementById(id)?.classList.remove('hidden');
+        const has = arr => arr.some(v => v > 0);
+
+        // STATUS
         const statusData = {
-            "Vazio": nfsAtivas.filter(n => !n.status || n.status === "").length,
-            "Produção": nfsAtivas.filter(n => n.status === "Em produção").length,
-            "Produzida": nfsAtivas.filter(n => n.status === "Produzida").length,
-            "Expedida": nfsAtivas.filter(n => n.status === "Expedida").length
+            'Sem status': semStatus,
+            'Em produção': nfsPeriodo.filter(n => n.status === 'Em produção').length,
+            'Produzida': produzidas,
+            'Expedida': expedidas
         };
+        if (has(Object.values(statusData))) {
+            hideMsg('msg-status-nfs');
+            renderChart('chart-status-nfs', 'doughnut', { labels: Object.keys(statusData), datasets: [{ data: Object.values(statusData), backgroundColor: [light ? '#cbd5e1' : '#475569', blue, green, purple], borderWidth: 0 }] }, { cutout: '68%', plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 12, font: { size: 10 } } } } });
+        } else showMsg('msg-status-nfs');
 
-        const hasStatusData = Object.values(statusData).some(v => v > 0);
-        if (hasStatusData) {
-            document.getElementById('msg-status-nfs')?.classList.add('hidden');
-            renderChart('chart-status-nfs', 'doughnut', {
-                labels: Object.keys(statusData),
-                datasets: [{
-                    data: Object.values(statusData),
-                    backgroundColor: ['#1e293b', '#38bdf8', '#22c55e', '#a855f7'],
-                    borderWidth: 0
-                }]
-            }, { cutout: '70%', plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', boxWidth: 12, font: { size: 10 } } } } });
-        } else {
-            document.getElementById('msg-status-nfs')?.classList.remove('hidden');
-        }
-
-        // 3. GRÁFICO 2: NFs POR DIA (BARRAS)
-        const nfsPorDia = {};
-        nfsEmRotaAtiva.forEach(nf => {
-            const rota = rotasAtivas.find(r => r.id === nf.rota_id);
-            if (rota && rota.data) {
-                const dataBR = rota.data.split('-').reverse().slice(0, 2).join('/');
-                nfsPorDia[dataBR] = (nfsPorDia[dataBR] || 0) + 1;
-            }
+        // EVOLUÇÃO DIÁRIA
+        const dias = {};
+        nfsPeriodo.forEach(n => {
+            const d = obterDataReferenciaNF(n, rotasPorId); if (!d) return;
+            if (!dias[d]) dias[d] = { produzidas: 0, expedidas: 0, finalizadas: 0 };
+            if (n.status === 'Produzida') dias[d].produzidas++;
+            if (n.status === 'Expedida') dias[d].expedidas++;
+            if (n.rota_id && rotasPorId.get(n.rota_id)?.status === 'finalizada') dias[d].finalizadas++;
         });
+        const datas = Object.keys(dias).sort();
+        if (datas.length) {
+            hideMsg('msg-evolucao-operacional');
+            renderChart('chart-evolucao-operacional', 'line', { labels: datas.map(d => d.split('-').reverse().slice(0,2).join('/')), datasets: [
+                { label: 'Produzidas', data: datas.map(d => dias[d].produzidas), borderColor: green, backgroundColor: 'rgba(34,197,94,.08)', tension: .35, fill: true, pointRadius: 3 },
+                { label: 'Expedidas', data: datas.map(d => dias[d].expedidas), borderColor: blue, backgroundColor: 'transparent', tension: .35, pointRadius: 3 },
+                { label: 'Finalizadas', data: datas.map(d => dias[d].finalizadas), borderColor: purple, backgroundColor: 'transparent', tension: .35, pointRadius: 3 }
+            ] }, { plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, stepSize: 1 } }, x: { grid: { display: false }, ticks: { color: textColor } } } });
+        } else showMsg('msg-evolucao-operacional');
 
-        const sortedNfDates = Object.keys(nfsPorDia).sort();
-        if (sortedNfDates.length > 0) {
-            document.getElementById('msg-nfs-dia')?.classList.add('hidden');
-            renderChart('chart-nfs-dia', 'bar', {
-                labels: sortedNfDates,
-                datasets: [{
-                    label: 'Quantidade de NFs',
-                    data: sortedNfDates.map(d => nfsPorDia[d]),
-                    backgroundColor: 'rgba(34, 197, 94, 0.4)',
-                    borderColor: '#22c55e',
-                    borderWidth: 1,
-                    borderRadius: 4
-                }]
-            }, { 
-                plugins: { legend: { display: false } },
-                scales: { 
-                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 } } },
-                    x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
-                } 
-            });
-        } else {
-            document.getElementById('msg-nfs-dia')?.classList.remove('hidden');
-        }
+        // TIPOS
+        if (transporte + retirada) {
+            hideMsg('msg-tipos-nf');
+            renderChart('chart-tipos-nf', 'doughnut', { labels: ['Transporte', 'Retirada'], datasets: [{ data: [transporte, retirada], backgroundColor: [green, orange], borderWidth: 0 }] }, { cutout: '68%', plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 12, font: { size: 10 } } } } });
+        } else showMsg('msg-tipos-nf');
 
-        // 4. GRÁFICO 3: ROTAS POR DIA (BARRAS)
-        const rotasPorDia = {};
-        rotasAtivas.forEach(r => {
-            if (r.data) {
-                const dataBR = r.data.split('-').reverse().slice(0, 2).join('/');
-                rotasPorDia[dataBR] = (rotasPorDia[dataBR] || 0) + 1;
-            }
-        });
+        // DESTINOS
+        const destinos = {};
+        nfsPeriodo.filter(n => n.uf !== 'RT').forEach(n => { const d = (n.cidade || n.destino || 'SEM DESTINO').trim().toUpperCase(); destinos[d] = (destinos[d] || 0) + 1; });
+        const topDestinos = Object.entries(destinos).sort((a,b)=>b[1]-a[1]).slice(0,6);
+        if (topDestinos.length) {
+            hideMsg('msg-destinos');
+            renderChart('chart-destinos', 'bar', { labels: topDestinos.map(x=>x[0]), datasets: [{ label:'NFs', data:topDestinos.map(x=>x[1]), backgroundColor:'rgba(56,189,248,.45)', borderColor:blue, borderWidth:1, borderRadius:5 }] }, { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true,grid:{color:gridColor},ticks:{color:textColor,stepSize:1}},y:{grid:{display:false},ticks:{color:textColor,font:{size:10}}}} });
+        } else showMsg('msg-destinos');
 
-        const sortedRotaDates = Object.keys(rotasPorDia).sort();
-        if (sortedRotaDates.length > 0) {
-            document.getElementById('msg-rotas-dia')?.classList.add('hidden');
-            renderChart('chart-rotas-dia', 'bar', {
-                labels: sortedRotaDates,
-                datasets: [{
-                    label: 'Quantidade de Rotas',
-                    data: sortedRotaDates.map(d => rotasPorDia[d]),
-                    backgroundColor: 'rgba(56, 189, 248, 0.4)',
-                    borderColor: '#38bdf8',
-                    borderWidth: 1,
-                    borderRadius: 4
-                }]
-            }, { 
-                plugins: { legend: { display: false } },
-                scales: { 
-                    y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8', font: { size: 10 }, stepSize: 1 } },
-                    x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
-                } 
-            });
-        } else {
-            document.getElementById('msg-rotas-dia')?.classList.remove('hidden');
-        }
+        // ROTAS POR DIA
+        const rotasDia = {}; rotasPeriodo.forEach(r => { if (r.data) rotasDia[r.data] = (rotasDia[r.data] || 0) + 1; });
+        const datasRotas = Object.keys(rotasDia).sort();
+        if (datasRotas.length) {
+            hideMsg('msg-rotas-dia');
+            renderChart('chart-rotas-dia','bar',{labels:datasRotas.map(d=>d.split('-').reverse().slice(0,2).join('/')),datasets:[{label:'Rotas',data:datasRotas.map(d=>rotasDia[d]),backgroundColor:'rgba(34,197,94,.42)',borderColor:green,borderWidth:1,borderRadius:5}]},{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:gridColor},ticks:{color:textColor,stepSize:1}},x:{grid:{display:false},ticks:{color:textColor}}}});
+        } else showMsg('msg-rotas-dia');
 
-        // 5. RANKING TRANSPORTADORAS (Top 5)
-        const transpCounts = {};
-        rotasAtivas.forEach(r => {
-            const t = (r.transportadora || "").trim() || "NÃO INFORMADA";
-            transpCounts[t] = (transpCounts[t] || 0) + 1;
-        });
-        const sortedTransp = Object.entries(transpCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        const rankingTranspElem = document.getElementById('ranking-transportadoras');
-        if (rankingTranspElem) {
-            rankingTranspElem.innerHTML = sortedTransp.length > 0 
-                ? sortedTransp.map(([nome, qtd]) => `<div class="ranking-item"><span>${nome}</span><strong>${qtd} rotas</strong></div>`).join('')
-                : `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding: 20px;">Sem dados suficientes.</p>`;
-        }
+        // RANKING TRANSPORTADORAS
+        const transp = {};
+        rotasPeriodo.forEach(r => { const nome=(r.transportadora||'NÃO INFORMADA').trim().toUpperCase(); if(!transp[nome]) transp[nome]={rotas:0,nfs:0}; transp[nome].rotas++; transp[nome].nfs += nfsPeriodo.filter(n=>n.rota_id===r.id).length; });
+        const topTransp=Object.entries(transp).sort((a,b)=>b[1].nfs-a[1].nfs).slice(0,5);
+        const rt=document.getElementById('ranking-transportadoras');
+        if(rt) rt.innerHTML=topTransp.length ? topTransp.map(([nome,v],i)=>`<div class="ranking-item"><span><b class="ranking-index">${i+1}</b>${nome}</span><strong>${v.nfs} NFs <em>${v.rotas} rotas</em></strong></div>`).join('') : '<p class="kpi-empty">Sem dados no período.</p>';
 
-        // 6. RANKING KAMS (Top 5 por NFs)
-        const kamCounts = {};
-        nfsAtivas.forEach(n => {
-            const k = (n.kam || "").trim() || "SEM RESPONSÁVEL";
-            kamCounts[k] = (kamCounts[k] || 0) + 1;
-        });
-        const sortedKams = Object.entries(kamCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        const rankingKamsElem = document.getElementById('ranking-kams');
-        if (rankingKamsElem) {
-            rankingKamsElem.innerHTML = sortedKams.length > 0
-                ? sortedKams.map(([nome, qtd]) => `<div class="ranking-item"><span>${nome}</span><strong>${qtd} NFs</strong></div>`).join('')
-                : `<p style="text-align:center; color:var(--text-muted); font-size:12px; padding: 20px;">Sem dados suficientes.</p>`;
-        }
+        // RANKING KAMS
+        const kams={}; nfsPeriodo.forEach(n=>{const k=(n.kam||'SEM RESPONSÁVEL').trim().toUpperCase(); kams[k]=(kams[k]||0)+1;});
+        const topKams=Object.entries(kams).sort((a,b)=>b[1]-a[1]).slice(0,5); const rk=document.getElementById('ranking-kams');
+        if(rk) rk.innerHTML=topKams.length ? topKams.map(([nome,q],i)=>`<div class="ranking-item"><span><b class="ranking-index">${i+1}</b>${nome}</span><strong>${q} NFs <em>${taxa(q,totalNfs)}%</em></strong></div>`).join('') : '<p class="kpi-empty">Sem dados no período.</p>';
 
-        // 7. ALERTAS DE PREENCHIMENTO
-        const alertRotas = rotasAtivas.filter(r => !r.transportadora || r.transportadora.trim() === "").length;
-        const alertNfs = nfsAtivas.filter(n => !n.status || n.status.trim() === "").length;
-        
-        const alertsContainer = document.getElementById('alerts-summary');
-        if (alertsContainer) {
-            alertsContainer.innerHTML = `
-                <div class="alert-item">
-                    <span class="alert-label">Rotas sem transportadora</span>
-                    <span class="alert-count">${alertRotas}</span>
-                </div>
-                <div class="alert-item">
-                    <span class="alert-label">NFs sem status (vazias)</span>
-                    <span class="alert-count">${alertNfs}</span>
-                </div>
-            `;
-        }
+        // ALERTAS
+        const alertas=[
+            ['NFs sem rota',pendentes,'warning'],
+            ['NFs sem status',semStatus,'warning'],
+            ['Rotas sem transportadora',semTransportadora,'danger'],
+            ['Rotas ativas',rotasAtivas.length,'info']
+        ];
+        const ac=document.getElementById('alerts-summary');
+        if(ac) ac.innerHTML=alertas.map(([label,q,type])=>`<div class="alert-item ${type}"><span><i></i>${label}</span><strong>${q}</strong></div>`).join('');
 
-    } catch (err) {
-        console.error("Erro ao carregar Dashboard:", err);
+    } catch (err) { console.error("Erro ao carregar Dashboard KPI:", err); }
+}
+
+function escaparHtmlPainel(valor) {
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function normalizarBuscaPainel(valor) {
+    return String(valor ?? '').trim().toLowerCase();
+}
+
+function formatarDataPainel(data) {
+    if (!data) return '—';
+    const partes = String(data).slice(0, 10).split('-');
+    return partes.length === 3 ? `${partes[2]}/${partes[1]}/${partes[0]}` : data;
+}
+
+function obterTipoNfPainel(nf) {
+    return String(nf?.uf || '').toUpperCase() === 'RT' ? 'Retirada' : 'Transporte';
+}
+
+function renderizarResultadoPesquisaNfPainel() {
+    if (!resultadoPesquisaNfPainel) return;
+    const termo = normalizarBuscaPainel(pesquisaNfPainel?.value);
+    if (!termo) {
+        resultadoPesquisaNfPainel.classList.add('hidden');
+        resultadoPesquisaNfPainel.innerHTML = '';
+        limparPesquisaNfPainel?.classList.add('hidden');
+        return;
     }
+
+    limparPesquisaNfPainel?.classList.remove('hidden');
+    const encontrados = nfsDashboardCache
+        .filter(nf => normalizarBuscaPainel(nf.numero).includes(termo))
+        .sort((a, b) => {
+            const aExato = normalizarBuscaPainel(a.numero) === termo ? 0 : 1;
+            const bExato = normalizarBuscaPainel(b.numero) === termo ? 0 : 1;
+            return aExato - bExato;
+        })
+        .slice(0, 8);
+
+    resultadoPesquisaNfPainel.classList.remove('hidden');
+
+    if (!encontrados.length) {
+        resultadoPesquisaNfPainel.innerHTML = `
+          <div class="painel-nf-search-empty">
+            <span>NF não encontrada</span>
+            <small>Nenhuma nota corresponde a <strong>${escaparHtmlPainel(pesquisaNfPainel.value)}</strong>.</small>
+          </div>`;
+        return;
+    }
+
+    const rotasPorId = new Map(rotasDashboardCache.map(r => [r.id, r]));
+    resultadoPesquisaNfPainel.innerHTML = `
+      <div class="painel-nf-search-head">
+        <div><strong>${encontrados.length}</strong> resultado(s) encontrado(s)</div>
+        ${encontrados.length > 1 ? '<small>Mostrando até 8 resultados</small>' : ''}
+      </div>
+      <div class="painel-nf-search-table-wrap">
+        <table class="painel-nf-search-table">
+          <thead><tr>
+            <th>NF</th><th>Tipo</th><th>Destino</th><th>Qtd</th><th>Marca</th><th>Potência</th><th>KAM</th><th>Rota</th><th>Transportadora</th><th>Status</th><th>Data</th>
+          </tr></thead>
+          <tbody>
+            ${encontrados.map(nf => {
+                const rota = nf.rota_id ? rotasPorId.get(nf.rota_id) : null;
+                const tipo = obterTipoNfPainel(nf);
+                const destino = tipo === 'Retirada' ? '—' : (nf.destino || nf.cidade || '—');
+                const status = nf.status || (rota ? (rota.status === 'finalizada' ? 'Finalizada' : 'Em rota') : 'Pendente');
+                return `<tr>
+                  <td><strong>${escaparHtmlPainel(nf.numero || '—')}</strong></td>
+                  <td><span class="painel-nf-type ${tipo === 'Retirada' ? 'retirada' : 'transporte'}">${tipo}</span></td>
+                  <td>${escaparHtmlPainel(destino)}</td>
+                  <td>${escaparHtmlPainel(nf.qtd ?? '—')}</td>
+                  <td>${escaparHtmlPainel(nf.marca || '—')}</td>
+                  <td>${escaparHtmlPainel(nf.potencia || '—')}</td>
+                  <td>${escaparHtmlPainel(nf.kam || '—')}</td>
+                  <td>${escaparHtmlPainel(rota?.nome || 'Sem rota')}</td>
+                  <td>${escaparHtmlPainel(rota?.transportadora || '—')}</td>
+                  <td><span class="painel-nf-status">${escaparHtmlPainel(status)}</span></td>
+                  <td>${formatarDataPainel(obterDataReferenciaNF(nf, rotasPorId))}</td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+}
+
+function configurarPesquisaNfPainel() {
+    if (pesquisaNfPainel) {
+        pesquisaNfPainel.addEventListener('input', () => {
+            clearTimeout(timerPesquisaNfPainel);
+            timerPesquisaNfPainel = setTimeout(renderizarResultadoPesquisaNfPainel, 120);
+        });
+        pesquisaNfPainel.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                pesquisaNfPainel.value = '';
+                renderizarResultadoPesquisaNfPainel();
+                pesquisaNfPainel.blur();
+            }
+        });
+    }
+    limparPesquisaNfPainel?.addEventListener('click', () => {
+        if (pesquisaNfPainel) pesquisaNfPainel.value = '';
+        renderizarResultadoPesquisaNfPainel();
+        pesquisaNfPainel?.focus();
+    });
 }
 
 function renderChart(id, type, data, options) {
