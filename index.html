@@ -45,28 +45,31 @@
         
     </div>
 
-    <button class="btn" id="open-nf-modal-btn">+ Nova NF</button>
+    <div class="mobile-pending-section">
+      <button type="button" class="mobile-pending-toggle" id="mobile-pending-toggle" aria-expanded="false" aria-controls="mobile-pending-content" aria-label="Abrir NFs pendentes">
+        <span class="mobile-pending-chevron" aria-hidden="true">›</span>
+      </button>
 
-    <input type="text" placeholder="Buscar NF ou destino..." class="search">
+      <div class="mobile-pending-content" id="mobile-pending-content">
+        <button class="btn" id="open-nf-modal-btn">+ Nova NF</button>
 
-    <div class="filters">
+        <input type="text" placeholder="Buscar NF ou destino..." class="search">
 
-  <button onclick="trocarFiltro('todos')">
-    Todos <span id="count-todos">0</span>
-  </button>
+        <div class="filters">
+          <button onclick="trocarFiltro('todos')">
+            Todos <span id="count-todos">0</span>
+          </button>
+          <button onclick="trocarFiltro('transporte')">
+            Transporte <span id="count-transporte">0</span>
+          </button>
+          <button onclick="trocarFiltro('retira')">
+            Retira <span id="count-retira">0</span>
+          </button>
+        </div>
 
-  <button onclick="trocarFiltro('transporte')">
-    Transporte <span id="count-transporte">0</span>
-  </button>
-
-  <button onclick="trocarFiltro('retira')">
-    Retira <span id="count-retira">0</span>
-  </button>
-
-</div>
-
-
-    <div class="nf-list"></div>
+        <div class="nf-list"></div>
+      </div>
+    </div>
   </aside>
 
   <!-- MAIN -->
@@ -74,9 +77,22 @@
 
     <!-- Visão Principal (Dashboard) -->
     <div id="dashboard-view">
-      <div class="topbar">
-        <h2>Roteirização</h2>
-        <div class="topbar-actions">
+      <div class="topbar transit-topbar global-system-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+            <div class="transit-title-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            </div>
+            <div>
+              <h2>Roteirização</h2>
+              <p class="transit-subtitle">Organize rotas, notas fiscais e expedições.</p>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
           <!-- GRUPO 1: FILTROS -->
           <div class="topbar-group">
             <div class="view-toggle">
@@ -111,9 +127,22 @@
 
     <!-- Visão do Painel de Controle -->
     <div id="control-panel-view" class="hidden">
-      <div class="topbar">
-        <h2>Painel de Controle</h2>
-        <div class="topbar-actions">
+      <div class="topbar transit-topbar global-system-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+            <div class="transit-title-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"></path><path d="M4 19h16"></path><rect x="7" y="12" width="3" height="4"></rect><rect x="12" y="9" width="3" height="7"></rect><rect x="17" y="6" width="3" height="10"></rect></svg>
+            </div>
+            <div>
+              <h2>Painel de Controle</h2>
+              <p class="transit-subtitle">Acompanhe indicadores e o desempenho da operação.</p>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
           <div class="export-powerbi-wrapper" style="position: relative; display: inline-block;">
             <button class="btn btn-outline" id="export-powerbi-btn">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; opacity: 0.8;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><polyline points="9 15 12 18 15 15"></polyline></svg>
@@ -175,23 +204,23 @@
         </div>
 
         <div class="dashboard-stats kpi-primary-grid">
-          <div class="stat-card kpi-card kpi-card-main"><div class="stat-icon kpi-icon-neutral"><span>NF</span></div><div class="stat-info"><span class="stat-label">NFs no período</span><h3 id="stat-nfs-total">0</h3><small id="stat-nfs-total-sub">Todas as NFs</small></div></div>
-          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-green"><span>✓</span></div><div class="stat-info"><span class="stat-label">NFs produzidas</span><h3 id="stat-nfs-produzidas">0</h3><small id="stat-nfs-produzidas-sub">0% do total</small></div></div>
+          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-purple"><span>✓</span></div><div class="stat-info"><span class="stat-label">NFs produzidas</span><h3 id="stat-nfs-produzidas">0</h3><small id="stat-nfs-produzidas-sub">0% do total</small></div></div>
           <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-blue"><span>↗</span></div><div class="stat-info"><span class="stat-label">NFs expedidas</span><h3 id="stat-nfs-expedidas">0</h3><small id="stat-nfs-expedidas-sub">0% do total</small></div></div>
-          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-purple"><span>✓</span></div><div class="stat-info"><span class="stat-label">NFs finalizadas</span><h3 id="stat-nfs-finalizadas">0</h3><small id="stat-nfs-finalizadas-sub">0% do total</small></div></div>
+          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-blue"><span>↔</span></div><div class="stat-info"><span class="stat-label">NFs em trânsito</span><h3 id="stat-nfs-transito">0</h3><small id="stat-nfs-transito-sub">0% do total</small></div></div>
+          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-green"><span>✓</span></div><div class="stat-info"><span class="stat-label">NFs entregues</span><h3 id="stat-nfs-entregues">0</h3><small id="stat-nfs-entregues-sub">0% do total</small></div></div>
+          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-purple"><span>✓</span></div><div class="stat-info"><span class="stat-label">Rotas finalizadas</span><h3 id="stat-nfs-finalizadas">0</h3><small id="stat-nfs-finalizadas-sub">0% do total</small></div></div>
           <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-orange"><span>!</span></div><div class="stat-info"><span class="stat-label">NFs pendentes</span><h3 id="stat-nfs-pendentes">0</h3><small id="stat-nfs-pendentes-sub">Sem rota</small></div></div>
-          <div class="stat-card kpi-card"><div class="stat-icon kpi-icon-cyan"><span>R</span></div><div class="stat-info"><span class="stat-label">Rotas no período</span><h3 id="stat-rotas-total">0</h3><small id="stat-rotas-total-sub">0 finalizadas</small></div></div>
         </div>
 
         <div class="kpi-secondary-grid">
-          <div class="kpi-metric-card"><div><span class="kpi-metric-label">Taxa de conclusão</span><strong id="kpi-taxa-conclusao">0%</strong></div><div class="kpi-progress"><span id="kpi-taxa-conclusao-bar"></span></div><small>NFs finalizadas sobre o total do período</small></div>
+          <div class="kpi-metric-card"><div><span class="kpi-metric-label">Taxa de conclusão</span><strong id="kpi-taxa-conclusao">0%</strong></div><div class="kpi-progress"><span id="kpi-taxa-conclusao-bar"></span></div><small>Rotas finalizadas sobre o total de rotas</small></div>
           <div class="kpi-metric-card"><div><span class="kpi-metric-label">Taxa de expedição</span><strong id="kpi-taxa-expedicao">0%</strong></div><div class="kpi-progress"><span id="kpi-taxa-expedicao-bar"></span></div><small>NFs expedidas sobre o total do período</small></div>
           <div class="kpi-metric-card"><div><span class="kpi-metric-label">Média de NFs por rota</span><strong id="kpi-media-nfs-rota">0</strong></div><small>Quantidade média por rota do período</small></div>
           <div class="kpi-metric-card"><div><span class="kpi-metric-label">Volume movimentado</span><strong id="kpi-volume-total">0</strong></div><small>Quantidade de itens informada nas NFs</small></div>
         </div>
 
         <div class="dashboard-charts kpi-charts-primary">
-          <div class="chart-container chart-container-large"><div class="chart-title-row"><div><span class="kpi-eyebrow">FLUXO</span><h3>Evolução operacional</h3></div><span class="chart-note">Produção · Expedição · Finalização</span></div><div class="chart-canvas-wrapper"><canvas id="chart-evolucao-operacional"></canvas></div><div id="msg-evolucao-operacional" class="empty-chart-msg hidden">Sem dados suficientes no período.</div></div>
+          <div class="chart-container chart-container-large"><div class="chart-title-row"><div><span class="kpi-eyebrow">FLUXO</span><h3>Evolução operacional</h3></div><span class="chart-note">Produção · Produzidas · Trânsito · Entrega</span></div><div class="chart-canvas-wrapper"><canvas id="chart-evolucao-operacional"></canvas></div><div id="msg-evolucao-operacional" class="empty-chart-msg hidden">Sem dados suficientes no período.</div></div>
           <div class="chart-container"><div class="chart-title-row"><div><span class="kpi-eyebrow">STATUS</span><h3>Status das NFs</h3></div></div><div class="chart-canvas-wrapper"><canvas id="chart-status-nfs"></canvas></div><div id="msg-status-nfs" class="empty-chart-msg hidden">Sem dados suficientes no período.</div></div>
         </div>
 
@@ -220,9 +249,22 @@
 
     <!-- Visão Gerencial -->
     <div id="gerencial-view" class="hidden">
-      <div class="topbar">
-        <h2>Gerencial</h2>
-        <div class="topbar-actions">
+      <div class="topbar transit-topbar global-system-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+            <div class="transit-title-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.1h-2.5V20a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H6v-2.5h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1 1.8-1.8.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V6h2.5v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1v2.5h-.1a1.7 1.7 0 0 0-1.6 1Z"/></svg>
+            </div>
+            <div>
+              <h2>Gerencial</h2>
+              <p class="transit-subtitle">Configurações administrativas e controles do sistema.</p>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
           <button class="btn btn-outline" id="back-to-control-panel-from-gerencial-btn" type="button" style="display:inline-flex !important;">← Voltar ao Painel</button>
           <div id="user-display-gerencial" class="user-display"></div>
         </div>
@@ -290,9 +332,22 @@
 
     <!-- Visão de Programação -->
     <div id="programacao-view" class="hidden">
-      <div class="topbar">
-        <h2>Programação</h2>
-        <div class="topbar-actions">
+      <div class="topbar transit-topbar global-system-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+            <div class="transit-title-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+            </div>
+            <div>
+              <h2>Programação</h2>
+              <p class="transit-subtitle">Planeje e acompanhe a programação das rotas.</p>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
           <!-- GRUPO 1: FILTROS / HISTÓRICO -->
           <div class="topbar-group">
               <input type="text" id="filtro-nome-programacao" class="date-filter" placeholder="NF, KAM, Rota ou Destino..." title="Pesquisa global na programação" style="cursor: text;">
@@ -330,9 +385,22 @@
 
     <!-- Visão do Novo Histórico (Página Independente) -->
     <div id="new-history-view" class="hidden">
-      <div class="topbar">
-        <h2>Histórico</h2>
-        <div class="topbar-actions">
+      <div class="topbar transit-topbar global-system-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+            <div class="transit-title-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path><path d="M12 7v5l3 2"></path></svg>
+            </div>
+            <div>
+              <h2>Histórico</h2>
+              <p class="transit-subtitle">Consulte rotas e programações finalizadas.</p>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
           <!-- GRUPO 1: FILTROS -->
           <div class="topbar-group">
             <input type="text" id="filtro-nome-new-history" class="date-filter" placeholder="Buscar no histórico" title="Filtrar por nome ou transportadora" style="cursor: text;">
@@ -393,11 +461,103 @@
       </div>
     </div>
 
+    <!-- Visão de Em Trânsito (prévia visual — sem integração operacional) -->
+    <div id="em-transito-view" class="hidden">
+      <div class="topbar transit-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+          <div class="transit-title-icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h11v11H3z"></path><path d="M14 10h4l3 3v4h-7z"></path><circle cx="7" cy="19" r="1.8"></circle><circle cx="18" cy="19" r="1.8"></circle>
+            </svg>
+          </div>
+          <div>
+            <h2>Em Trânsito</h2>
+            <p class="transit-subtitle">Acompanhe as rotas expedidas e o andamento das entregas.</p>
+          </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
+          <div class="topbar-group">
+            <button class="btn btn-outline" id="transit-view-toggle" type="button" title="Alternar visualização">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+              Visão geral
+            </button>
+            <div id="user-display-transit" class="user-display"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="transit-page">
+        <div class="transit-demo-banner">
+          <div class="transit-demo-icon" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="10" x2="12" y2="16"></line><line x1="12" y1="7" x2="12.01" y2="7"></line></svg>
+          </div>
+          <div><strong>Operação de transportadora</strong><span>Acompanhe as rotas em trânsito e registre as entregas das NFs.</span></div>
+        </div>
+
+        <section class="transit-kpis" aria-label="Resumo de entregas">
+          <article class="transit-kpi transit-kpi-primary">
+            <div class="transit-kpi-icon"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h11v11H3z"></path><path d="M14 10h4l3 3v4h-7z"></path><circle cx="7" cy="19" r="1.8"></circle><circle cx="18" cy="19" r="1.8"></circle></svg></div>
+            <div><span>Rotas em trânsito</span><strong>08</strong><small>2 iniciadas hoje</small></div>
+          </article>
+          <article class="transit-kpi">
+            <div class="transit-kpi-icon"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 4 4L19 6"></path></svg></div>
+            <div><span>NFs entregues</span><strong>27</strong><small>de 46 em trânsito</small></div>
+          </article>
+          <article class="transit-kpi">
+            <div class="transit-kpi-icon"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v14H4z"></path><path d="M8 6V4h8v2"></path><path d="M8 11h8M8 15h5"></path></svg></div>
+            <div><span>NFs em trânsito</span><strong>19</strong><small>aguardando entrega</small></div>
+          </article>
+          <article class="transit-kpi transit-kpi-neutral">
+            <div class="transit-kpi-icon"><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18"></path></svg></div>
+            <div><span>Taxa de entrega</span><strong>59%</strong><small>das NFs expedidas</small></div>
+          </article>
+        </section>
+
+        <section class="transit-toolbar">
+          <div class="transit-toolbar-title"><span>Rotas em andamento</span><small>8 rotas aguardando conclusão</small></div>
+          <div class="transit-toolbar-actions">
+            <label class="transit-search">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>
+              <input id="transit-demo-search" type="search" placeholder="Buscar rota, destino ou NF..." autocomplete="off">
+            </label>
+            <button class="transit-filter-btn active" type="button">Todas <span>8</span></button>
+            <button class="transit-filter-btn" type="button">Pendentes <span>5</span></button>
+            <button class="transit-filter-btn" type="button">Parciais <span>3</span></button>
+          </div>
+        </section>
+
+        <section class="transit-route-list" id="transit-demo-list" aria-label="Rotas em trânsito"></section>
+
+        <div class="transit-empty-state hidden" id="transit-demo-empty">
+          <div class="transit-empty-icon"><svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg></div>
+          <h3>Nenhuma rota encontrada</h3><p>Altere o termo de busca para visualizar outras rotas.</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Visão de Simulação de Rota -->
     <div id="simulate-route-view" class="hidden">
-      <div class="topbar">
-        <h2>Simular Rota</h2>
-        <div class="topbar-actions">
+      <div class="topbar transit-topbar global-system-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+            <div class="transit-title-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="18" r="2"></circle><circle cx="18" cy="6" r="2"></circle><path d="M8 18c5 0 1-12 8-12"></path></svg>
+            </div>
+            <div>
+              <h2>Simular Rota</h2>
+              <p class="transit-subtitle">Simule possibilidades e analise suas rotas.</p>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
           <div class="topbar-group">
             <button class="btn btn-outline" id="back-to-dashboard-from-simulate-btn">← Voltar</button>
           </div>
@@ -502,9 +662,22 @@
     </div>
 
   <div id="gerenciar-usuarios-view" class="hidden">
-      <div class="topbar">
-        <h2>Gerenciar Usuários</h2>
-        <div class="topbar-actions">
+      <div class="topbar transit-topbar global-system-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+            <div class="transit-title-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"></path></svg>
+            </div>
+            <div>
+              <h2>Gerenciar Usuários</h2>
+              <p class="transit-subtitle">Administre usuários e responsáveis comerciais.</p>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
           <button class="btn btn-outline" id="back-to-gerencial-from-usuarios-btn" type="button" style="display:inline-flex !important;">← Voltar ao Gerencial</button>
           <div id="user-display-gerenciar-usuarios" class="user-display"></div>
         </div>
@@ -533,6 +706,22 @@
             </div>
           </div>
 
+          <div class="panel-container" id="gerencial-transportadoras-section" style="margin-bottom: 24px; grid-column: 1 / -1;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+              <div>
+                <h3 style="margin: 0; display: flex; align-items: center;">Gerenciar Transportadoras <span id="count-transportadoras" style="font-size: 11px; color: var(--primary); background: rgba(34, 197, 94, 0.1); padding: 2px 10px; border-radius: 20px; font-weight: 700; margin-left: 12px; border: 1px solid rgba(34, 197, 94, 0.2);"></span></h3>
+                <small style="display:block; margin-top:5px; color:var(--text-muted);">Cadastros usados no login das transportadoras e na seleção das rotas.</small>
+              </div>
+              <button class="btn" id="add-transportadora-btn" style="margin: 0; white-space: nowrap;">+ Nova Transportadora</button>
+            </div>
+            <div style="overflow-x: auto;">
+              <table class="data-table">
+                <thead><tr><th>Transportadora</th><th>E-mail</th><th>Status</th><th style="width: 100px; text-align: center;">Ações</th></tr></thead>
+                <tbody id="transportadoras-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="panel-container" id="gerencial-kam-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
               <div>
@@ -553,9 +742,22 @@
     </div>
 
 <div id="permissoes-view" class="hidden">
-      <div class="topbar">
-        <h2>Permissões</h2>
-        <div class="topbar-actions">
+      <div class="topbar transit-topbar global-system-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+            <div class="transit-title-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-2.8 7.7-7 10-4.2-2.3-7-5.5-7-10V6l7-3Z"></path><path d="m9 12 2 2 4-4"></path></svg>
+            </div>
+            <div>
+              <h2>Permissões</h2>
+              <p class="transit-subtitle">Defina acessos e ações permitidas por usuário.</p>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
           <button class="btn btn-outline" id="back-to-gerencial-from-permissoes-btn" type="button" style="display:inline-flex !important;">← Voltar ao Gerencial</button>
           <div id="user-display-permissoes" class="user-display"></div>
         </div>
@@ -588,9 +790,22 @@
     </div>
 
 <div id="limites-retirada-view" class="hidden">
-      <div class="topbar">
-        <h2>Limites de Retirada</h2>
-        <div class="topbar-actions">
+      <div class="topbar transit-topbar global-system-topbar">
+        <div class="transit-brand-title">
+          <div class="transit-brand">
+            <img src="img/logo.png" alt="Rota Sirius" class="transit-brand-logo">
+          </div>
+          <div class="transit-title-wrap">
+            <div class="transit-title-icon" aria-hidden="true">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18M8 14h2M14 14h2M8 18h2"></path></svg>
+            </div>
+            <div>
+              <h2>Limites de Retirada</h2>
+              <p class="transit-subtitle">Configure limites diários e exceções de retirada.</p>
+            </div>
+          </div>
+        </div>
+        <div class="topbar-actions transit-top-actions">
           <button class="btn btn-outline" id="back-to-gerencial-from-limites-btn" type="button" style="display:inline-flex !important;">← Voltar ao Gerencial</button>
           <div id="user-display-limites-retirada" class="user-display"></div>
         </div>
@@ -786,7 +1001,10 @@
             <input type="date" id="rota-data" required>
             
             <label for="rota-transportadora">Transportadora:</label>
-            <input type="text" id="rota-transportadora" placeholder="Ex: TransLog Express">
+            <select id="rota-transportadora" required>
+                <option value="Retira">Retira</option>
+            </select>
+            <small id="rota-transportadora-hint" style="display:block; margin-top:-8px; margin-bottom:12px; color:var(--text-muted);">Selecione Retira ou uma transportadora cadastrada.</small>
 
             <button type="submit" class="btn">Salvar Rota</button>
         </form>
@@ -795,13 +1013,22 @@
 
 <!-- Modal Genérico de Confirmação e Aviso -->
 <div id="generic-modal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 id="generic-modal-title">Aviso</h3>
+    <div class="modal-content generic-confirmation-modal">
         <span class="close-button">&times;</span>
-        <p id="generic-modal-message" style="text-align: center; margin-bottom: 20px; color: var(--text-main); line-height: 1.5;"></p>
-        <div class="form-row">
+        <div class="confirmation-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M8 6V4h8v2"></path>
+                <path d="M19 6l-1 14H6L5 6"></path>
+                <path d="M10 11v5"></path>
+                <path d="M14 11v5"></path>
+            </svg>
+        </div>
+        <h3 id="generic-modal-title">Aviso</h3>
+        <p id="generic-modal-message"></p>
+        <div class="confirmation-actions">
             <button id="generic-modal-cancel" class="btn-toggle">Cancelar</button>
-            <button id="generic-modal-ok" class="btn" style="margin-top: 0;">Confirmar</button>
+            <button id="generic-modal-ok" class="btn">Confirmar</button>
         </div>
     </div>
 </div>
@@ -874,10 +1101,39 @@
                         <option value="Administrador">Administrador</option>
                         <option value="Operador" selected>Operador</option>
                         <option value="Visualizador">Visualizador</option>
+                        <option value="Transportadora">Transportadora</option>
                     </select>
                 </div>
             </div>
+            <div class="form-group hidden" id="user-transportadora-group" style="margin-top: 10px;">
+                <label for="user-transportadora">Transportadora:</label>
+                <input type="text" id="user-transportadora" placeholder="Nome exato da transportadora">
+                <small style="display:block; margin-top:5px; color:var(--text-muted);">Usado para limitar o acesso do usuário às próprias rotas em trânsito.</small>
+            </div>
             <button type="submit" class="btn">Salvar Usuário</button>
+        </form>
+    </div>
+</div>
+
+<!-- Modal para Gerenciamento de Transportadora -->
+<div id="create-transportadora-modal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="transportadora-modal-title">Adicionar Transportadora</h3>
+        <span class="close-button">&times;</span>
+        <form id="create-transportadora-form">
+            <input type="hidden" id="transportadora-user-id-hidden">
+            <label for="transportadora-nome">Nome da transportadora:</label>
+            <input type="text" id="transportadora-nome" placeholder="Ex: LF Transportes" required>
+            <label for="transportadora-email">E-mail de acesso:</label>
+            <input type="email" id="transportadora-email" required>
+            <label for="transportadora-senha">Senha:</label>
+            <input type="password" id="transportadora-senha" minlength="6" required>
+            <label for="transportadora-status">Status:</label>
+            <select id="transportadora-status">
+                <option value="Ativo">Ativa</option>
+                <option value="Inativo">Inativa</option>
+            </select>
+            <button type="submit" class="btn">Salvar Transportadora</button>
         </form>
     </div>
 </div>
@@ -1003,6 +1259,12 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.1 3.7 11 3l2.3 1.4 2.9-.3 2 1.8-.5 2.2 2 2.1-.9 2.5.4 2.3-2.2 2-2.1-.2-1.6 1.8-2.4-.6-1.9.9-1.7-1.7-2.3-.4-.4-2.5-1.5-1.8.8-2.2-.6-2.1 1.8-1.8z"></path><circle cx="9" cy="9" r="1"></circle><circle cx="14.5" cy="7.5" r="1"></circle><circle cx="15.5" cy="13.5" r="1"></circle><circle cx="10.5" cy="15.5" r="1"></circle><path d="M9.8 9.6 13.7 7.9M14.8 8.4l.5 4.1M14.8 14.1l-3.5 1"></path></svg>
       </span>
       <span><strong>Simular Rota</strong><small>Simulação e cálculo de rota</small></span>
+    </button>
+    <button type="button" class="global-menu-item" data-menu-action="em-transito" data-menu-permission="Em Trânsito">
+      <span class="global-menu-item-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h11v11H3z"></path><path d="M14 10h4l3 3v4h-7z"></path><circle cx="7" cy="19" r="1.8"></circle><circle cx="18" cy="19" r="1.8"></circle></svg>
+      </span>
+      <span><strong>Em Trânsito</strong><small>Rotas expedidas e entregas</small></span>
     </button>
     <div class="global-menu-divider"></div>
     <button type="button" class="global-menu-item theme-toggle-item" data-menu-action="toggle-theme" aria-label="Alterar tema">
