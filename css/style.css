@@ -9255,6 +9255,16 @@ body.light-theme .global-system-topbar .user-display:hover {
    começa abaixo dele, sem repetir a logo.
    ========================================================= */
 @media (min-width: 901px) {
+  /* Em Trânsito já possui seu próprio head e não precisa da reserva de 108px
+     usada pelas telas com head global. */
+  .main:has(#em-transito-view:not(.hidden)) {
+    padding-top: 32px !important;
+  }
+
+  .app.panel-active .main:has(#em-transito-view:not(.hidden)) {
+    padding-top: 40px !important;
+  }
+
   /* O head global ocupa toda a largura da aplicação, como no Em Trânsito. */
   .global-system-topbar {
     position: fixed !important;
