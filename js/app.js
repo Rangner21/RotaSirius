@@ -313,12 +313,12 @@ window.toggleMapsMenu = function(event) {
     if (event) event.stopPropagation();
     const btn = event.currentTarget;
     const dropdown = btn.nextElementSibling;
-    
+
     // Fecha outros dropdowns abertos
     document.querySelectorAll('.maps-dropdown, .user-dropdown').forEach(d => {
         if (d !== dropdown) d.classList.add('hidden');
     });
-    
+
     dropdown.classList.toggle('hidden');
 };
 
@@ -344,13 +344,13 @@ function montarUrlGoogleMaps(nfs) {
         // 2. Cidade, UF e CEP
         if (nf.cidade && String(nf.cidade).trim() !== "") parts.push(String(nf.cidade).trim());
         if (nf.uf && String(nf.uf).trim() !== "" && String(nf.uf).toUpperCase() !== 'RT') parts.push(String(nf.uf).trim());
-        
+
         if (nf.cep && String(nf.cep).trim() !== "") {
             let formattedCep = String(nf.cep).replace(/\D/g, '');
             if (formattedCep.length === 8) formattedCep = formattedCep.replace(/^(\d{5})(\d)/, '$1-$2');
             parts.push(formattedCep);
         }
-        
+
         return parts
             .filter(p => p !== "")
             .join(", ")
@@ -363,7 +363,7 @@ function montarUrlGoogleMaps(nfs) {
 
     const destination = destinos[destinos.length - 1];
     const waypoints = destinos.slice(0, destinos.length - 1);
-    
+
     let rotaUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
     if (waypoints.length > 0) {
         rotaUrl += `&waypoints=${encodeURIComponent(waypoints.join('|'))}`;
@@ -373,7 +373,7 @@ function montarUrlGoogleMaps(nfs) {
 
 window.handleAbrirNoMaps = async function(rotaId) {
     if (!rotaId) return;
-    
+
     try {
         // Tarefa 1: Pegar as NFs da rota na ordem atual (pela criação)
         const { data: nfs, error } = await supabaseClient
@@ -405,7 +405,7 @@ window.handleAbrirNoMaps = async function(rotaId) {
 
 window.handleCopiarLinkMaps = async function(rotaId) {
     if (!rotaId) return;
-    
+
     try {
         const { data: nfs, error } = await supabaseClient
             .from("nfs")
@@ -648,37 +648,114 @@ function openModal(modalElement) {
 }
 
 // FUNÇÕES DE MODAL REUTILIZÁVEIS (Substitutos de alert/confirm)
+function configurarIconeModalGenerico(tipo = 'info') {
+  const icon = document.getElementById('generic-modal-icon');
+  if (!icon) return;
+
+  const icones = {
+    info: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="M12 10v6"></path>
+        <path d="M12 7h.01"></path>
+      </svg>`,
+    confirmacao: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="M9.8 9a2.3 2.3 0 1 1 3.9 1.7c-.9.8-1.7 1.2-1.7 2.3"></path>
+        <path d="M12 16h.01"></path>
+      </svg>`,
+    sucesso: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="m8 12 2.7 2.7L16.5 9"></path>
+      </svg>`,
+    erro: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9"></circle>
+        <path d="m9 9 6 6"></path>
+        <path d="m15 9-6 6"></path>
+      </svg>`,
+    alerta: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m10.3 4.6-7.2 12.5A2 2 0 0 0 4.8 20h14.4a2 2 0 0 0 1.7-2.9L13.7 4.6a2 2 0 0 0-3.4 0Z"></path>
+        <path d="M12 9v4"></path>
+        <path d="M12 16h.01"></path>
+      </svg>`,
+    remover: `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 7h16"></path>
+        <path d="M9 7V4h6v3"></path>
+        <path d="M18 7l-1 13H7L6 7"></path>
+        <path d="M10 11v5"></path>
+        <path d="M14 11v5"></path>
+      </svg>`
+  };
+
+  icon.className = `confirmation-icon modal-icon-${tipo}`;
+  icon.innerHTML = icones[tipo] || icones.info;
+}
+
+function classificarAvisoModal(mensagem) {
+  const texto = String(mensagem || '').toLowerCase();
+  if (/sucesso|realizad[oa]|salv[oa]|cadastrad[oa]|atualizad[oa]|copiado|finalizad[oa] com sucesso|entrega registrada/.test(texto)) return 'sucesso';
+  if (/erro|falha|não foi possível|nao foi possivel|inválid[oa]|invalido/.test(texto)) return 'erro';
+  if (/atenção|atencao|cuidado|não pode|nao pode|não é possível|nao e possivel|obrigatório|obrigatoria/.test(texto)) return 'alerta';
+  return 'info';
+}
+
 window.mostrarAviso = function(mensagem) {
   // Mantém o aviso acima de outros modais abertos (ex.: resultado do Leitor DOC).
   if (genericModal) genericModal.style.zIndex = "10000";
-  if (genericModalTitle) genericModalTitle.innerText = "Aviso";
+  const tipoAviso = classificarAvisoModal(mensagem);
+  const titulosAviso = { info: 'Aviso', sucesso: 'Sucesso', erro: 'Erro', alerta: 'Atenção' };
+  if (genericModalTitle) genericModalTitle.innerText = titulosAviso[tipoAviso] || 'Aviso';
   if (genericModalMessage) genericModalMessage.innerText = mensagem;
-  if (genericModalCancel) genericModalCancel.style.display = "none";
+  if (genericModalCancel) {
+    genericModalCancel.style.display = "none";
+    genericModalCancel.classList.remove('confirmacao-nao');
+  }
   if (genericModalOk) {
     genericModalOk.innerText = "OK";
+    genericModalOk.classList.remove('confirmacao-sim');
+    genericModalOk.classList.remove('modal-btn-danger', 'modal-btn-success', 'modal-btn-warning');
+    genericModalOk.classList.add('modal-btn-primary');
     genericModalOk.onclick = () => closeModal(genericModal);
   }
+  configurarIconeModalGenerico(tipoAviso);
   openModal(genericModal);
 };
 
 window.confirmarAcao = function(mensagem, callback) {
-  if (genericModalTitle) genericModalTitle.innerText = "Confirmação";
+  if (genericModalTitle) genericModalTitle.innerText = "Confirmar ação";
   if (genericModalMessage) genericModalMessage.innerText = mensagem;
-  if (genericModalCancel) genericModalCancel.style.display = "block";
+  if (genericModalCancel) {
+    genericModalCancel.style.display = "block";
+    genericModalCancel.innerText = "Cancelar";
+    genericModalCancel.classList.remove('confirmacao-nao');
+    genericModalCancel.classList.remove('modal-btn-danger', 'modal-btn-success', 'modal-btn-warning');
+    genericModalCancel.classList.add('modal-btn-secondary');
+    genericModalCancel.onclick = () => closeModal(genericModal);
+  }
   if (genericModalOk) {
     genericModalOk.innerText = "Confirmar";
+    genericModalOk.classList.remove('confirmacao-sim');
+    genericModalOk.classList.remove('modal-btn-danger', 'modal-btn-success', 'modal-btn-warning');
+    genericModalOk.classList.add('modal-btn-success');
     genericModalOk.onclick = async () => {
       await callback();
       closeModal(genericModal);
     };
   }
+  configurarIconeModalGenerico('confirmacao');
   openModal(genericModal);
 };
 
 function closeModal(modalElement) {
   if (modalElement === genericModal) {
-    genericModalCancel?.classList.remove('confirmacao-nao');
-    genericModalOk?.classList.remove('confirmacao-sim');
+    genericModalCancel?.classList.remove('confirmacao-nao', 'modal-btn-secondary');
+    genericModalOk?.classList.remove('confirmacao-sim', 'modal-btn-primary', 'modal-btn-danger', 'modal-btn-success', 'modal-btn-warning');
+    genericModal?.classList.remove('modal-danger', 'modal-confirmation', 'modal-info', 'modal-success', 'modal-error', 'modal-warning');
   }
 
   // FIX 2b: Verificação de nulo antes do uso
@@ -1406,7 +1483,7 @@ window.atualizarMapaRoteirizado = async function(nfs) {
 async function lidarComInputCepSimulacao(e, tipo) {
     let val = e.target.value;
     let clean = val.replace(/\D/g, '');
-    
+
     // Aplica máscara visual 00000-000
     if (clean.length > 5) {
         e.target.value = clean.replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9);
@@ -1435,9 +1512,9 @@ async function lidarComInputCepSimulacao(e, tipo) {
             const isOrigin = tipo === 'origin';
             const label = isOrigin ? 'Origem' : `Parada ${parseInt(tipo.replace('stop', ''))}`;
             const marker = L.marker([loc.lat, loc.lng], { icon: isOrigin ? createOriginIcon() : createNumberedStopIcon(parseInt(tipo.replace('stop', ''))) })
-                .addTo(simulateMarkersLayer) 
+                .addTo(simulateMarkersLayer)
                 .bindPopup(`<b>${label}: ${loc.label}</b>`);
-            
+
             simulateMarkersData[tipo] = marker;
             await ajustarMapaSimulacao();
         }
@@ -1472,12 +1549,12 @@ function adicionarNovaParadaSimulacao() {
 window.removerParadaSimulacao = async function(id) {
     const tipo = `stop${id}`;
     const block = document.querySelector(`.simulation-address-block[data-stopId="${id}"]`);
-    
+
     if (simulateMarkersData[tipo]) {
         simulateMarkersLayer.removeLayer(simulateMarkersData[tipo]);
         delete simulateMarkersData[tipo];
     }
-    
+
     if (block) block.remove();
 
     await ajustarMapaSimulacao();
@@ -1523,7 +1600,7 @@ window.limparRotaSimulacao = async function() {
     window.currentSimulatedPoints = null;
     if (simulateMarkersLayer) simulateMarkersLayer.clearLayers();
     if (simulateRouteLayer) simulateRouteLayer.clearLayers();
-    
+
     const statsContainer = document.getElementById('simulate-stats-container');
     if (statsContainer) statsContainer.classList.add('hidden');
 
@@ -1591,7 +1668,7 @@ async function exibirDetalhesRotaSimulacao(rotaId) {
         const nfs = nfsRes.data || [];
 
         const dataFmt = rota.data ? rota.data.split('-').reverse().join('/') : '---';
-        
+
         let nfsListHtml = ''; // Variável para construir a lista de NFs/paradas
 
         container.innerHTML = `
@@ -1735,7 +1812,7 @@ async function ajustarMapaSimulacao() {
                 if (statsContainer && distElem && durElem) {
                     const distanceKm = (route.distance / 1000).toFixed(1);
                     const durationMins = Math.round(route.duration / 60);
-                    
+
                     let durationText = `${durationMins} min`;
                     if (durationMins >= 60) {
                         const h = Math.floor(durationMins / 60);
@@ -1754,7 +1831,7 @@ async function ajustarMapaSimulacao() {
             L.polyline(coords, { color: '#22c55e', weight: 5, opacity: 0.7, dashArray: '10, 10' }).addTo(simulateRouteLayer);
         }
     }
-    
+
     const markers = Object.values(simulateMarkersData).filter(m => m !== null);
     const routes = simulateRouteLayer.getLayers();
 
@@ -2312,7 +2389,7 @@ function renderizarUsuarios(users) {
     users.forEach(user => {
         const tr = document.createElement('tr');
         const statusColor = user.status === 'Ativo' ? 'var(--primary)' : '#ef4444';
-        
+
         tr.innerHTML = `
             <td>${user.nome} ${user.sobrenome}</td>
             <td>${user.cargo || '---'}</td>
@@ -2340,7 +2417,7 @@ window.editarUsuario = function(id) {
 
     if (userModalTitle) userModalTitle.innerText = "Editar Usuário";
     if (userIdHidden) userIdHidden.value = user.id;
-    
+
     document.getElementById('user-nome').value = user.nome;
     document.getElementById('user-sobrenome').value = user.sobrenome;
     document.getElementById('user-email').value = user.email;
@@ -2375,7 +2452,7 @@ window.excluirUsuario = function(id) {
         try {
             const { error } = await supabaseClient.from("usuarios").delete().eq("id", id);
             if (error) throw error;
-            
+
             await carregarUsuarios();
         } catch (err) {
             console.error("Erro ao excluir usuário:", err);
@@ -2589,7 +2666,7 @@ function renderizarKams(kams) {
 function popularSelectKam(kams, valorSelecionado = "") {
     if (!nfKamInput) return;
     nfKamInput.innerHTML = '<option value="" disabled selected>Selecione um KAM...</option>';
-    
+
     if (kams && kams.length > 0) {
         kams.forEach(kam => {
             const option = document.createElement('option');
@@ -2695,7 +2772,7 @@ if (createKamForm) {
             closeModal(createKamModal);
             createKamForm.reset();
             if (kamIdHidden) kamIdHidden.value = "";
-            
+
         } catch (err) {
             console.error("Erro inesperado ao salvar KAM:", err);
             mostrarAviso("Erro inesperado ao salvar KAM");
@@ -2828,12 +2905,12 @@ if (openSimulateRouteBtn) {
         // Configura os listeners para os campos de entrada de CEP da simulação
         const originInput = document.getElementById('simulate-origin-cep');
         const stop1Input = document.getElementById('simulate-stop1-cep');
-        
+
         if (originInput && !originInput.dataset.listener) {
             originInput.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'origin'));
             originInput.dataset.listener = "true";
         }
-        
+
         if (stop1Input && !stop1Input.dataset.listener) {
             stop1Input.addEventListener('input', (e) => lidarComInputCepSimulacao(e, 'stop1'));
             stop1Input.dataset.listener = "true";
@@ -2844,7 +2921,7 @@ if (openSimulateRouteBtn) {
             addStopBtn.addEventListener('click', adicionarNovaParadaSimulacao);
             addStopBtn.dataset.listener = "true";
         }
-        
+
         const clearBtn = document.getElementById('simulate-clear-btn');
         if (clearBtn && !clearBtn.dataset.listener) {
             clearBtn.addEventListener('click', limparRotaSimulacao);
@@ -2882,12 +2959,12 @@ if (openSimulateRouteBtn) {
                 routedModeBtn.classList.remove('active');
                 cepContent.classList.remove('hidden');
                 routedContent.classList.add('hidden');
-                
+
                 // Limpa o mapa ao voltar para CEP para não misturar visualmente
                 simulateMarkersLayer.clearLayers();
                 simulateRouteLayer.clearLayers();
                 window.currentSimulatedPoints = null;
-                ajustarMapaSimulacao(); 
+                ajustarMapaSimulacao();
             };
             routedModeBtn.onclick = () => {
                 routedModeBtn.classList.add('active');
@@ -2934,7 +3011,7 @@ if (openSimulateRouteBtn) {
                 const points = window.currentSimulatedPoints;
                 const origin = `${points[0].lat},${points[0].lng}`;
                 const destination = `${points[points.length - 1].lat},${points[points.length - 1].lng}`;
-                
+
                 let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
                 if (points.length > 2) {
                     const waypoints = points.slice(1, -1).map(p => `${p.lat},${p.lng}`).join('|');
@@ -3460,7 +3537,7 @@ if (createUserForm) {
             }
 
             const { data, error } = result;
-            
+
             if (id) {
                 console.log("Resposta update usuário:", data, error);
             } else {
@@ -3469,7 +3546,7 @@ if (createUserForm) {
 
             if (error) {
                 console.error("Erro ao salvar no Supabase:", error);
-                
+
                 // Tratamento de e-mail duplicado comum no Supabase (código 23505)
                 if (error.code === '23505') {
                     mostrarAviso("Este e-mail já está cadastrado no sistema.");
@@ -3812,7 +3889,7 @@ if (openRotaModalBtn) {
   console.warn('openRotaModalBtn não encontrado.');
 }
 if (openHistoryBtn) {
-  openHistoryBtn.addEventListener('click', () => { 
+  openHistoryBtn.addEventListener('click', () => {
       if (dashboardView && controlPanelView && programacaoView && newHistoryView) {
           dashboardView.classList.add('hidden');
           controlPanelView.classList.add('hidden');
@@ -3835,7 +3912,7 @@ if (btnTransporte && btnRetira && nfTipoInput) {
     nfTipoInput.value = 'transporte';
     btnTransporte.classList.add('active');
     btnRetira.classList.remove('active');
-    
+
     // Habilitar campos de endereço para Transporte
     if (nfCepInput) nfCepInput.disabled = false;
     if (nfCidadeInput) { nfCidadeInput.disabled = false; nfCidadeInput.required = true; }
@@ -3853,14 +3930,14 @@ if (btnTransporte && btnRetira && nfTipoInput) {
     nfTipoInput.value = 'retira';
     btnRetira.classList.add('active');
     btnTransporte.classList.remove('active');
-    
+
     // Desabilitar campos de endereço para Retira e limpar valores
     if (nfCepInput) { nfCepInput.disabled = true; nfCepInput.value = ''; }
     if (nfCidadeInput) { nfCidadeInput.disabled = true; nfCidadeInput.value = ''; nfCidadeInput.required = false; }
     if (nfUfInput) { nfUfInput.disabled = true; nfUfInput.value = ''; nfUfInput.required = false; }
     if (nfEnderecoInput) { nfEnderecoInput.disabled = true; nfEnderecoInput.value = ''; }
     if (nfEnderecoNumeroInput) { nfEnderecoNumeroInput.disabled = true; nfEnderecoNumeroInput.value = ''; }
-    
+
     if (nfValorInput) { nfValorInput.disabled = true; nfValorInput.value = '0'; nfValorInput.required = false; }
   });
 }
@@ -3922,7 +3999,7 @@ async function handleSalvarNF(fecharAoSalvar = true) {
     // O número da NF já está limpo (trim) na variável 'numero' definida acima.
     let checkQuery = supabaseClient.from("nfs").select("id").eq("numero", numero);
     if (nfId) checkQuery = checkQuery.neq("id", nfId);
-    
+
     const { data: existingNfs, error: checkError } = await checkQuery;
     if (checkError) console.error('Erro ao validar duplicidade:', checkError);
     if (existingNfs && existingNfs.length > 0) {
@@ -3955,7 +4032,7 @@ async function handleSalvarNF(fecharAoSalvar = true) {
     } else {
       // Modo Criação
       nfData.rota_id = null;
-      
+
       // Tarefa 4: Debug Temporário
       console.log("Nova NF payload:", nfData);
 
@@ -3971,7 +4048,7 @@ async function handleSalvarNF(fecharAoSalvar = true) {
     }
 
     console.log('handleCriarNF: NF salva com sucesso:', data);
-    
+
     await carregarTudo();
 
     if (fecharAoSalvar) {
@@ -3984,10 +4061,10 @@ async function handleSalvarNF(fecharAoSalvar = true) {
       if (nfMarcaInput) nfMarcaInput.value = "";
       if (nfPotenciaInput) nfPotenciaInput.value = "";
       if (nfKamInput) nfKamInput.value = "";
-      
+
       carregarKams();
       if (btnTransporte) btnTransporte.click();
-      
+
       if (nfNumeroInput) nfNumeroInput.focus();
       mostrarAviso("NF salva com sucesso!");
     }
@@ -4192,7 +4269,7 @@ async function carregarNFs() {
       const cidadeStr = String(nf.cidade || "").toLowerCase();
       const destinoStr = String(nf.destino || "").toLowerCase(); // Fallback busca
       const correspondeBusca = numeroStr.includes(termoBusca) || cidadeStr.includes(termoBusca) || destinoStr.includes(termoBusca);
-      
+
       if (filtroAtual === 'transporte') return correspondeBusca && nf.uf !== 'RT';
       if (filtroAtual === 'retira') return correspondeBusca && nf.uf === 'RT';
       return correspondeBusca;
@@ -4203,7 +4280,7 @@ async function carregarNFs() {
       div.className = "nf-card";
 
       const badge = nf.uf === 'RT' ? '<small style="color: #f87171;">[RETIRA]</small>' : '';
-      
+
       // Verifica se a NF possui observação para aplicar o destaque visual
       const temObs = nf.observacao && nf.observacao.trim() !== "";
       const infoStyle = temObs ? 'style="color: #fbbf24; opacity: 1;"' : '';
@@ -4250,7 +4327,7 @@ window.abrirModalInfoNF = async function(nfId, readOnly = false) {
         if (error) throw error;
 
         const valorFrete = formatar(nf.valor_frete || 0);
-        
+
         // Máscara de CEP para exibição
         let cepExibicao = nf.cep || "";
         if (cepExibicao.length === 8) {
@@ -4263,7 +4340,7 @@ window.abrirModalInfoNF = async function(nfId, readOnly = false) {
                     <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Número da NF</label>
                     <div style="font-size: 20px; font-weight: 800; color: var(--primary);">NF ${nf.numero || '---'}</div>
                 </div>
-                
+
                 <div>
                     <label style="display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;">Tipo da Operação</label>
                     <div style="font-weight: 600; text-transform: capitalize;">${nf.tipo || '---'}</div>
@@ -4357,7 +4434,7 @@ window.salvarObservacaoNF = async function(nfId) {
         // Atualiza as visualizações (Side list e Rotas ativas)
         await carregarNFs();
         await carregarRotas();
-        
+
         // Se estiver na página de programação, atualiza também para refletir a mudança
         if (programacaoView && !programacaoView.classList.contains('hidden')) {
             await carregarProgramacao();
@@ -4390,10 +4467,10 @@ window.editarNF = async function(nfId) {
     if (nfQuantidadeInput) nfQuantidadeInput.value = data.qtd ?? "";
     if (nfMarcaInput) nfMarcaInput.value = data.marca || "";
     if (nfPotenciaInput) nfPotenciaInput.value = data.potencia || "";
-    
+
     const { data: kams } = await supabaseClient.from("kams").select("*").order("nome");
     popularSelectKam(kams, data.kam);
-    
+
     // Usa o campo 'tipo' da tabela se existir, caso contrário verifica pela UF (compatibilidade)
     const tipoOperacao = data.tipo || (data.uf === 'RT' ? 'retira' : 'transporte');
 
@@ -4607,9 +4684,9 @@ async function carregarRotas() {
     console.error('carregarRotas: Cliente supabaseClient não está definido.');
     return;
   }
-  
-  let query = supabaseClient.from("rotas").select("*").eq("status", "ativa");
-  
+
+  let query = supabaseClient.from("rotas").select("*").eq("status", "ativa").order("data", { ascending: true }).order("id", { ascending: true });
+
   const { data: rotas, error: errR } = await query;
   const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*");
 
@@ -4660,7 +4737,7 @@ async function carregarRotas() {
     // Destaque visual para observação da rota
     const hasObs = rota.observacao_historico && rota.observacao_historico.trim() !== "";
     const iconStyle = hasObs ? 'color: #fbbf24; opacity: 1;' : 'color: var(--accent); opacity: 0.7;';
-    
+
     // Mantém o destaque se a rota já estiver selecionada
     if (rotaSelecionada === rota.id) {
       card.classList.add("selected");
@@ -4695,8 +4772,8 @@ async function carregarRotas() {
     nfsDaRota.forEach(n => total += Number(n.valor_frete));
 
     // Formatação do Nome e Data (Tarefa 5 e 6)
-    const displayNome = rota.data 
-        ? `${rota.nome} - ${rota.data.split('-')[2]}/${rota.data.split('-')[1]}` 
+    const displayNome = rota.data
+        ? `${rota.nome} - ${rota.data.split('-')[2]}/${rota.data.split('-')[1]}`
         : rota.nome;
 
     card.innerHTML = `
@@ -4790,28 +4867,78 @@ async function carregarRotas() {
 
     const body = card.querySelector(".rota-body");
 
-    nfsDaRota.forEach(nf => {
-      const linha = document.createElement("div");
-      linha.className = "nf-row";
-      
-      // Destaque visual para observação
-      const temObs = nf.observacao && nf.observacao.trim() !== "";
-      const infoStyle = temObs ? 'color: #fbbf24; opacity: 1;' : '';
-      const infoTitle = temObs ? "Informações (Possui Observação)" : "Informações";
-
-      linha.innerHTML = `
-        <span>NF ${nf.numero}</span>
-        <span>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</span>
-        <span>R$ ${formatar(nf.valor_frete)}</span>
-        <button class="icon-btn info" title="${infoTitle}" onclick="event.stopPropagation(); abrirModalInfoNF('${nf.id}');" style="padding: 2px; ${infoStyle}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-        </button>
+    if (viewMode === 'list') {
+      body.innerHTML = `
+        <div class="rota-list-nf-table">
+          <div class="rota-list-nf-header">
+            <span>NF</span>
+            <span>DESTINO</span>
+            <span>TIPO</span>
+            <span>FRETE</span>
+            <span>QTD</span>
+            <span>MARCA</span>
+            <span>POTÊNCIA</span>
+            <span>KAM</span>
+            <span>STATUS</span>
+            <span></span>
+          </div>
+          <div class="rota-list-nf-body"></div>
+        </div>
       `;
 
-      linha.onclick = () => confirmarRemocaoDaRota(nf.id);
+      const listaNfBody = body.querySelector('.rota-list-nf-body');
+      nfsDaRota.forEach(nf => {
+        const linha = document.createElement('div');
+        linha.className = 'rota-list-nf-row nf-row';
 
-      body.appendChild(linha);
-    });
+        const temObs = nf.observacao && nf.observacao.trim() !== '';
+        const infoStyle = temObs ? 'color: #fbbf24; opacity: 1;' : '';
+        const infoTitle = temObs ? 'Informações (Possui Observação)' : 'Informações';
+        const destino = nf.uf === 'RT' ? 'RETIRA' : `${nf.cidade || nf.destino || '---'}/${nf.uf || '---'}`;
+        const status = nf.status || '---';
+
+        linha.innerHTML = `
+          <span class="rota-list-nf-number"><strong>${nf.numero}</strong></span>
+          <span>${destino}</span>
+          <span style="text-transform: capitalize;">${nf.tipo || '---'}</span>
+          <span>R$ ${formatar(nf.valor_frete || 0)}</span>
+          <span>${nf.qtd || '---'}</span>
+          <span>${nf.marca || '---'}</span>
+          <span>${nf.potencia || '---'}</span>
+          <span>${nf.kam || '---'}</span>
+          <span><span class="rota-list-nf-status">${status}</span></span>
+          <button class="icon-btn info" title="${infoTitle}" onclick="event.stopPropagation(); abrirModalInfoNF('${nf.id}');" style="padding: 2px; ${infoStyle}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          </button>
+        `;
+
+        linha.onclick = () => confirmarRemocaoDaRota(nf.id);
+        listaNfBody.appendChild(linha);
+      });
+    } else {
+      nfsDaRota.forEach(nf => {
+        const linha = document.createElement("div");
+        linha.className = "nf-row";
+
+        // Destaque visual para observação
+        const temObs = nf.observacao && nf.observacao.trim() !== "";
+        const infoStyle = temObs ? 'color: #fbbf24; opacity: 1;' : '';
+        const infoTitle = temObs ? "Informações (Possui Observação)" : "Informações";
+
+        linha.innerHTML = `
+          <span>NF ${nf.numero}</span>
+          <span>${nf.uf === 'RT' ? 'RETIRA' : (nf.cidade || nf.destino) + '/' + nf.uf}</span>
+          <span>R$ ${formatar(nf.valor_frete)}</span>
+          <button class="icon-btn info" title="${infoTitle}" onclick="event.stopPropagation(); abrirModalInfoNF('${nf.id}');" style="padding: 2px; ${infoStyle}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          </button>
+        `;
+
+        linha.onclick = () => confirmarRemocaoDaRota(nf.id);
+
+        body.appendChild(linha);
+      });
+    }
 
     container.appendChild(card);
   });
@@ -4848,6 +4975,7 @@ window.confirmarRemocaoDaRota = function(nfId) {
 
   if (genericModalTitle) genericModalTitle.innerText = 'Remover NF da rota?';
   if (genericModalMessage) genericModalMessage.innerText = 'Deseja realmente remover esta NF da rota?';
+  configurarIconeModalGenerico('remover');
 
   if (genericModalCancel) {
     genericModalCancel.style.display = 'block';
@@ -5383,7 +5511,7 @@ window.finalizarRota = window.expedirRota;
 // LOGICA DE HISTÓRICO (LocalStorage)
 function salvarRotaNoHistorico(rota, nfs, totalFrete) {
     const historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
-    
+
     const novaEntrada = {
         id: rota.id,
         nome: rota.nome,
@@ -5409,14 +5537,14 @@ function salvarRotaNoHistorico(rota, nfs, totalFrete) {
 window.renderizarHistorico = async function(termoBusca = "") {
     const container = document.getElementById('history-container');
     if (!container) return;
-    
+
     try {
         // Busca rotas finalizadas no Supabase
         const { data: rotas, error: errR } = await supabaseClient
             .from("rotas")
             .select("*")
             .eq("status", "finalizada")
-            .order("finalizada_em", { ascending: false });
+            .order("data", { ascending: false });
 
         if (errR) throw errR;
 
@@ -5435,14 +5563,14 @@ window.renderizarHistorico = async function(termoBusca = "") {
         const historicoFiltrado = rotas.filter(rota => {
             const nomeMatch = (rota.nome || "").toLowerCase().includes(termo);
             const dataFinMatch = rota.finalizada_em ? new Date(rota.finalizada_em).toLocaleString('pt-BR').includes(termo) : false;
-            
+
             let dataRotaMatch = false;
             if (rota.data) {
                 if (rota.data.includes(termo)) dataRotaMatch = true;
                 const [y, m, d] = rota.data.split('-');
                 if (`${d}/${m}/${y}`.includes(termo)) dataRotaMatch = true;
             }
-            
+
             return nomeMatch || dataFinMatch || dataRotaMatch;
         });
 
@@ -5490,7 +5618,7 @@ window.excluirHistorico = function(historicoId) {
         let historico = JSON.parse(localStorage.getItem('rota_historico') || '[]');
         historico = historico.filter(h => h.id !== historicoId);
         localStorage.setItem('rota_historico', JSON.stringify(historico));
-        
+
         renderizarHistorico();
     });
 };
@@ -5501,9 +5629,9 @@ window.retornarRota = async function(rotaId) {
       try {
         const { error } = await supabaseClient
             .from("rotas")
-            .update({ 
-                status: 'ativa', 
-                finalizada_em: null 
+            .update({
+                status: 'ativa',
+                finalizada_em: null
             })
             .eq("id", rotaId);
 
@@ -5512,7 +5640,7 @@ window.retornarRota = async function(rotaId) {
         // Atualiza as interfaces de histórico e a tela principal
         if (window.renderizarHistorico) await window.renderizarHistorico();
         if (window.renderizarHistoricoProgramacao) await window.renderizarHistoricoProgramacao();
-        
+
         carregarTudo();
         if (typeof carregarProgramacao === 'function') carregarProgramacao();
 
@@ -5572,7 +5700,7 @@ window.deletarRota = async function(rotaId) {
       // Depois deletamos a rota
       const { error } = await supabaseClient.from("rotas").delete().eq("id", rotaId);
       if (error) throw error;
-      
+
       if (rotaSelecionada === rotaId) rotaSelecionada = null;
       carregarTudo();
     } catch (error) {
@@ -5587,7 +5715,7 @@ window.deletarRota = async function(rotaId) {
 async function buscarDadosParaProgramacao() {
     const { data: rotas, error: errR } = await supabaseClient.from("rotas").select("*").eq("status", "ativa");
     const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*").not("rota_id", "is", null);
-    
+
     if (errR || errN) throw new Error("Erro ao carregar dados do Supabase");
     return { rotas, nfs };
 }
@@ -5607,7 +5735,7 @@ function agruparDadosProgramacao(rotas, nfs, termoBusca = "") {
             const matchNF = String(nf.numero).toLowerCase().includes(termo);
             const matchKam = String(nf.kam || "").toLowerCase().includes(termo);
             const localizacao = (nf.cidade || nf.destino || "").toLowerCase();
-            const matchDestino = localizacao.includes(termo) || 
+            const matchDestino = localizacao.includes(termo) ||
                                 String(nf.uf || "").toLowerCase().includes(termo);
 
             // Se nenhum dos campos bater, ignora esta NF
@@ -5616,7 +5744,7 @@ function agruparDadosProgramacao(rotas, nfs, termoBusca = "") {
 
         const dataKey = rota.data || "sem-data";
         if (!agrupado[dataKey]) agrupado[dataKey] = {};
-        
+
         if (!agrupado[dataKey][rota.id]) {
             agrupado[dataKey][rota.id] = {
                 nome: rota.nome,
@@ -5902,13 +6030,13 @@ function renderizarProgramacaoAutomatica(agrupado) {
 window.abrirEdicaoStatus = function(event, nfId, statusAtual) {
     event.stopPropagation();
     const cell = document.getElementById(`cell-status-${nfId}`);
-    
+
     // Evita abrir múltiplos se já estiver editando
     if (!cell || cell.querySelector('select')) return;
 
     const select = document.createElement('select');
     select.className = 'status-select-inline';
-    
+
     const opcoes = ["", "Em produção", "Produzida", "Expedida"];
     opcoes.forEach(opt => {
         const o = document.createElement('option');
@@ -5924,7 +6052,7 @@ window.abrirEdicaoStatus = function(event, nfId, statusAtual) {
 
     // Salvar ao mudar o valor
     select.onchange = () => window.salvarStatusNF(nfId, select.value);
-    
+
     // Voltar ao normal se perder o foco sem mudar
     select.onblur = () => {
         if (cell.contains(select)) {
@@ -6000,7 +6128,7 @@ window.handleExportExcel = async function (e, specificDate = null) {
         // 3. Buscar dados atuais (respeitando filtros da tela)
         const { rotas, nfs } = await buscarDadosParaProgramacao();
         const termoTexto = filtroNomeProg ? filtroNomeProg.value : "";
-        
+
         // Se houver uma data específica (clique no card), mantém o comportamento de exportar somente aquele dia.
         const filtroData = obterFiltroDataGlobal();
         const rotasFiltradas = rotas.filter(rota => {
@@ -6052,7 +6180,7 @@ window.handleExportExcel = async function (e, specificDate = null) {
                 "NF", "DESTINO", "Status", "Qtd.", "Marca", "Potência", "KAM", "ROTA", "TRANSPORTADORA"
             ]);
 
-            const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) => 
+            const rotasIds = Object.keys(agrupado[dataKey]).sort((a, b) =>
                 agrupado[dataKey][a].nome.localeCompare(agrupado[dataKey][b].nome)
             );
 
@@ -6533,7 +6661,7 @@ window.renderizarHistoricoProgramacao = async function(termoBusca = "") {
         datas.forEach(dataKey => {
             const section = document.createElement('div');
             section.style.marginBottom = "30px";
-            
+
             let html = `
                 <h4 style="color: var(--primary); border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; margin-bottom: 18px; font-size: 14px;">
                     ${formatarDataComDiaSemana(dataKey)}
@@ -6661,7 +6789,7 @@ window.abrirModalDetalhesRota = async function(rotaId) {
         const rota = rotaRes.data;
         const nfs = nfsRes.data || [];
         const totalFrete = nfs.reduce((acc, nf) => acc + Number(nf.valor_frete || 0), 0);
-        
+
         const dataRota = rota.data ? rota.data.split('-').reverse().join('/') : '---';
         const dataFin = formatarDataHora(rota.finalizada_em);
 
@@ -6763,7 +6891,7 @@ window.salvarObservacaoHistorico = async function(rotaId) {
             .eq("id", rotaId);
 
         if (error) throw error;
-        
+
         // Fecha o modal após o salvamento bem-sucedido
         closeModal(routeDetailsModal);
 
@@ -6804,7 +6932,7 @@ async function carregarNovoHistorico() {
             .from("rotas")
             .select("*")
             .eq("status", "finalizada")
-            .order("finalizada_em", { ascending: false });
+            .order("data", { ascending: false });
         if (errR) throw errR;
 
         if (!rotas || rotas.length === 0) {
@@ -6841,9 +6969,9 @@ async function carregarNovoHistorico() {
             return;
         }
 
-        // O histórico usa exatamente o mesmo modo de visualização salvo da Roteirização.
-        const viewMode = localStorage.getItem('rota_view_mode') || 'grid';
-        container.classList.toggle('list-view', viewMode === 'list');
+        // Histórico permanece sempre em CARDS. A preferência de Lista da Roteirização
+        // não deve alterar esta página.
+        container.classList.remove('list-view');
         container.innerHTML = "";
 
         rotasFiltradas.forEach(rota => {
@@ -7416,9 +7544,9 @@ function configurarPesquisaNfPainel() {
 function renderChart(id, type, data, options, plugins = []) {
     const ctx = document.getElementById(id);
     if (!ctx) return;
-    
+
     if (charts[id]) charts[id].destroy(); // Limpa gráfico anterior para evitar bugs de hover
-    
+
     charts[id] = new Chart(ctx, {
         type: type,
         data: data,
@@ -7653,17 +7781,17 @@ if (progHistoryModal) {
 if (nfCepInput) {
     nfCepInput.addEventListener('input', (e) => {
         // Tarefa 3: Remover caracteres extras e considerar apenas números
-        let numValue = e.target.value.replace(/\D/g, ''); 
-        if (numValue.length > 8) numValue = numValue.slice(0, 8); 
-        
+        let numValue = e.target.value.replace(/\D/g, '');
+        if (numValue.length > 8) numValue = numValue.slice(0, 8);
+
         // Tarefa 2: Aplicar máscara automática 00000-000
         let maskedValue = numValue;
         if (numValue.length > 5) {
             maskedValue = numValue.replace(/^(\d{5})(\d)/, '$1-$2');
         }
-        
+
         e.target.value = maskedValue;
-        
+
         // Tarefa 4: Debug Temporário
         console.log("CEP formatado:", e.target.value);
 
@@ -7737,7 +7865,7 @@ if (exportPowerBiBtn && exportPowerBiDropdown) {
         document.querySelectorAll('.user-dropdown, .maps-dropdown').forEach(d => {
             if (d !== exportPowerBiDropdown) d.classList.add('hidden');
         });
-        
+
         // Alterna o menu atual
         exportPowerBiDropdown.classList.toggle('hidden');
     });
@@ -7746,7 +7874,7 @@ if (exportPowerBiBtn && exportPowerBiDropdown) {
 // FUNÇÃO PARA EXPORTAR BASE ANALÍTICA CSV (POWER BI)
 window.handleExportPowerBiCSV = async function(e) {
     if (e) e.stopPropagation();
-    
+
     // Fecha o dropdown
     const dropdown = document.getElementById('export-powerbi-dropdown');
     if (dropdown) dropdown.classList.add('hidden');
@@ -7774,7 +7902,7 @@ window.handleExportPowerBiCSV = async function(e) {
 
         nfs.forEach(nf => {
             const rota = rotas.find(r => r.id === nf.rota_id) || {};
-            
+
             const rowData = [
                 rota.data || "",
                 rota.status || (nf.rota_id ? "ativa" : "pendente"),
@@ -7815,11 +7943,11 @@ window.handleExportPowerBiCSV = async function(e) {
         const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        
+
         const dataHoje = new Date().toISOString().slice(0, 10);
         link.setAttribute("href", url);
         link.setAttribute("download", `base_power_bi_${dataHoje}.csv`);
-        
+
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -7833,7 +7961,7 @@ window.handleExportPowerBiCSV = async function(e) {
 // FUNÇÃO PARA EXPORTAR BASE ANALÍTICA EXCEL (POWER BI)
 window.handleExportPowerBiExcel = async function(e) {
     if (e) e.stopPropagation();
-    
+
     // Fecha o dropdown
     const dropdown = document.getElementById('export-powerbi-dropdown');
     if (dropdown) dropdown.classList.add('hidden');
@@ -7861,7 +7989,7 @@ window.handleExportPowerBiExcel = async function(e) {
 
         nfs.forEach(nf => {
             const rota = rotas.find(r => r.id === nf.rota_id) || {};
-            
+
             excelData.push([
                 rota.data || "",
                 rota.status || (nf.rota_id ? "ativa" : "pendente"),

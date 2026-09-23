@@ -804,14 +804,14 @@ input:-webkit-autofill:active {
 }
 
 
-/* Modal de confirmação de remoção de NF — visual premium e botões simétricos */
+/* MODAIS GENÉRICOS — visual consistente para aviso, confirmação, sucesso, erro e remoção */
 .generic-confirmation-modal {
   max-width: 500px;
   padding: 34px 28px 28px;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #071225;
   border: 1px solid #26354d;
-  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.48);
   text-align: center;
 }
 
@@ -819,32 +819,60 @@ input:-webkit-autofill:active {
   width: 58px;
   height: 58px;
   margin: 0 auto 18px;
-  border: 2px solid #ef4444;
+  border: 2px solid currentColor;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ff6b6b;
-  background: rgba(220, 38, 38, 0.10);
+  background: transparent;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .generic-confirmation-modal .confirmation-icon svg {
-  width: 28px;
-  height: 28px;
+  width: 29px;
+  height: 29px;
+}
+
+.generic-confirmation-modal .modal-icon-info {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.generic-confirmation-modal .modal-icon-confirmacao {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.generic-confirmation-modal .modal-icon-sucesso {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.generic-confirmation-modal .modal-icon-erro,
+.generic-confirmation-modal .modal-icon-remover {
+  color: #ff4d5f;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.generic-confirmation-modal .modal-icon-alerta {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 14px;
 }
 
 .generic-confirmation-modal h3 {
   margin: 0 0 10px;
-  font-size: 1.15rem;
+  font-size: 1.18rem;
   font-weight: 700;
   color: #f8fafc;
 }
 
 .generic-confirmation-modal #generic-modal-message {
-  margin: 0 0 24px;
+  margin: 0 auto 24px;
+  max-width: 410px;
   color: #cbd5e1;
-  line-height: 1.5;
-  font-size: 0.95rem;
+  line-height: 1.55;
+  font-size: 0.94rem;
 }
 
 .generic-confirmation-modal .confirmation-actions {
@@ -857,33 +885,99 @@ input:-webkit-autofill:active {
 .generic-confirmation-modal .confirmation-actions button {
   width: 100%;
   min-width: 0;
-  height: 42px;
+  height: 44px;
   margin: 0;
-  border-radius: 7px;
+  border-radius: 8px;
   font-weight: 700;
   font-size: 0.9rem;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 
-.generic-confirmation-modal .confirmation-actions .confirmacao-nao {
-  background: #16a34a;
-  border-color: #16a34a;
+/* Quando o modal possui apenas um botão (ex.: OK), ele ocupa toda a largura disponível. */
+.generic-confirmation-modal .confirmation-actions:has(> #generic-modal-cancel[style*="display: none"]) #generic-modal-ok {
+  grid-column: 1 / -1;
+}
+
+.generic-confirmation-modal .confirmation-actions button:hover {
+  transform: translateY(-1px);
+}
+
+.generic-confirmation-modal .modal-btn-primary {
+  background: #223756;
+  border-color: #314c72;
+  color: #f8fafc;
+}
+
+.generic-confirmation-modal .modal-btn-primary:hover {
+  background: #2a4365;
+  border-color: #3b5d89;
+}
+
+.generic-confirmation-modal .modal-btn-secondary {
+  background: transparent;
+  border-color: #304766;
+  color: #cbd5e1;
+}
+
+.generic-confirmation-modal .modal-btn-secondary:hover {
+  background: rgba(48, 71, 102, 0.22);
+  border-color: #4a6384;
+}
+
+.generic-confirmation-modal .modal-btn-success {
+  background: #22b85a;
+  border-color: #22b85a;
   color: #fff;
 }
 
+.generic-confirmation-modal .modal-btn-success:hover {
+  background: #1da650;
+  border-color: #1da650;
+}
+
+.generic-confirmation-modal .modal-btn-warning {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  color: #111827;
+}
+
+.generic-confirmation-modal .modal-btn-warning:hover {
+  background: #d97706;
+  border-color: #d97706;
+}
+
+.generic-confirmation-modal .modal-btn-danger {
+  background: #ef4055;
+  border-color: #ef4055;
+  color: #fff;
+}
+
+.generic-confirmation-modal .modal-btn-danger:hover {
+  background: #dc3147;
+  border-color: #dc3147;
+}
+
+/* O modal de remoção de NF mantém o destaque vermelho e a lixeira solicitada. */
+.generic-confirmation-modal .confirmation-actions .confirmacao-nao {
+  background: transparent;
+  border-color: #304766;
+  color: #cbd5e1;
+}
+
 .generic-confirmation-modal .confirmation-actions .confirmacao-nao:hover {
-  background: #15803d;
-  border-color: #15803d;
+  background: rgba(48, 71, 102, 0.22);
+  border-color: #4a6384;
 }
 
 .generic-confirmation-modal .confirmation-actions .confirmacao-sim {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: #ef4055;
+  border-color: #ef4055;
   color: #fff;
 }
 
 .generic-confirmation-modal .confirmation-actions .confirmacao-sim:hover {
-  background: #b91c1c;
-  border-color: #b91c1c;
+  background: #dc3147;
+  border-color: #dc3147;
 }
 
 /* CLOSE BUTTON FOR MODALS */
@@ -1117,17 +1211,18 @@ input:-webkit-autofill:active {
 }
 
 .rotas.list-view .rota-card {
-  flex-direction: row !important;
-  align-items: center !important;
-  padding: 12px 24px !important;
-  gap: 20px;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  padding: 14px 20px !important;
+  gap: 0 !important;
 }
 
 .rotas.list-view .rota-header {
-  border-bottom: none !important;
-  padding-bottom: 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding-bottom: 12px !important;
   margin-bottom: 0 !important;
-  flex: 1;
+  width: 100%;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: flex-start !important;
@@ -1139,6 +1234,7 @@ input:-webkit-autofill:active {
   align-items: center;
   gap: 24px;
   flex: 1;
+  min-width: 0;
 }
 
 .rotas.list-view .rota-title-group { margin-bottom: 0 !important; min-width: 180px; }
@@ -1152,8 +1248,84 @@ input:-webkit-autofill:active {
   margin-left: auto;
 }
 
-.rotas.list-view .rota-body { display: none !important; }
-.rotas.list-view .rota-footer { margin-top: 0 !important; padding-top: 0 !important; gap: 8px !important; }
+.rotas.list-view .rota-body {
+  display: block !important;
+  width: 100%;
+  padding: 12px 0 0 !important;
+}
+
+.rotas.list-view .rota-list-nf-table {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rotas.list-view .rota-list-nf-header,
+.rotas.list-view .rota-list-nf-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1.1fr) minmax(150px, 1.8fr) minmax(90px, .9fr) minmax(100px, .9fr) minmax(55px, .6fr) minmax(90px, 1fr) minmax(95px, 1fr) minmax(120px, 1.2fr) minmax(105px, 1fr) 28px;
+  align-items: center;
+  column-gap: 10px;
+  min-width: 900px;
+}
+
+.rotas.list-view .rota-list-nf-header {
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0 10px 8px;
+}
+
+.rotas.list-view .rota-list-nf-row {
+  min-height: 42px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 12px;
+}
+
+.rotas.list-view .rota-list-nf-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rotas.list-view .rota-list-nf-row:hover {
+  background: rgba(255, 255, 255, .025);
+}
+
+.rotas.list-view .rota-list-nf-number {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rotas.list-view .rota-list-nf-status {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rotas.list-view .rota-footer {
+  width: 100%;
+  margin-top: 12px !important;
+  padding-top: 12px !important;
+  border-top: 1px solid var(--border);
+  gap: 8px !important;
+}
+
 .rotas.list-view .rota-footer .btn { min-width: 100px !important; height: 32px !important; font-size: 11px !important; }
 
 /* DASHBOARD STATS - PAINEL DE CONTROLE */
@@ -2818,17 +2990,18 @@ input:-webkit-autofill:active {
 }
 
 .rotas.list-view .rota-card {
-  flex-direction: row !important;
-  align-items: center !important;
-  padding: 12px 24px !important;
-  gap: 20px;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  padding: 14px 20px !important;
+  gap: 0 !important;
 }
 
 .rotas.list-view .rota-header {
-  border-bottom: none !important;
-  padding-bottom: 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+  padding-bottom: 12px !important;
   margin-bottom: 0 !important;
-  flex: 1;
+  width: 100%;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: flex-start !important;
@@ -2840,6 +3013,7 @@ input:-webkit-autofill:active {
   align-items: center;
   gap: 24px;
   flex: 1;
+  min-width: 0;
 }
 
 .rotas.list-view .rota-title-group { margin-bottom: 0 !important; min-width: 180px; }
@@ -2853,8 +3027,84 @@ input:-webkit-autofill:active {
   margin-left: auto;
 }
 
-.rotas.list-view .rota-body { display: none !important; }
-.rotas.list-view .rota-footer { margin-top: 0 !important; padding-top: 0 !important; gap: 8px !important; }
+.rotas.list-view .rota-body {
+  display: block !important;
+  width: 100%;
+  padding: 12px 0 0 !important;
+}
+
+.rotas.list-view .rota-list-nf-table {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rotas.list-view .rota-list-nf-header,
+.rotas.list-view .rota-list-nf-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 1.1fr) minmax(150px, 1.8fr) minmax(90px, .9fr) minmax(100px, .9fr) minmax(55px, .6fr) minmax(90px, 1fr) minmax(95px, 1fr) minmax(120px, 1.2fr) minmax(105px, 1fr) 28px;
+  align-items: center;
+  column-gap: 10px;
+  min-width: 900px;
+}
+
+.rotas.list-view .rota-list-nf-header {
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0 10px 8px;
+}
+
+.rotas.list-view .rota-list-nf-row {
+  min-height: 42px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-main);
+  font-size: 12px;
+}
+
+.rotas.list-view .rota-list-nf-row > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rotas.list-view .rota-list-nf-row:hover {
+  background: rgba(255, 255, 255, .025);
+}
+
+.rotas.list-view .rota-list-nf-number {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rotas.list-view .rota-list-nf-status {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rotas.list-view .rota-footer {
+  width: 100%;
+  margin-top: 12px !important;
+  padding-top: 12px !important;
+  border-top: 1px solid var(--border);
+  gap: 8px !important;
+}
+
 .rotas.list-view .rota-footer .btn { min-width: 100px !important; height: 32px !important; font-size: 11px !important; }
 
 /* DASHBOARD STATS - PAINEL DE CONTROLE */
@@ -5839,7 +6089,9 @@ body.light-theme .kpi-metric-card, body.light-theme .kpi-summary-strip { box-sha
 
 /* Pesquisa de NF — Painel de Controle */
 .painel-filtros-container {
-  margin-bottom: 20px;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5932,7 +6184,10 @@ body.light-theme .kpi-metric-card, body.light-theme .kpi-summary-strip { box-sha
 }
 
 .painel-nf-search-result {
-  margin: -8px 0 22px;
+  width: 100%;
+  max-width: 1600px;
+  margin: -8px auto 22px;
+  box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg-card);
@@ -9332,5 +9587,47 @@ body.light-theme .global-system-topbar .user-display:hover {
 
   .app.panel-active .main {
     padding-top: 102px !important;
+  }
+}
+
+/* MODO LISTA — mantém o layout original e abre a lista de NFs abaixo do cabeçalho */
+@media (min-width: 901px) {
+  .rotas.list-view .rota-card {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    padding: 12px 24px !important;
+    gap: 20px;
+  }
+
+  .rotas.list-view .rota-header {
+    width: auto !important;
+    border-bottom: none !important;
+    padding-bottom: 0 !important;
+    margin-bottom: 0 !important;
+    flex: 1 1 auto !important;
+  }
+
+  /* A lista só aparece quando a rota estiver expandida. */
+  .rotas.list-view .rota-body {
+    display: none !important;
+    order: 3;
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    padding: 12px 0 0 !important;
+  }
+
+  .rotas.list-view .rota-card:not(.collapsed) .rota-body {
+    display: block !important;
+  }
+
+  /* Mantém Maps, Documentos e Finalizar Rota no topo, como antes. */
+  .rotas.list-view .rota-footer {
+    order: 2;
+    width: auto !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    border-top: none !important;
+    gap: 8px !important;
   }
 }
