@@ -85,6 +85,11 @@ function checkAuth() {
             inicializarMenuGlobal();
             carregarTudo();
             exibirUsuarioLogado();
+            if (usuarioEhTransportadora()) {
+                mostrarSomenteView(emTransitoView);
+                document.querySelector('.app')?.classList.remove('panel-active');
+                inicializarEmTransito();
+            }
         })();
         // --- END Task 4 ---
     } else {
@@ -98,6 +103,7 @@ function checkAuth() {
 // MENU GLOBAL DE NAVEGAÇÃO
 // =========================================================
 function inicializarMenuGlobal() {
+    inicializarNfsPendentesMobile();
     const menu = document.getElementById('global-menu');
     const overlay = document.getElementById('global-menu-overlay');
     const closeBtn = document.getElementById('global-menu-close');
@@ -139,6 +145,26 @@ function inicializarMenuGlobal() {
     }
 
     atualizarMenuGlobalPermissoes();
+}
+
+function inicializarNfsPendentesMobile() {
+    const toggle = document.getElementById('mobile-pending-toggle');
+    const content = document.getElementById('mobile-pending-content');
+    if (!toggle || !content || toggle.dataset.initialized === 'true') return;
+
+    const setOpen = (open) => {
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        content.classList.toggle('is-collapsed', !open);
+    };
+
+    toggle.addEventListener('click', () => {
+        const open = toggle.getAttribute('aria-expanded') !== 'true';
+        setOpen(open);
+        toggle.setAttribute('aria-label', open ? 'Fechar NFs pendentes' : 'Abrir NFs pendentes');
+    });
+
+    toggle.dataset.initialized = 'true';
+    setOpen(false);
 }
 
 function abrirMenuGlobal() {
@@ -188,7 +214,8 @@ function navegarPeloMenuGlobal(acao) {
     };
 
     if (acao === 'dashboard') {
-        [dashboardView, controlPanelView, gerencialView, gerenciarUsuariosView, programacaoView, newHistoryView, simulateRouteView, permissoesView, limitesRetiradaView]
+        if (usuarioEhTransportadora()) { mostrarSomenteView(emTransitoView); inicializarEmTransito(); return; }
+        [dashboardView, controlPanelView, gerencialView, gerenciarUsuariosView, programacaoView, newHistoryView, simulateRouteView, emTransitoView, permissoesView, limitesRetiradaView]
             .forEach(view => view?.classList.add('hidden'));
         dashboardView?.classList.remove('hidden');
         document.querySelector('.app')?.classList.remove('panel-active');
@@ -200,6 +227,12 @@ function navegarPeloMenuGlobal(acao) {
     if (acao === 'painel') return clicar('open-control-panel-btn');
     if (acao === 'gerencial') return clicar('open-gerencial-btn');
     if (acao === 'simular') return clicar('open-simulate-route-btn');
+    if (acao === 'em-transito') {
+        mostrarSomenteView(emTransitoView);
+        document.querySelector('.app')?.classList.remove('panel-active');
+        inicializarEmTransito();
+        return;
+    }
 }
 
 function exibirUsuarioLogado() {
@@ -208,11 +241,12 @@ function exibirUsuarioLogado() {
     const programacaoElem = document.getElementById('user-display-programacao');
     const newHistoryElem = document.getElementById('user-display-new-history');
     const simulateElem = document.getElementById('user-display-simulate');
+    const transitElem = document.getElementById('user-display-transit');
     const gerencialElem = document.getElementById('user-display-gerencial');
     const usuarioLogado = JSON.parse(localStorage.getItem("usuarioLogado"));
 
     if (!usuarioLogado) {
-        [dashElem, panelElem, programacaoElem, newHistoryElem, gerencialElem].forEach(el => { if (el) el.innerHTML = ""; });
+        [dashElem, panelElem, programacaoElem, newHistoryElem, simulateElem, transitElem, gerencialElem].forEach(el => { if (el) el.innerHTML = ""; });
         return;
     }
 
@@ -257,7 +291,7 @@ function exibirUsuarioLogado() {
         </div>
     `;
 
-    [dashElem, panelElem, programacaoElem, newHistoryElem, simulateElem, gerencialElem].forEach(el => {
+    [dashElem, panelElem, programacaoElem, newHistoryElem, simulateElem, transitElem, gerencialElem].forEach(el => {
         if (el) {
             el.innerHTML = html;
             el.onclick = toggleUserMenu;
@@ -466,7 +500,7 @@ if (loginForm) {
     loginForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
-        const email = loginEmail.value.trim();
+        const email = loginEmail.value.trim().toLowerCase();
         const pass = loginPass.value.trim();
 
         try {
@@ -479,16 +513,16 @@ if (loginForm) {
                 const { data, error } = await supabaseClient
                     .from("usuarios")
                     .select("*")
-                    .eq("email", email)
+                    .ilike("email", email)
                     .eq("senha", pass)
-                    .single();
+                    .limit(1);
 
                 if (error) {
                     console.error("Erro detalhado do Supabase:", error.message, error.details, error.hint);
                 }
 
-                if (!error && data) {
-                    usuarioLogado = data;
+                if (!error && data?.length) {
+                    usuarioLogado = data[0];
 
                     // Atualiza/substitui o cadastro local pelo registro oficial do banco.
                     // Isso garante que o ID usado pelo sistema seja o UUID de usuarios.id.
@@ -536,6 +570,9 @@ const createRotaModal = document.getElementById('create-rota-modal');
 const genericModal = document.getElementById('generic-modal');
 const historyModal = document.getElementById('history-modal');
 const routeDetailsModal = document.getElementById('route-details-modal');
+const createTransportadoraModal = document.getElementById('create-transportadora-modal');
+const createTransportadoraForm = document.getElementById('create-transportadora-form');
+const addTransportadoraBtn = document.getElementById('add-transportadora-btn');
 
 const openNfModalBtn = document.getElementById('open-nf-modal-btn');
 const openRotaModalBtn = document.getElementById('open-rota-modal-btn');
@@ -639,6 +676,11 @@ window.confirmarAcao = function(mensagem, callback) {
 };
 
 function closeModal(modalElement) {
+  if (modalElement === genericModal) {
+    genericModalCancel?.classList.remove('confirmacao-nao');
+    genericModalOk?.classList.remove('confirmacao-sim');
+  }
+
   // FIX 2b: Verificação de nulo antes do uso
   if (!modalElement) {
     console.error('closeModal: Elemento modal é nulo.');
@@ -650,6 +692,253 @@ function closeModal(modalElement) {
   // Ela permanece disponível durante a sessão e só é alterada pelo fluxo do Leitor DOC.
 }
 
+// --- ÁREA EM TRÂNSITO (OPERACIONAL) ---
+let transitoInicializado = false;
+let transitoFiltroAtual = 'todas';
+let transitoRefreshTimer = null;
+
+function usuarioEhTransportadora() {
+    const user = JSON.parse(localStorage.getItem('usuarioLogado') || 'null');
+    return user?.permissao === 'Transportadora';
+}
+
+function normalizarTransportadora(valor) {
+    return String(valor || '').trim().toLowerCase();
+}
+
+function usuarioPodeOperarTransito() {
+    return usuarioPodeAcao('Em Trânsito', 'marcar_entregue');
+}
+
+function formatarQtdModulos(nf) {
+    const qtd = Number(nf?.qtd || 0);
+    return Number.isFinite(qtd) ? qtd : 0;
+}
+
+async function carregarDadosEmTransito() {
+    const list = document.getElementById('transit-demo-list');
+    const empty = document.getElementById('transit-demo-empty');
+    if (!list) return;
+
+    try {
+        const user = JSON.parse(localStorage.getItem('usuarioLogado') || 'null');
+        let query = supabaseClient.from('rotas').select('*').eq('status', 'em_transito').order('data', { ascending: true }).order('id', { ascending: true });
+        if (usuarioEhTransportadora()) {
+            const transportadora = String(user?.transportadora || '').trim();
+            if (!transportadora) {
+                renderizarEmTransito([], []);
+                return;
+            }
+            query = query.ilike('transportadora', transportadora);
+        }
+
+        const { data: rotas, error: errR } = await query;
+        if (errR) throw errR;
+        const ids = (rotas || []).map(r => r.id);
+        let nfs = [];
+        if (ids.length) {
+            const { data, error } = await supabaseClient.from('nfs').select('*').in('rota_id', ids).order('numero', { ascending: true });
+            if (error) throw error;
+            nfs = data || [];
+        }
+        renderizarEmTransito(rotas || [], nfs);
+    } catch (error) {
+        console.error('Erro ao carregar Em Trânsito:', error);
+        list.innerHTML = '<div class="transit-empty-state"><div class="transit-empty-icon">!</div><h3>Não foi possível carregar as rotas</h3><p>Verifique sua conexão e tente novamente.</p></div>';
+        if (empty) empty.classList.add('hidden');
+    }
+}
+
+function renderizarEmTransito(rotas, nfs) {
+    const list = document.getElementById('transit-demo-list');
+    const empty = document.getElementById('transit-demo-empty');
+    const search = document.getElementById('transit-demo-search');
+    if (!list) return;
+
+    const termo = String(search?.value || '').trim().toLowerCase();
+    const grupos = new Map();
+    nfs.forEach(nf => {
+        const key = String(nf.rota_id);
+        if (!grupos.has(key)) grupos.set(key, []);
+        grupos.get(key).push(nf);
+    });
+
+    const filtradas = (rotas || []).filter(rota => {
+        const itens = grupos.get(String(rota.id)) || [];
+        const entregues = itens.filter(n => String(n.status || '').toLowerCase() === 'entregue').length;
+        const pendentes = itens.length - entregues;
+        const matchFiltro = transitoFiltroAtual === 'todas'
+            || (transitoFiltroAtual === 'pendentes' && pendentes === itens.length && itens.length > 0)
+            || (transitoFiltroAtual === 'parciais' && entregues > 0 && pendentes > 0);
+        const haystack = [rota.nome, rota.data, rota.transportadora, ...itens.map(n => `${n.numero} ${n.cidade || ''} ${n.destino || ''} ${n.uf || ''}`)].join(' ').toLowerCase();
+        return matchFiltro && (!termo || haystack.includes(termo));
+    });
+
+    const totalRotas = rotas.length;
+    const todasNfs = nfs;
+    const entregues = todasNfs.filter(n => String(n.status || '').toLowerCase() === 'entregue').length;
+    const emTransito = todasNfs.filter(n => String(n.status || '').toLowerCase() === 'em trânsito').length;
+    const taxa = todasNfs.length ? Math.round((entregues / todasNfs.length) * 100) : 0;
+
+    const kpiValues = document.querySelectorAll('#em-transito-view .transit-kpi strong');
+    if (kpiValues[0]) kpiValues[0].textContent = String(totalRotas).padStart(2, '0');
+    if (kpiValues[1]) kpiValues[1].textContent = entregues;
+    if (kpiValues[2]) kpiValues[2].textContent = emTransito;
+    if (kpiValues[3]) kpiValues[3].textContent = `${taxa}%`;
+    const kpiSubs = document.querySelectorAll('#em-transito-view .transit-kpi small');
+    if (kpiSubs[1]) kpiSubs[1].textContent = `de ${todasNfs.length} NFs em trânsito`;
+    if (kpiSubs[2]) kpiSubs[2].textContent = 'aguardando entrega';
+    if (kpiSubs[3]) kpiSubs[3].textContent = 'das NFs expedidas';
+
+    const filterButtons = document.querySelectorAll('#em-transito-view .transit-filter-btn');
+    if (filterButtons[0]) filterButtons[0].innerHTML = `Todas <span>${rotas.length}</span>`;
+    if (filterButtons[1]) filterButtons[1].innerHTML = `Pendentes <span>${rotas.filter(r => { const a=grupos.get(String(r.id))||[]; return a.length && a.every(n=>String(n.status||'').toLowerCase()!=='entregue'); }).length}</span>`;
+    if (filterButtons[2]) filterButtons[2].innerHTML = `Parciais <span>${rotas.filter(r => { const a=grupos.get(String(r.id))||[]; const e=a.filter(n=>String(n.status||'').toLowerCase()==='entregue').length; return e>0 && e<a.length; }).length}</span>`;
+
+    const toolbarSub = document.querySelector('#em-transito-view .transit-toolbar-title small');
+    if (toolbarSub) toolbarSub.textContent = `${rotas.length} ${rotas.length === 1 ? 'rota aguardando conclusão' : 'rotas aguardando conclusão'}`;
+
+    list.innerHTML = '';
+    filtradas.forEach(rota => {
+        const itens = grupos.get(String(rota.id)) || [];
+        const entreguesRota = itens.filter(n => String(n.status || '').toLowerCase() === 'entregue').length;
+        const pendentesRota = itens.length - entreguesRota;
+        const qtdModulos = itens.reduce((sum, n) => sum + formatarQtdModulos(n), 0);
+        const percentual = itens.length ? Math.round((entreguesRota / itens.length) * 100) : 0;
+        const nfSearch = itens.map(n => n.numero).join(' ');
+        const card = document.createElement('article');
+        card.className = 'transit-route-card';
+        card.dataset.search = `${rota.nome || ''} ${rota.data || ''} ${rota.transportadora || ''} ${nfSearch}`.toLowerCase();
+        card.innerHTML = `
+            <div class="transit-route-main">
+              <div class="transit-route-heading">
+                <div class="transit-route-name-wrap"><span class="transit-route-dot"></span><div><h3>${rota.nome || 'Rota sem nome'}</h3><p>Rota #${rota.id} · ${formatarDataBR(rota.data)}${rota.transportadora ? ` · ${rota.transportadora}` : ''}</p></div></div>
+                <span class="transit-status-pill">Em trânsito</span>
+              </div>
+              <div class="transit-route-meta"><span><b>${itens.length}</b> NFs</span><span><b>${qtdModulos}</b> módulos</span><span><b>${entreguesRota}</b> entregues</span><span><b>${pendentesRota}</b> pendentes</span></div>
+              <div class="transit-progress-row"><div class="transit-progress"><span style="width:${percentual}%"></span></div><strong>${percentual}%</strong></div>
+            </div>
+            <div class="transit-route-action"><button type="button" class="btn btn-outline transit-demo-details" data-route-id="${rota.id}">Ver NFs <span>→</span></button></div>
+        `;
+        list.appendChild(card);
+    });
+
+    if (empty) empty.classList.toggle('hidden', filtradas.length !== 0);
+    if (!filtradas.length && !rotas.length && empty) {
+        empty.querySelector('h3').textContent = 'Nenhuma rota em trânsito';
+        empty.querySelector('p').textContent = usuarioEhTransportadora() ? 'Quando uma rota for expedida para esta transportadora, ela aparecerá aqui.' : 'Quando uma rota for expedida, ela aparecerá aqui.';
+    } else if (empty) {
+        empty.querySelector('h3').textContent = 'Nenhuma rota encontrada';
+        empty.querySelector('p').textContent = 'Altere os filtros ou o termo de busca.';
+    }
+
+    list.querySelectorAll('.transit-demo-details').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const rotaId = btn.dataset.routeId;
+            const existing = btn.closest('.transit-route-card')?.querySelector('.transit-route-details');
+            if (existing) {
+                existing.remove();
+                btn.innerHTML = 'Ver NFs <span>→</span>';
+                return;
+            }
+            await abrirDetalhesEmTransito(btn, rotaId);
+        });
+    });
+}
+
+async function abrirDetalhesEmTransito(btn, rotaId) {
+    const card = btn.closest('.transit-route-card');
+    if (!card) return;
+    const { data: rota, error: rotaError } = await supabaseClient.from('rotas').select('*').eq('id', rotaId).single();
+    const { data: nfs, error: nfsError } = await supabaseClient.from('nfs').select('*').eq('rota_id', rotaId).order('numero', { ascending: true });
+    if (rotaError || nfsError) {
+        mostrarAviso('Não foi possível carregar as NFs desta rota.');
+        return;
+    }
+    const details = document.createElement('div');
+    details.className = 'transit-route-details';
+    details.innerHTML = `
+      <div class="transit-detail-head"><div><strong>${rota.nome || 'Rota'}</strong><span>${nfs.length} NFs · ${rota.transportadora || 'Transportadora não informada'}</span></div><span class="transit-detail-note">${nfs.filter(n=>String(n.status||'').toLowerCase()==='entregue').length}/${nfs.length} entregues</span></div>
+      <div class="transit-nf-table">
+        ${nfs.map(nf => {
+            const entregue = String(nf.status || '').toLowerCase() === 'entregue';
+            const destino = nf.uf === 'RT' ? 'RETIRA' : `${nf.cidade || nf.destino || '—'}/${nf.uf || '—'}`;
+            return `<div class="transit-nf-row"><strong>NF ${nf.numero}</strong><span>${destino}</span><span>${formatarQtdModulos(nf)} módulos</span><span class="transit-nf-status ${entregue ? 'is-delivered' : ''}">${entregue ? 'Entregue' : 'Em trânsito'}</span>${!entregue && usuarioPodeOperarTransito() ? `<button type="button" class="btn btn-outline transit-deliver-btn" data-nf-id="${nf.id}" data-rota-id="${rota.id}">Marcar entregue</button>` : ''}</div>`;
+        }).join('')}
+      </div>
+      <div class="transit-detail-footer"><span>Somente o status de entrega pode ser alterado nesta área.</span><span>${usuarioPodeOperarTransito() ? 'Ação disponível' : 'Modo consulta'}</span></div>
+    `;
+    card.appendChild(details);
+    btn.innerHTML = 'Ocultar NFs <span>↑</span>';
+    details.querySelectorAll('.transit-deliver-btn').forEach(action => action.addEventListener('click', () => marcarNFComoEntregue(action.dataset.nfId, action.dataset.rotaId)));
+}
+
+async function marcarNFComoEntregue(nfId, rotaId) {
+    if (!usuarioPodeAcao('Em Trânsito', 'marcar_entregue')) {
+        mostrarAviso('⛔ Você não possui permissão para registrar entregas.');
+        return;
+    }
+    try {
+        const { error } = await supabaseClient.from('nfs').update({ status: 'Entregue' }).eq('id', nfId);
+        if (error) throw error;
+
+        const { data: nfsDaRota, error: errNfs } = await supabaseClient.from('nfs').select('id,status').eq('rota_id', rotaId);
+        if (errNfs) throw errNfs;
+        const todasEntregues = (nfsDaRota || []).length > 0 && (nfsDaRota || []).every(n => String(n.status || '').toLowerCase() === 'entregue');
+        if (todasEntregues) {
+            const { error: errRota } = await supabaseClient.from('rotas').update({ status: 'finalizada', finalizada_em: new Date().toISOString() }).eq('id', rotaId).eq('status', 'em_transito');
+            if (errRota) throw errRota;
+            mostrarAviso('Entrega registrada. Todas as NFs da rota foram entregues e a rota foi finalizada.');
+        } else {
+            mostrarAviso('Entrega registrada com sucesso.');
+        }
+        await carregarDadosEmTransito();
+        if (typeof renderizarHistorico === 'function') await renderizarHistorico();
+        if (typeof carregarPainelControle === 'function') await carregarPainelControle();
+    } catch (error) {
+        console.error('Erro ao registrar entrega:', error);
+        mostrarAviso('Não foi possível registrar a entrega.');
+    }
+}
+
+async function inicializarEmTransito() {
+    if (!usuarioPodeVisualizar('Em Trânsito')) return;
+    await carregarDadosEmTransito();
+    const input = document.getElementById('transit-demo-search');
+    if (input && !input.dataset.listener) {
+        input.addEventListener('input', () => renderizarEmTransitoAtual());
+        input.dataset.listener = 'true';
+    }
+    document.querySelectorAll('#em-transito-view .transit-filter-btn').forEach((btn, index) => {
+        if (btn.dataset.listener) return;
+        btn.addEventListener('click', () => {
+            transitoFiltroAtual = ['todas', 'pendentes', 'parciais'][index] || 'todas';
+            document.querySelectorAll('#em-transito-view .transit-filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderizarEmTransitoAtual();
+        });
+        btn.dataset.listener = 'true';
+    });
+    if (transitoRefreshTimer) clearInterval(transitoRefreshTimer);
+    transitoRefreshTimer = setInterval(() => {
+        if (!emTransitoView?.classList.contains('hidden')) carregarDadosEmTransito();
+    }, 15000);
+    transitoInicializado = true;
+}
+
+async function renderizarEmTransitoAtual() {
+    // Reconsulta para manter a busca/filtros sincronizados com o banco.
+    await carregarDadosEmTransito();
+}
+
+// Ao navegar para qualquer tela operacional existente, fecha a prévia de Em Trânsito.
+document.addEventListener('click', event => {
+    const button = event.target.closest('button');
+    if (!button || !emTransitoView) return;
+    const ids = ['open-control-panel-btn', 'open-control-panel-from-prog-btn', 'open-control-panel-from-new-history-btn', 'open-programacao-btn', 'open-programacao-from-new-history-btn', 'open-history-btn', 'open-simulate-route-btn', 'back-to-dashboard-btn', 'back-to-dashboard-from-programacao-btn', 'back-to-dashboard-from-new-history-btn', 'back-to-dashboard-from-simulate-btn', 'open-gerencial-btn'];
+    if (ids.includes(button.id)) emTransitoView.classList.add('hidden');
+});
+
 // --- NAVEGAÇÃO PAINEL DE CONTROLE ---
 const dashboardView = document.getElementById('dashboard-view');
 const controlPanelView = document.getElementById('control-panel-view');
@@ -658,6 +947,7 @@ const gerenciarUsuariosView = document.getElementById('gerenciar-usuarios-view')
 const programacaoView = document.getElementById('programacao-view'); // Nova referência
 const newHistoryView = document.getElementById('new-history-view');
 const simulateRouteView = document.getElementById('simulate-route-view');
+const emTransitoView = document.getElementById('em-transito-view');
 
 // Estado da tela Simular Rota
 // Declarado explicitamente para evitar ReferenceError ao abrir a tela.
@@ -684,6 +974,7 @@ function mostrarSomenteView(viewAlvo) {
         programacaoView,
         newHistoryView,
         simulateRouteView,
+        emTransitoView,
         permissoesView,
         limitesRetiradaView
     ];
@@ -1522,12 +1813,16 @@ const permissoesConfigBase = {
     },
     'Simular Rota': { visualizacao: true, gerenciamento: true },
     'Painel de Controle': {
-        visualizacao: true, gerenciamento: true
+        visualizacao: true, gerenciamento: true,
+        visualizar_frete: false
     },
     'Gerencial': {
         visualizacao: false, gerenciamento: false,
         gerenciar_usuarios: false, gerenciar_kam: false,
         gerenciar_permissoes: false, gerenciar_limites: false
+    },
+    'Em Trânsito': {
+        visualizacao: false, gerenciamento: false, marcar_entregue: false
     }
 };
 
@@ -1552,6 +1847,7 @@ function obterPermissoesVisuaisUsuario(user) {
         defaults['Histórico'].retornar_rota = false;
         defaults['Histórico'].excluir_historico = false;
         defaults['Histórico'].observacao = false;
+        defaults['Painel de Controle'].visualizar_frete = false;
         defaults['Gerencial'].visualizacao = false;
         defaults['Gerencial'].gerenciamento = false;
         defaults['Gerencial'].gerenciar_permissoes = false;
@@ -1572,6 +1868,16 @@ function obterPermissoesVisuaisUsuario(user) {
         defaults['Gerencial'].gerenciamento = true;
         defaults['Gerencial'].gerenciar_permissoes = true;
         defaults['Gerencial'].gerenciar_limites = true;
+        defaults['Painel de Controle'].visualizar_frete = true;
+    } else if (acesso === 'Transportadora') {
+        Object.values(defaults).forEach(p => {
+            p.visualizacao = false;
+            p.gerenciamento = false;
+            Object.keys(p).forEach(k => { if (k !== 'visualizacao' && k !== 'gerenciamento') p[k] = false; });
+        });
+        defaults['Em Trânsito'].visualizacao = true;
+        defaults['Em Trânsito'].gerenciamento = true;
+        defaults['Em Trânsito'].marcar_entregue = true;
     } else if (acesso === 'ADM TI') {
         Object.values(defaults).forEach(p => {
             p.visualizacao = true;
@@ -1781,6 +2087,7 @@ function renderizarPermissoes() {
                 <option value="Administrador" ${user.permissao === 'Administrador' ? 'selected' : ''}>Administrador</option>
                 <option value="Operador" ${user.permissao === 'Operador' ? 'selected' : ''}>Operador</option>
                 <option value="Visualizador" ${user.permissao === 'Visualizador' ? 'selected' : ''}>Visualizador</option>
+                <option value="Transportadora" ${user.permissao === 'Transportadora' ? 'selected' : ''}>Transportadora</option>
               </select>
             </span>
             <span class="permission-chevron">⌄</span>
@@ -1861,8 +2168,12 @@ function aplicarPermissoesNaInterface() {
     if (cardLimites) cardLimites.classList.toggle('hidden', !usuarioPodeAcao('Gerencial', 'gerenciar_limites'));
     const cardUsuarios = document.querySelector('[data-gerencial-placeholder="Gerenciar Usuários"]');
     const kamSection = document.getElementById('gerencial-kam-section');
+    const transportadorasSection = document.getElementById('gerencial-transportadoras-section');
     if (cardUsuarios) cardUsuarios.classList.toggle('hidden', !usuarioPodeAcao('Gerencial', 'gerenciar_usuarios'));
+    if (transportadorasSection) transportadorasSection.classList.toggle('hidden', !usuarioPodeAcao('Gerencial', 'gerenciar_usuarios'));
     if (kamSection) kamSection.classList.toggle('hidden', !usuarioPodeAcao('Gerencial', 'gerenciar_kam'));
+    const addTransportadora = document.getElementById('add-transportadora-btn');
+    if (addTransportadora) addTransportadora.style.display = usuarioPodeAcao('Gerencial', 'gerenciar_usuarios') ? 'inline-flex' : 'none';
 
     // As ações específicas são independentes do "Gerenciar" e do perfil.
     // O CSS também acompanha as flags para não deixar botões visualmente utilizáveis
@@ -1891,6 +2202,7 @@ function aplicarPermissoesNaInterface() {
     regras.push(`.history-card .btn[onclick*="retornar"]{display:${usuarioPodeAcao('Histórico', 'retornar_rota') ? 'block' : 'none'}!important;}`);
     regras.push(`.history-card .btn[onclick*="excluirHistorico"]{display:${usuarioPodeAcao('Histórico', 'excluir_historico') ? 'block' : 'none'}!important;}`);
     regras.push(`#export-programacao-btn{display:${usuarioPodeAcao('Programação', 'exportar') ? 'inline-flex' : 'none'}!important;}`);
+    regras.push(`#em-transito-view .transit-deliver-btn{display:${usuarioPodeAcao('Em Trânsito', 'marcar_entregue') ? 'inline-flex' : 'none'}!important;}`);
     style.textContent = regras.join('\n');
     inicializarMenuGlobal();
 }
@@ -1924,7 +2236,7 @@ function criarPainelPermissoesUsuario(user) {
                     <div class="permission-operations">
                       <span class="permission-operations-label">Ações específicas</span>
                       ${Object.entries(p).filter(([k]) => !['visualizacao','gerenciamento','transporte','retirada'].includes(k)).map(([k,v]) => {
-                          const labels = { adicionar_nf:'Adicionar NF', editar_nf:'Editar NF', excluir_nf:'Excluir NF', criar_rota:'Criar rota', editar_rota:'Editar rota', excluir_rota:'Excluir rota', adicionar_nf_rota:'Adicionar NF à rota', remover_nf_rota:'Remover NF da rota', finalizar_rota:'Finalizar rota', copiar_resumo:'Copiar resumo', observacao_nf:'Observação da NF', alterar_status:'Alterar status', retornar_rota:'Retornar rota', exportar:'Exportar', visualizar_detalhes:'Detalhes da rota', excluir_historico:'Excluir histórico', observacao:'Observação', gerenciar_usuarios:'Gerenciar usuários', gerenciar_kam:'Gerenciar KAM', gerenciar_permissoes:'Gerenciar permissões', gerenciar_limites:'Gerenciar limites' };
+                          const labels = { adicionar_nf:'Adicionar NF', editar_nf:'Editar NF', excluir_nf:'Excluir NF', criar_rota:'Criar rota', editar_rota:'Editar rota', excluir_rota:'Excluir rota', adicionar_nf_rota:'Adicionar NF à rota', remover_nf_rota:'Remover NF da rota', finalizar_rota:'Finalizar rota', copiar_resumo:'Copiar resumo', observacao_nf:'Observação da NF', alterar_status:'Alterar status', retornar_rota:'Retornar rota', exportar:'Exportar', visualizar_detalhes:'Detalhes da rota', excluir_historico:'Excluir histórico', observacao:'Observação', gerenciar_usuarios:'Gerenciar usuários', gerenciar_kam:'Gerenciar KAM', gerenciar_permissoes:'Gerenciar permissões', gerenciar_limites:'Gerenciar limites', visualizar_frete:'Visualizar valores de frete', marcar_entregue:'Marcar NF como entregue' };
                           return `<label class=\"permission-switch-line compact\"><input type=\"checkbox\" data-permission=\"${k}\" ${v ? 'checked' : ''}><span class=\"permission-switch\"></span><span>${labels[k] || k}</span></label>`;
                       }).join('')}
                     </div>` : ''}
@@ -2015,9 +2327,24 @@ window.editarUsuario = function(id) {
     document.getElementById('user-password').value = user.senha;
     document.getElementById('user-cargo').value = user.cargo;
     document.getElementById('user-permissao').value = user.permissao;
+    const transportadoraField = document.getElementById('user-transportadora');
+    if (transportadoraField) transportadoraField.value = user.transportadora || '';
+    atualizarCampoTransportadoraUsuario();
 
     openModal(createUserModal);
 };
+
+function atualizarCampoTransportadoraUsuario() {
+    const select = document.getElementById('user-permissao');
+    const field = document.getElementById('user-transportadora');
+    const group = document.getElementById('user-transportadora-group');
+    if (!select || !field || !group) return;
+    const ativo = select.value === 'Transportadora';
+    group.classList.toggle('hidden', !ativo);
+    field.required = ativo;
+}
+
+document.getElementById('user-permissao')?.addEventListener('change', atualizarCampoTransportadoraUsuario);
 
 window.excluirUsuario = function(id) {
     if (!usuarioPodeAcao('Gerencial', 'gerenciar_usuarios')) {
@@ -2088,6 +2415,113 @@ async function carregarUsuarios() {
         renderizarUsuarios(listaUsuariosLocal);
     } catch (err) {
         console.error("Erro ao carregar usuários:", err);
+    }
+}
+
+// --- GERENCIAMENTO DE TRANSPORTADORAS ---
+async function carregarTransportadoras() {
+    const tbody = document.getElementById('transportadoras-table-body');
+    const count = document.getElementById('count-transportadoras');
+    if (!tbody) return;
+    try {
+        const { data, error } = await supabaseClient.from('usuarios').select('id,nome,sobrenome,email,transportadora,status,permissao').eq('permissao', 'Transportadora').order('transportadora', { ascending: true });
+        if (error) throw error;
+        const grupos = new Map();
+        (data || []).forEach(user => {
+            const nome = String(user.transportadora || '').trim();
+            if (!nome) return;
+            const chave = normalizarTransportadora(nome);
+            if (!grupos.has(chave)) grupos.set(chave, user);
+        });
+        const lista = [...grupos.values()].sort((a,b) => String(a.transportadora).localeCompare(String(b.transportadora), 'pt-BR', { sensitivity: 'base' }));
+        if (count) count.textContent = `${lista.length} ${lista.length === 1 ? 'transportadora' : 'transportadoras'}`;
+        tbody.innerHTML = lista.length ? lista.map(user => {
+            const ativo = String(user.status || 'Ativo').toLowerCase() !== 'inativo';
+            const statusText = ativo ? 'Ativa' : 'Inativa';
+            const statusColor = ativo ? 'var(--primary)' : 'var(--text-muted)';
+            return `<tr>
+                <td><strong>${escaparHtmlTransportadora(user.transportadora)}</strong></td>
+                <td>${escaparHtmlTransportadora(user.email || '---')}</td>
+                <td><span style="color:${statusColor};font-weight:600;">● ${statusText}</span></td>
+                <td><div style="display:flex;gap:8px;justify-content:center;">
+                    <button class="icon-btn edit" title="Editar" onclick="editarTransportadora('${user.id}')"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg></button>
+                    <button class="icon-btn ${ativo ? 'delete' : 'edit'}" title="${ativo ? 'Inativar' : 'Ativar'}" onclick="alternarStatusTransportadora('${user.id}', ${ativo})">${ativo ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="8" y1="8" x2="16" y2="16"></line><line x1="16" y1="8" x2="8" y2="16"></line></svg>' : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>'}</button>
+                </div></td>
+            </tr>`;
+        }).join('') : '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px;">Nenhuma transportadora cadastrada.</td></tr>';
+    } catch (error) {
+        console.error('Erro ao carregar transportadoras:', error);
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#ef4444;padding:24px;">Não foi possível carregar as transportadoras.</td></tr>';
+    }
+}
+
+function abrirModalTransportadora(user = null) {
+    if (!createTransportadoraModal) return;
+    if (user) {
+        document.getElementById('transportadora-modal-title').textContent = 'Editar Transportadora';
+        document.getElementById('transportadora-user-id-hidden').value = user.id || '';
+        document.getElementById('transportadora-nome').value = user.transportadora || '';
+        document.getElementById('transportadora-email').value = user.email || '';
+        document.getElementById('transportadora-senha').value = '';
+        document.getElementById('transportadora-senha').required = false;
+        document.getElementById('transportadora-status').value = String(user.status || 'Ativo').toLowerCase() === 'inativo' ? 'Inativo' : 'Ativo';
+    } else {
+        document.getElementById('transportadora-modal-title').textContent = 'Adicionar Transportadora';
+        document.getElementById('transportadora-user-id-hidden').value = '';
+        document.getElementById('transportadora-nome').value = '';
+        document.getElementById('transportadora-email').value = '';
+        document.getElementById('transportadora-senha').value = '';
+        document.getElementById('transportadora-senha').required = true;
+        document.getElementById('transportadora-status').value = 'Ativo';
+    }
+    openModal(createTransportadoraModal);
+}
+
+window.editarTransportadora = async function(id) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_usuarios')) { mostrarAviso('⛔ Você não possui permissão para gerenciar transportadoras.'); return; }
+    const { data, error } = await supabaseClient.from('usuarios').select('*').eq('id', id).single();
+    if (error || !data) { mostrarAviso('Não foi possível carregar a transportadora.'); return; }
+    abrirModalTransportadora(data);
+};
+
+window.alternarStatusTransportadora = async function(id, atualmenteAtiva) {
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_usuarios')) { mostrarAviso('⛔ Você não possui permissão para gerenciar transportadoras.'); return; }
+    const novoStatus = atualmenteAtiva ? 'Inativo' : 'Ativo';
+    confirmarAcao(`${atualmenteAtiva ? 'Inativar' : 'Ativar'} esta transportadora?`, async () => {
+        const { error } = await supabaseClient.from('usuarios').update({ status: novoStatus }).eq('id', id);
+        if (error) { console.error(error); mostrarAviso('Não foi possível alterar o status.'); return; }
+        await carregarTransportadoras();
+        await preencherSelectTransportadoras(rotaTransportadoraInput?.value || 'Retira');
+        mostrarAviso(`Transportadora ${atualmenteAtiva ? 'inativada' : 'ativada'} com sucesso.`);
+    });
+};
+
+async function salvarTransportadora(event) {
+    event.preventDefault();
+    if (!usuarioPodeAcao('Gerencial', 'gerenciar_usuarios')) { mostrarAviso('⛔ Você não possui permissão para gerenciar transportadoras.'); return; }
+    const id = document.getElementById('transportadora-user-id-hidden')?.value || '';
+    const nome = document.getElementById('transportadora-nome')?.value.trim() || '';
+    const email = document.getElementById('transportadora-email')?.value.trim().toLowerCase() || '';
+    const senha = document.getElementById('transportadora-senha')?.value || '';
+    const status = document.getElementById('transportadora-status')?.value || 'Ativo';
+    if (!nome || !email || (!id && !senha)) { mostrarAviso('Preencha nome, e-mail e senha.'); return; }
+
+    const payload = { nome, sobrenome: '', email, cargo: 'Transportadora', permissao: 'Transportadora', transportadora: nome, status };
+    if (senha) payload.senha = senha;
+    try {
+        const query = id
+            ? supabaseClient.from('usuarios').update(payload).eq('id', id).select().single()
+            : supabaseClient.from('usuarios').insert([{ ...payload, senha }]).select().single();
+        const { error } = await query;
+        if (error) throw error;
+        closeModal(createTransportadoraModal);
+        await carregarUsuarios();
+        await carregarTransportadoras();
+        await preencherSelectTransportadoras(rotaTransportadoraInput?.value || 'Retira');
+        mostrarAviso(`Transportadora ${id ? 'atualizada' : 'cadastrada'} com sucesso.`);
+    } catch (error) {
+        console.error('Erro ao salvar transportadora:', error);
+        mostrarAviso('Não foi possível salvar a transportadora: ' + (error.message || 'erro desconhecido'));
     }
 }
 
@@ -2258,6 +2692,7 @@ if (addUserBtn) {
         if (userModalTitle) userModalTitle.innerText = "Adicionar Novo Usuário";
         if (userIdHidden) userIdHidden.value = "";
         if (createUserForm) createUserForm.reset();
+        atualizarCampoTransportadoraUsuario();
         openModal(createUserModal);
     });
 }
@@ -2277,12 +2712,7 @@ if (openControlPanelBtn) {
             return;
         }
         if (dashboardView && controlPanelView && programacaoView && newHistoryView) {
-            dashboardView.classList.add('hidden');
-            programacaoView.classList.add('hidden'); // Esconde programação também
-            newHistoryView.classList.add('hidden');
-            simulateRouteView.classList.add('hidden');
-            if (gerencialView) gerencialView.classList.add('hidden');
-            controlPanelView.classList.remove('hidden');
+            mostrarSomenteView(controlPanelView);
             document.querySelector('.app').classList.add('panel-active');
             carregarDashboard();
         }
@@ -2296,13 +2726,7 @@ if (openControlPanelFromProgBtn) {
             mostrarAviso("⛔ Acesso restrito. Você não possui permissão para gerenciar o Painel de Controle.");
             return;
         }
-        programacaoView.classList.add('hidden');
-        if (gerencialView) gerencialView.classList.add('hidden');
-        if (gerenciarUsuariosView) gerenciarUsuariosView.classList.add('hidden');
-        if (newHistoryView) newHistoryView.classList.add('hidden');
-        simulateRouteView.classList.add('hidden');
-        if (gerencialView) gerencialView.classList.add('hidden');
-        controlPanelView.classList.remove('hidden');
+        mostrarSomenteView(controlPanelView);
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
     });
@@ -2315,10 +2739,7 @@ if (openControlPanelFromHistoryBtn) {
             mostrarAviso("⛔ Acesso restrito. Você não possui permissão para gerenciar o Painel de Controle.");
             return;
         }
-        newHistoryView.classList.add('hidden');
-        simulateRouteView.classList.add('hidden');
-        if (gerencialView) gerencialView.classList.add('hidden');
-        controlPanelView.classList.remove('hidden');
+        mostrarSomenteView(controlPanelView);
         document.querySelector('.app').classList.add('panel-active');
         carregarDashboard();
     });
@@ -2559,6 +2980,7 @@ function abrirTelaGerenciarUsuarios(event) {
     if (origem && destino) destino.innerHTML = origem.innerHTML;
 
     carregarUsuarios();
+    carregarTransportadoras();
     carregarKams();
     aplicarPermissoesNaInterface();
 }
@@ -2972,7 +3394,7 @@ if (openRotaModalFromProgBtn) {
     openRotaModalFromProgBtn.addEventListener('click', () => {
         if (rotaModalTitle) rotaModalTitle.innerText = "Adicionar Nova Rota";
         if (rotaIdHidden) rotaIdHidden.value = "";
-        openModal(createRotaModal);
+        abrirModalNovaRotaComTransportadoras();
     });
 }
 
@@ -2991,6 +3413,7 @@ if (createUserForm) {
         const senha = document.getElementById('user-password').value;
         const cargo = document.getElementById('user-cargo').value.trim();
         const permissao = document.getElementById('user-permissao').value;
+        const transportadora = document.getElementById('user-transportadora')?.value.trim() || null;
 
         const userData = {
             nome: nome,
@@ -2999,6 +3422,7 @@ if (createUserForm) {
             senha: senha,
             cargo: cargo,
             permissao: permissao,
+            transportadora: permissao === 'Transportadora' ? transportadora : null,
         };
 
         console.log("Tentando salvar usuário:", userData);
@@ -3362,7 +3786,7 @@ if (openRotaModalBtn) {
     if (rotaIdHidden) rotaIdHidden.value = "";
     if (rotaNomeInput) rotaNomeInput.value = "";
     if (rotaDataInput) rotaDataInput.value = "";
-    openModal(createRotaModal);
+    abrirModalNovaRotaComTransportadoras();
   });
 } else {
   console.warn('openRotaModalBtn não encontrado.');
@@ -3554,6 +3978,78 @@ async function handleSalvarNF(fecharAoSalvar = true) {
   }
 }
 
+// TRANSPORTADORAS — usa os próprios usuários do tipo Transportadora, sem exigir nova tabela/coluna.
+function escaparHtmlTransportadora(valor) {
+    return String(valor ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+}
+
+async function obterTransportadorasCadastradas() {
+    try {
+        const { data, error } = await supabaseClient
+            .from('usuarios')
+            .select('id,nome,sobrenome,email,senha,transportadora,status,permissao')
+            .eq('permissao', 'Transportadora')
+            .order('transportadora', { ascending: true });
+        if (error) throw error;
+        const mapa = new Map();
+        (data || []).forEach(user => {
+            const nome = String(user.transportadora || '').trim();
+            if (!nome) return;
+            const chave = normalizarTransportadora(nome);
+            if (!mapa.has(chave)) mapa.set(chave, {
+                nome,
+                ativo: String(user.status || 'Ativo').toLowerCase() !== 'inativo',
+                email: user.email || '',
+                userId: user.id
+            });
+        });
+        return [...mapa.values()].sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+    } catch (error) {
+        console.error('Erro ao carregar transportadoras cadastradas:', error);
+        return [];
+    }
+}
+
+async function preencherSelectTransportadoras(valorAtual = '') {
+    if (!rotaTransportadoraInput) return;
+    const atual = String(valorAtual || rotaTransportadoraInput.value || '').trim();
+    const podeTransportar = usuarioPodeTransportar();
+    const podeRetirar = usuarioPodeRetirar();
+    const lista = await obterTransportadorasCadastradas();
+    const permitidas = podeTransportar ? lista.filter(t => t.ativo) : [];
+
+    rotaTransportadoraInput.innerHTML = '';
+    if (podeRetirar) {
+        rotaTransportadoraInput.insertAdjacentHTML('beforeend', '<option value="Retira">Retira</option>');
+    }
+    permitidas.forEach(t => {
+        rotaTransportadoraInput.insertAdjacentHTML('beforeend', `<option value="${escaparHtmlTransportadora(t.nome)}">${escaparHtmlTransportadora(t.nome)}</option>`);
+    });
+
+    // Ao editar uma rota antiga, mantém a transportadora salva mesmo que ela tenha sido inativada.
+    if (atual && ![...rotaTransportadoraInput.options].some(o => normalizarTransportadora(o.value) === normalizarTransportadora(atual))) {
+        rotaTransportadoraInput.insertAdjacentHTML('beforeend', `<option value="${escaparHtmlTransportadora(atual)}">${escaparHtmlTransportadora(atual)} (atual)</option>`);
+    }
+
+    const primeira = [...rotaTransportadoraInput.options].find(o => normalizarTransportadora(o.value) === normalizarTransportadora(atual));
+    if (primeira) rotaTransportadoraInput.value = primeira.value;
+    else if (podeRetirar) rotaTransportadoraInput.value = 'Retira';
+    else if (rotaTransportadoraInput.options.length) rotaTransportadoraInput.selectedIndex = 0;
+
+    rotaTransportadoraInput.disabled = rotaTransportadoraInput.options.length === 0;
+    const hint = document.getElementById('rota-transportadora-hint');
+    if (hint) {
+        if (!podeTransportar && podeRetirar) hint.textContent = 'Seu acesso permite somente rotas do tipo Retira.';
+        else if (podeTransportar && !permitidas.length) hint.textContent = 'Nenhuma transportadora ativa cadastrada. Cadastre uma no Gerencial.';
+        else hint.textContent = 'Selecione Retira ou uma transportadora cadastrada.';
+    }
+}
+
+async function abrirModalNovaRotaComTransportadoras() {
+    await preencherSelectTransportadoras('Retira');
+    openModal(createRotaModal);
+}
+
 // CRIAR ROTA
 async function handleCriarRota(event) {
     if (!usuarioPodeAcao('Roteirização', 'criar_rota')) { mostrarAviso('⛔ Você não possui permissão para criar rota.'); return; }
@@ -3569,11 +4065,11 @@ async function handleCriarRota(event) {
 
   const nome = rotaNomeInput ? rotaNomeInput.value.trim() : '';
   const dataRota = rotaDataInput ? rotaDataInput.value : '';
-  const transportadora = rotaTransportadoraInput ? rotaTransportadoraInput.value.trim() : '';
+  const transportadora = rotaTransportadoraInput ? rotaTransportadoraInput.value.trim() : 'Retira';
   const rotaId = rotaIdHidden ? rotaIdHidden.value : '';
   console.log('handleCriarRota: Nome da rota coletado:', nome);
 
-  if (!nome || !dataRota) {
+  if (!nome || !dataRota || !transportadora) {
     mostrarAviso("Por favor, preencha o nome e a data da rota.");
     console.warn('handleCriarRota: Validação falhou.');
     return;
@@ -3667,6 +4163,7 @@ async function carregarNFs() {
     if (document.getElementById('count-todos')) document.getElementById('count-todos').innerText = total;
     if (document.getElementById('count-transporte')) document.getElementById('count-transporte').innerText = transporte;
     if (document.getElementById('count-retira')) document.getElementById('count-retira').innerText = retira;
+    if (document.getElementById('mobile-pending-count')) document.getElementById('mobile-pending-count').innerText = total;
 
     const termoBusca = searchInput ? searchInput.value.toLowerCase() : "";
 
@@ -3951,7 +4448,7 @@ async function enviarParaRota(nfId) {
 
         const { error } = await supabaseClient
             .from("nfs")
-            .update({ rota_id: rotaSelecionada })
+            .update({ rota_id: rotaSelecionada, status: 'Em produção' })
             .eq("id", nfId);
         if (error) throw error;
 
@@ -4254,7 +4751,7 @@ async function carregarRotas() {
             </button>
           </div>
         </div>
-        <button class="btn" onclick="event.stopPropagation(); finalizarRota('${rota.id}')">Finalizar Rota</button>
+        <button class="btn" onclick="event.stopPropagation(); ${normalizarTransportadora(rota.transportadora) === 'retira' ? `finalizarRotaRetira('${rota.id}')` : `expedirRota('${rota.id}')`}">${normalizarTransportadora(rota.transportadora) === 'retira' ? 'Finalizar Rota' : 'Expedir Rota'}</button>
       </div>
     `;
 
@@ -4278,7 +4775,7 @@ async function carregarRotas() {
         </button>
       `;
 
-      linha.onclick = () => removerDaRota(nf.id);
+      linha.onclick = () => confirmarRemocaoDaRota(nf.id);
 
       body.appendChild(linha);
     });
@@ -4309,6 +4806,35 @@ window.alternarRotaRecolhida = function(rotaId, button) {
   button.setAttribute('title', recolhida ? 'Expandir rota' : 'Recolher rota');
 };
 
+// CONFIRMAR REMOÇÃO DA ROTA
+window.confirmarRemocaoDaRota = function(nfId) {
+  if (!usuarioPodeAcao('Roteirização', 'remover_nf_rota')) {
+    mostrarAviso('⛔ Você não possui permissão para remover NF da rota.');
+    return;
+  }
+
+  if (genericModalTitle) genericModalTitle.innerText = 'Remover NF da rota?';
+  if (genericModalMessage) genericModalMessage.innerText = 'Deseja realmente remover esta NF da rota?';
+
+  if (genericModalCancel) {
+    genericModalCancel.style.display = 'block';
+    genericModalCancel.innerText = 'Não';
+    genericModalCancel.classList.add('confirmacao-nao');
+    genericModalCancel.onclick = () => closeModal(genericModal);
+  }
+
+  if (genericModalOk) {
+    genericModalOk.innerText = 'Sim';
+    genericModalOk.classList.add('confirmacao-sim');
+    genericModalOk.onclick = async () => {
+      await removerDaRota(nfId);
+      closeModal(genericModal);
+    };
+  }
+
+  openModal(genericModal);
+};
+
 // REMOVER DA ROTA
 async function removerDaRota(nfId) {
     if (!usuarioPodeAcao('Roteirização', 'remover_nf_rota')) { mostrarAviso('⛔ Você não possui permissão para remover NF da rota.'); return; }
@@ -4317,10 +4843,29 @@ async function removerDaRota(nfId) {
     alert('Erro: O serviço de banco de dados não está disponível.');
     return;
   }
-  await supabaseClient
+  const { data: nfAtual, error: nfBuscaError } = await supabaseClient
     .from("nfs")
-    .update({ rota_id: null })
+    .select('id,status')
+    .eq('id', nfId)
+    .single();
+  if (nfBuscaError) {
+    console.error('Erro ao consultar NF antes de remover da rota:', nfBuscaError);
+    mostrarAviso('Não foi possível remover a NF da rota.');
+    return;
+  }
+
+  const payload = { rota_id: null };
+  if (String(nfAtual?.status || '') === 'Em produção') payload.status = null;
+
+  const { error: remocaoError } = await supabaseClient
+    .from("nfs")
+    .update(payload)
     .eq("id", nfId);
+  if (remocaoError) {
+    console.error('Erro ao remover NF da rota:', remocaoError);
+    mostrarAviso('Não foi possível remover a NF da rota.');
+    return;
+  }
 
   carregarTudo();
 }
@@ -4332,7 +4877,8 @@ window.editarRota = async function(rotaId, nomeAtual, dataAtual, transportadoraA
   if (rotaIdHidden) rotaIdHidden.value = rotaId;
   if (rotaNomeInput) rotaNomeInput.value = nomeAtual;
   if (rotaDataInput) rotaDataInput.value = dataAtual || "";
-  if (rotaTransportadoraInput) rotaTransportadoraInput.value = transportadoraAtual || "";
+  if (rotaTransportadoraInput) rotaTransportadoraInput.value = transportadoraAtual || 'Retira';
+  await preencherSelectTransportadoras(transportadoraAtual || 'Retira');
   openModal(createRotaModal);
 }
 
@@ -4455,15 +5001,15 @@ window.gerarRomaneioPartida = async function(rotaId) {
     doc.roundedRect(margem, 10, boxW, 20, 2.5, 2.5, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15.5);
+    doc.setFontSize(15);
     doc.text('SIRIUS', margem + 5, 19);
-    doc.setFontSize(12.5);
-    doc.text('ROMANEIO DE PARTIDA', pageWidth - margem - 5, 20.5, { align: 'right' });
+    doc.setFontSize(12);
+    doc.text('ROMANEIO DE PARTIDA', pageWidth - margem - 5, 18.5, { align: 'right' });
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(6.7);
     doc.setTextColor(235, 248, 239);
-    doc.text(`Nº ${numeroControle}`, pageWidth - margem - 5, 25.5, { align: 'right' });
-    doc.setFontSize(7.8);
+    doc.text(`Nº ${numeroControle}`, pageWidth - margem - 5, 23.2, { align: 'right' });
+    doc.setFontSize(7.2);
     doc.text('Documento de conferência e recebimento de carga para transporte', margem + 5, 25.5);
 
     // IDENTIFICAÇÃO: células com label e valor em posições fixas para nunca sobrepor.
@@ -4694,46 +5240,96 @@ window.copiarResumo = async function(rotaId, rotaNome, totalFrete) {
   }
 };
 
-// FINALIZAR ROTA (Deleta a rota sem devolver NFs para pendentes)
-window.finalizarRota = async function(rotaId) {
+// FINALIZAR ROTA RETIRA — não passa por Em Trânsito; vai direto para o Histórico.
+window.finalizarRotaRetira = async function(rotaId) {
     if (!usuarioPodeAcao('Roteirização', 'finalizar_rota')) { mostrarAviso('⛔ Você não possui permissão para finalizar rota.'); return; }
-  confirmarAcao("Deseja finalizar esta rota? Ela será movida para o histórico.", async () => {
     try {
-      // TAREFA 2: Garantir que os dados sejam capturados antes da exclusão
-      const { data: rotas, error: errR } = await supabaseClient.from("rotas").select("*").eq("id", rotaId);
-      const { data: nfs, error: errN } = await supabaseClient.from("nfs").select("*").eq("rota_id", rotaId);
+        const { data: rota, error: rotaError } = await supabaseClient.from('rotas').select('*').eq('id', rotaId).single();
+        if (rotaError) throw rotaError;
+        if (!rota) throw new Error('Rota não encontrada.');
+        if (normalizarTransportadora(rota.transportadora) !== 'retira') {
+            return window.expedirRota(rotaId);
+        }
+        const { data: nfs, error: nfsError } = await supabaseClient.from('nfs').select('id').eq('rota_id', rotaId);
+        if (nfsError) throw nfsError;
+        if (!nfs?.length) { mostrarAviso('Não é possível finalizar uma rota sem NFs.'); return; }
 
-      if (errR || errN) throw new Error("Erro ao buscar dados para o histórico.");
-
-      if (rotas && rotas.length > 0) {
-          let total = 0;
-          if (nfs && nfs.length > 0) {
-              nfs.forEach(n => total += Number(n.valor_frete));
-          }
-          salvarRotaNoHistorico(rotas[0], nfs || [], total);
-      } else {
-          console.warn("finalizarRota: Rota não encontrada para registro no histórico.");
-      }
-
-      // Alteração para atualizar o status e a data de finalização ao invés de deletar
-      const { error } = await supabaseClient
-        .from("rotas")
-        .update({ 
-          status: 'finalizada', 
-          finalizada_em: new Date().toISOString() 
-        })
-        .eq("id", rotaId);
-
-      if (error) throw error;
-      
-      if (rotaSelecionada === rotaId) rotaSelecionada = null;
-      carregarTudo();
+        confirmarAcao(`Finalizar a rota ${rota.nome}? Esta rota é Retira e irá diretamente para o Histórico.`, async () => {
+            try {
+                const { error: nfStatusError } = await supabaseClient.from('nfs').update({ status: 'Entregue' }).eq('rota_id', rotaId);
+                if (nfStatusError) throw nfStatusError;
+                const { error } = await supabaseClient.from('rotas').update({ status: 'finalizada', finalizada_em: new Date().toISOString() }).eq('id', rotaId).eq('status', 'ativa');
+                if (error) throw error;
+                if (rotaSelecionada === rotaId) rotaSelecionada = null;
+                await carregarTudo();
+                if (typeof carregarProgramacao === 'function') await carregarProgramacao();
+                if (typeof carregarDashboard === 'function') await carregarDashboard();
+                mostrarAviso('Rota Retira finalizada e enviada ao Histórico.');
+            } catch (error) {
+                console.error('Erro ao finalizar rota Retira:', error);
+                mostrarAviso('Erro ao finalizar a rota Retira.');
+            }
+        });
     } catch (error) {
-      console.error("Erro ao finalizar rota:", error);
-      mostrarAviso("Erro ao finalizar rota.");
+        console.error('Erro ao preparar finalização Retira:', error);
+        mostrarAviso('Não foi possível preparar a finalização da rota.');
     }
-  });
 };
+
+// EXPEDIR ROTA — envia a rota para a área Em Trânsito
+window.expedirRota = async function(rotaId) {
+    if (!usuarioPodeAcao('Roteirização', 'finalizar_rota')) { mostrarAviso('⛔ Você não possui permissão para expedir rota.'); return; }
+    try {
+        const { data: rota, error: rotaError } = await supabaseClient.from('rotas').select('*').eq('id', rotaId).single();
+        if (rotaError) throw rotaError;
+        if (!rota) throw new Error('Rota não encontrada.');
+        if (!String(rota.transportadora || '').trim()) {
+            mostrarAviso('Informe a transportadora antes de expedir a rota.');
+            return;
+        }
+        if (normalizarTransportadora(rota.transportadora) === 'retira') {
+            return window.finalizarRotaRetira(rotaId);
+        }
+
+        const { data: nfs, error: nfsError } = await supabaseClient.from('nfs').select('id').eq('rota_id', rotaId);
+        if (nfsError) throw nfsError;
+        if (!nfs?.length) {
+            mostrarAviso('Não é possível expedir uma rota sem NFs.');
+            return;
+        }
+
+        confirmarAcao(`Expedir a rota ${rota.nome}? As ${nfs.length} NFs passarão para Em trânsito e ficarão disponíveis para a transportadora.`, async () => {
+            try {
+                const { error: nfUpdateError } = await supabaseClient
+                    .from('nfs')
+                    .update({ status: 'Em trânsito' })
+                    .eq('rota_id', rotaId);
+                if (nfUpdateError) throw nfUpdateError;
+
+                const { error: rotaUpdateError } = await supabaseClient
+                    .from('rotas')
+                    .update({ status: 'em_transito', finalizada_em: null })
+                    .eq('id', rotaId)
+                    .eq('status', 'ativa');
+                if (rotaUpdateError) throw rotaUpdateError;
+
+                if (rotaSelecionada === rotaId) rotaSelecionada = null;
+                await carregarTudo();
+                if (typeof carregarProgramacao === 'function') await carregarProgramacao();
+                mostrarAviso('Rota expedida com sucesso. Ela agora está Em trânsito.');
+            } catch (error) {
+                console.error('Erro ao expedir rota:', error);
+                mostrarAviso('Erro ao expedir rota.');
+            }
+        });
+    } catch (error) {
+        console.error('Erro ao preparar expedição da rota:', error);
+        mostrarAviso('Não foi possível preparar a expedição da rota.');
+    }
+};
+
+// Compatibilidade com chamadas antigas; novas telas usam expedirRota.
+window.finalizarRota = window.expedirRota;
 
 // LOGICA DE HISTÓRICO (LocalStorage)
 function salvarRotaNoHistorico(rota, nfs, totalFrete) {
@@ -6480,8 +7076,10 @@ async function carregarDashboard() {
 
         const totalNfs = nfsPeriodo.length;
         const produzidas = nfsPeriodo.filter(n => n.status === 'Produzida').length;
-        const expedidas = nfsPeriodo.filter(n => n.status === 'Expedida').length;
-        const finalizadas = nfsPeriodo.filter(n => n.rota_id && rotasPorId.get(n.rota_id)?.status === 'finalizada').length;
+        const emTransito = nfsPeriodo.filter(n => n.status === 'Em trânsito').length;
+        const entregues = nfsPeriodo.filter(n => n.status === 'Entregue').length;
+        const expedidas = nfsPeriodo.filter(n => ['Expedida', 'Em trânsito', 'Entregue'].includes(n.status)).length;
+        const finalizadas = rotasFinalizadas.length;
         const pendentes = nfsPeriodo.filter(n => !n.rota_id).length;
         const semStatus = nfsPeriodo.filter(n => !n.status || !String(n.status).trim()).length;
         const semTransportadora = rotasPeriodo.filter(r => !r.transportadora || !String(r.transportadora).trim()).length;
@@ -6497,13 +7095,12 @@ async function carregarDashboard() {
         const setPct = (id, barId, value) => { setText(id, `${value}%`); const bar = document.getElementById(barId); if (bar) bar.style.width = `${Math.min(100, value)}%`; };
         const pctSub = (value) => `${taxa(value, totalNfs)}% do total`;
 
-        setText('stat-nfs-total', totalNfs);
-        setText('stat-nfs-total-sub', `${transporte} transporte · ${retirada} retirada`);
         setText('stat-nfs-produzidas', produzidas); setText('stat-nfs-produzidas-sub', pctSub(produzidas));
         setText('stat-nfs-expedidas', expedidas); setText('stat-nfs-expedidas-sub', pctSub(expedidas));
-        setText('stat-nfs-finalizadas', finalizadas); setText('stat-nfs-finalizadas-sub', pctSub(finalizadas));
+        setText('stat-nfs-transito', emTransito); setText('stat-nfs-transito-sub', pctSub(emTransito));
+        setText('stat-nfs-entregues', entregues); setText('stat-nfs-entregues-sub', pctSub(entregues));
+        setText('stat-nfs-finalizadas', finalizadas); setText('stat-nfs-finalizadas-sub', `${rotasFinalizadas.length} rotas finalizadas`);
         setText('stat-nfs-pendentes', pendentes); setText('stat-nfs-pendentes-sub', pendentes ? 'Aguardando rota' : 'Nenhuma pendência');
-        setText('stat-rotas-total', rotasPeriodo.length); setText('stat-rotas-total-sub', `${rotasFinalizadas.length} finalizadas`);
         setPct('kpi-taxa-conclusao', 'kpi-taxa-conclusao-bar', pctConclusao);
         setPct('kpi-taxa-expedicao', 'kpi-taxa-expedicao-bar', pctExpedicao);
         setText('kpi-media-nfs-rota', mediaNfsRota);
@@ -6515,7 +7112,7 @@ async function carregarDashboard() {
         const light = document.body.classList.contains('light-theme');
         const gridColor = light ? 'rgba(100,116,139,0.12)' : 'rgba(255,255,255,0.06)';
         const textColor = light ? '#64748b' : '#94a3b8';
-        const green = '#22c55e', blue = '#38bdf8', purple = '#a855f7', orange = '#f59e0b';
+        const green = '#22c55e', production = '#f59e0b', produced = '#8b5cf6', transit = '#3b82f6', blue = '#38bdf8', orange = '#f97316';
 
         const hideMsg = id => document.getElementById(id)?.classList.add('hidden');
         const showMsg = id => document.getElementById(id)?.classList.remove('hidden');
@@ -6526,29 +7123,33 @@ async function carregarDashboard() {
             'Sem status': semStatus,
             'Em produção': nfsPeriodo.filter(n => n.status === 'Em produção').length,
             'Produzida': produzidas,
-            'Expedida': expedidas
+            'Em trânsito': emTransito,
+            'Entregue': entregues
         };
         if (has(Object.values(statusData))) {
             hideMsg('msg-status-nfs');
-            renderChart('chart-status-nfs', 'doughnut', { labels: Object.keys(statusData), datasets: [{ data: Object.values(statusData), backgroundColor: [light ? '#cbd5e1' : '#475569', blue, green, purple], borderWidth: 0 }] }, { cutout: '68%', plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 12, font: { size: 10 } } } } });
+            renderChart('chart-status-nfs', 'doughnut', { labels: Object.keys(statusData), datasets: [{ data: Object.values(statusData), backgroundColor: [light ? '#cbd5e1' : '#475569', production, produced, transit, green], borderWidth: 0 }] }, { cutout: '68%', plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 12, font: { size: 10 } } } } });
         } else showMsg('msg-status-nfs');
 
-        // EVOLUÇÃO DIÁRIA
+        // FLUXO OPERACIONAL — somente status de NF.
+        // Finalizada é status de ROTA e não entra neste gráfico para evitar dupla contagem.
         const dias = {};
         nfsPeriodo.forEach(n => {
             const d = obterDataReferenciaNF(n, rotasPorId); if (!d) return;
-            if (!dias[d]) dias[d] = { produzidas: 0, expedidas: 0, finalizadas: 0 };
+            if (!dias[d]) dias[d] = { emProducao: 0, produzidas: 0, transito: 0, entregues: 0 };
+            if (n.status === 'Em produção') dias[d].emProducao++;
             if (n.status === 'Produzida') dias[d].produzidas++;
-            if (n.status === 'Expedida') dias[d].expedidas++;
-            if (n.rota_id && rotasPorId.get(n.rota_id)?.status === 'finalizada') dias[d].finalizadas++;
+            if (n.status === 'Em trânsito') dias[d].transito++;
+            if (n.status === 'Entregue') dias[d].entregues++;
         });
         const datas = Object.keys(dias).sort();
         if (datas.length) {
             hideMsg('msg-evolucao-operacional');
             renderChart('chart-evolucao-operacional', 'line', { labels: datas.map(d => d.split('-').reverse().slice(0,2).join('/')), datasets: [
-                { label: 'Produzidas', data: datas.map(d => dias[d].produzidas), borderColor: green, backgroundColor: 'rgba(34,197,94,.08)', tension: .35, fill: true, pointRadius: 3 },
-                { label: 'Expedidas', data: datas.map(d => dias[d].expedidas), borderColor: blue, backgroundColor: 'transparent', tension: .35, pointRadius: 3 },
-                { label: 'Finalizadas', data: datas.map(d => dias[d].finalizadas), borderColor: purple, backgroundColor: 'transparent', tension: .35, pointRadius: 3 }
+                { label: 'Em produção', data: datas.map(d => dias[d].emProducao), borderColor: production, backgroundColor: 'rgba(245,158,11,.08)', tension: .35, fill: true, pointRadius: 3 },
+                { label: 'Produzidas', data: datas.map(d => dias[d].produzidas), borderColor: produced, backgroundColor: 'transparent', tension: .35, pointRadius: 3 },
+                { label: 'Em trânsito', data: datas.map(d => dias[d].transito), borderColor: transit, backgroundColor: 'transparent', tension: .35, pointRadius: 3 },
+                { label: 'Entregues', data: datas.map(d => dias[d].entregues), borderColor: green, backgroundColor: 'transparent', tension: .35, pointRadius: 3 }
             ] }, { plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 12, font: { size: 10 } } } }, scales: { y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, stepSize: 1 } }, x: { grid: { display: false }, ticks: { color: textColor } } } });
         } else showMsg('msg-evolucao-operacional');
 
@@ -6567,20 +7168,58 @@ async function carregarDashboard() {
             renderChart('chart-destinos', 'bar', { labels: topDestinos.map(x=>x[0]), datasets: [{ label:'NFs', data:topDestinos.map(x=>x[1]), backgroundColor:'rgba(56,189,248,.45)', borderColor:blue, borderWidth:1, borderRadius:5 }] }, { indexAxis:'y', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true,grid:{color:gridColor},ticks:{color:textColor,stepSize:1}},y:{grid:{display:false},ticks:{color:textColor,font:{size:10}}}} });
         } else showMsg('msg-destinos');
 
-        // ROTAS POR DIA
-        const rotasDia = {}; rotasPeriodo.forEach(r => { if (r.data) rotasDia[r.data] = (rotasDia[r.data] || 0) + 1; });
+        // ROTAS POR DIA — barras de rotas + marcador de NFs, sem segundo eixo.
+        // A quantidade de NFs aparece acima de cada coluna para preservar a escala das rotas.
+        const rotasDia = {};
+        rotasPeriodo.forEach(r => { if (r.data) rotasDia[r.data] = (rotasDia[r.data] || 0) + 1; });
+        const nfsDia = {};
+        nfsPeriodo.forEach(n => {
+            const d = obterDataReferenciaNF(n, rotasPorId);
+            if (d) nfsDia[d] = (nfsDia[d] || 0) + 1;
+        });
         const datasRotas = Object.keys(rotasDia).sort();
         if (datasRotas.length) {
             hideMsg('msg-rotas-dia');
-            renderChart('chart-rotas-dia','bar',{labels:datasRotas.map(d=>d.split('-').reverse().slice(0,2).join('/')),datasets:[{label:'Rotas',data:datasRotas.map(d=>rotasDia[d]),backgroundColor:'rgba(34,197,94,.42)',borderColor:green,borderWidth:1,borderRadius:5}]},{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,grid:{color:gridColor},ticks:{color:textColor,stepSize:1}},x:{grid:{display:false},ticks:{color:textColor}}}});
+            const rotasNfsPlugin = {
+                id: 'rotasNfsLabels',
+                afterDatasetsDraw(chart) {
+                    const {ctx} = chart;
+                    const meta = chart.getDatasetMeta(0);
+                    ctx.save();
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.font = '600 10px Inter, Arial, sans-serif';
+                    meta.data.forEach((bar, index) => {
+                        const data = chart.data.labels[index];
+                        const rawDate = datasRotas[index];
+                        const qtdNfs = nfsDia[rawDate] || 0;
+                        const label = `${qtdNfs} NF${qtdNfs === 1 ? '' : 's'}`;
+                        const y = Math.max(14, bar.y - 6);
+                        ctx.fillStyle = textColor;
+                        ctx.fillText(label, bar.x, y);
+                    });
+                    ctx.restore();
+                }
+            };
+            renderChart('chart-rotas-dia','bar',{labels:datasRotas.map(d=>d.split('-').reverse().slice(0,2).join('/')),datasets:[{label:'Rotas',data:datasRotas.map(d=>rotasDia[d]),backgroundColor:'rgba(34,197,94,.42)',borderColor:green,borderWidth:1,borderRadius:5}]},{plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel(context){const rawDate=datasRotas[context.dataIndex];const qtdNfs=nfsDia[rawDate]||0;const qtdRotas=rotasDia[rawDate]||0;const media=qtdRotas?(qtdNfs/qtdRotas).toFixed(1).replace('.',','):'0';return [`NFs: ${qtdNfs}`,`Média: ${media} NFs/rota`];}}}},scales:{y:{beginAtZero:true,grid:{color:gridColor},ticks:{color:textColor,stepSize:1},suggestedMax:Math.max(...datasRotas.map(d=>rotasDia[d]))+1},x:{grid:{display:false},ticks:{color:textColor}}},interaction:{mode:'index',intersect:false}},[rotasNfsPlugin]);
         } else showMsg('msg-rotas-dia');
 
         // RANKING TRANSPORTADORAS
+        const podeVisualizarFrete = usuarioPodeAcao('Painel de Controle', 'visualizar_frete');
         const transp = {};
-        rotasPeriodo.forEach(r => { const nome=(r.transportadora||'NÃO INFORMADA').trim().toUpperCase(); if(!transp[nome]) transp[nome]={rotas:0,nfs:0}; transp[nome].rotas++; transp[nome].nfs += nfsPeriodo.filter(n=>n.rota_id===r.id).length; });
+        rotasPeriodo.forEach(r => {
+            const nome=(r.transportadora||'NÃO INFORMADA').trim().toUpperCase();
+            if(!transp[nome]) transp[nome]={rotas:0,nfs:0,frete:0};
+            transp[nome].rotas++;
+            const nfsDaRota = nfsPeriodo.filter(n=>n.rota_id===r.id);
+            transp[nome].nfs += nfsDaRota.length;
+            if (podeVisualizarFrete) transp[nome].frete += nfsDaRota.reduce((total, n) => total + Number(n.valor_frete || 0), 0);
+        });
         const topTransp=Object.entries(transp).sort((a,b)=>b[1].nfs-a[1].nfs).slice(0,5);
         const rt=document.getElementById('ranking-transportadoras');
-        if(rt) rt.innerHTML=topTransp.length ? topTransp.map(([nome,v],i)=>`<div class="ranking-item"><span><b class="ranking-index">${i+1}</b>${nome}</span><strong>${v.nfs} NFs <em>${v.rotas} rotas</em></strong></div>`).join('') : '<p class="kpi-empty">Sem dados no período.</p>';
+        const rtCaption = document.querySelector('.kpi-bottom-grid .kpi-panel:first-child .kpi-panel-caption');
+        if (rtCaption) rtCaption.textContent = podeVisualizarFrete ? 'Rotas · NFs · Frete' : 'Rotas · NFs';
+        if(rt) rt.innerHTML=topTransp.length ? topTransp.map(([nome,v],i)=>`<div class="ranking-item"><span><b class="ranking-index">${i+1}</b>${nome}</span><strong>${v.nfs} NFs <em>${v.rotas} rotas${podeVisualizarFrete ? ` · R$ ${formatar(v.frete)}` : ''}</em></strong></div>`).join('') : '<p class="kpi-empty">Sem dados no período.</p>';
 
         // RANKING KAMS
         const kams={}; nfsPeriodo.forEach(n=>{const k=(n.kam||'SEM RESPONSÁVEL').trim().toUpperCase(); kams[k]=(kams[k]||0)+1;});
@@ -6670,7 +7309,7 @@ function renderizarResultadoPesquisaNfPainel() {
                 const rota = nf.rota_id ? rotasPorId.get(nf.rota_id) : null;
                 const tipo = obterTipoNfPainel(nf);
                 const destino = tipo === 'Retirada' ? '—' : (nf.destino || nf.cidade || '—');
-                const status = nf.status || (rota ? (rota.status === 'finalizada' ? 'Finalizada' : 'Em rota') : 'Pendente');
+                const status = rota?.status === 'finalizada' ? 'Entregue' : (nf.status || (rota ? 'Em rota' : 'Pendente'));
                 return `<tr>
                   <td><strong>${escaparHtmlPainel(nf.numero || '—')}</strong></td>
                   <td><span class="painel-nf-type ${tipo === 'Retirada' ? 'retirada' : 'transporte'}">${tipo}</span></td>
@@ -6711,7 +7350,7 @@ function configurarPesquisaNfPainel() {
     });
 }
 
-function renderChart(id, type, data, options) {
+function renderChart(id, type, data, options, plugins = []) {
     const ctx = document.getElementById(id);
     if (!ctx) return;
     
@@ -6724,7 +7363,8 @@ function renderChart(id, type, data, options) {
             responsive: true,
             maintainAspectRatio: false,
             ...options
-        }
+        },
+        plugins
     });
 }
 
@@ -6746,6 +7386,13 @@ if (createNfForm) {
         e.preventDefault();
         handleSalvarNF(true);
     });
+}
+
+if (addTransportadoraBtn) {
+  addTransportadoraBtn.addEventListener('click', () => abrirModalTransportadora());
+}
+if (createTransportadoraForm) {
+  createTransportadoraForm.addEventListener('submit', salvarTransportadora);
 }
 
 if (createRotaForm) {
@@ -6774,6 +7421,11 @@ if (createRotaModal) {
   if (closeRotaBtn) {
     closeRotaBtn.addEventListener('click', () => closeModal(createRotaModal));
   }
+}
+
+if (createTransportadoraModal) {
+    const closeTransportadoraBtn = createTransportadoraModal.querySelector('.close-button');
+    if (closeTransportadoraBtn) closeTransportadoraBtn.addEventListener('click', () => closeModal(createTransportadoraModal));
 }
 
 if (genericModal) {
